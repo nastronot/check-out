@@ -97,6 +97,40 @@ class VFDDriver:
             self._serial = serial.Serial(self.port, self.baud, timeout=0)
         except (serial.SerialException, OSError) as exc:
             raise VFDError(f"could not open {self.port}: {exc}") from exc
+        # Re-assert raw mode on every open (a fresh open resets termios).
+        self._force_raw_mode()
+
+    def _force_raw_mode(self) -> None:
+        """Disable the tty line discipline's OUTPUT post-processing.
+
+        WHY: without this the kernel "cooks" outgoing bytes (OPOST/ONLCR maps
+        NL->CR-NL, etc.) on the way to the display, injecting bytes that
+        advance the cursor and scroll the VFD. Our byte sequence is correct;
+        the kernel was mangling it. Clearing OPOST (full raw mode) makes pyserial
+        send exactly the bytes we write. Baud (ispeed/ospeed) is left untouched,
+        so 9600 8N1 survives.
+        """
+        if self._serial is None:
+            return
+        import termios
+
+        try:
+            fd = self._serial.fileno()
+            attrs = termios.tcgetattr(fd)
+            # indices: [iflag, oflag, cflag, lflag, ispeed, ospeed, cc]
+            attrs[0] &= ~(
+                termios.IGNBRK | termios.BRKINT | termios.PARMRK | termios.ISTRIP
+                | termios.INLCR | termios.IGNCR | termios.ICRNL | termios.IXON
+            )
+            attrs[1] &= ~termios.OPOST  # <-- critical: no output post-processing
+            attrs[2] |= termios.CS8
+            attrs[3] &= ~(
+                termios.ECHO | termios.ECHONL | termios.ICANON
+                | termios.ISIG | termios.IEXTEN
+            )
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        except (termios.error, OSError, AttributeError) as exc:
+            raise VFDError(f"could not set raw mode on {self.port}: {exc}") from exc
 
     def close(self) -> None:
         if self._serial is not None:

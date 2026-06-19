@@ -132,3 +132,46 @@ def test_show_sanitizes_non_ascii(driver, capsys):
     top = data[2:22]
     # 'é' is non-ASCII -> replaced with '?'
     assert bytes(top[:4]).decode() == "caf?"
+
+
+def test_force_raw_mode_clears_opost_on_real_fd():
+    """With a real fd, _force_raw_mode disables OPOST (and keeps CS8)."""
+    import os
+    import termios
+
+    master, slave = os.openpty()
+    try:
+        # Turn OPOST ON first so we can observe the driver clearing it.
+        attrs = termios.tcgetattr(slave)
+        attrs[1] |= termios.OPOST
+        termios.tcsetattr(slave, termios.TCSANOW, attrs)
+        assert termios.tcgetattr(slave)[1] & termios.OPOST  # precondition
+
+        drv = VFDDriver.__new__(VFDDriver)
+        drv.dry_run = False
+        drv.port = "pty"
+        drv.baud = 9600
+
+        class FakeSerial:
+            def __init__(self, fd):
+                self._fd = fd
+
+            def fileno(self):
+                return self._fd
+
+        drv._serial = FakeSerial(slave)
+        drv._force_raw_mode()
+
+        after = termios.tcgetattr(slave)
+        assert not (after[1] & termios.OPOST)  # output post-processing off
+        assert after[2] & termios.CS8  # 8-bit chars preserved
+    finally:
+        os.close(master)
+        os.close(slave)
+
+
+def test_force_raw_mode_noop_in_dry_run():
+    """Dry-run has no real fd; raw-mode setup must be a safe no-op."""
+    drv = VFDDriver(dry_run=True)
+    assert drv._serial is None
+    drv._force_raw_mode()  # must not raise
