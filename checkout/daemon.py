@@ -118,9 +118,11 @@ def run(dry_run: bool = False) -> int:
                 continue
             time.sleep(tick)
     finally:
-        log("shutting down: clearing display")
+        log("shutting down: blanking display")
         try:
-            driver.clear()
+            # blank() = 0x1F then 0x14, so the exit screen is dark with no
+            # lingering cursor block (a bare clear() would re-enable the cursor).
+            driver.blank()
         except VFDError:
             pass
         driver.close()
