@@ -14,6 +14,11 @@ CMD_CLEAR = 0x1F          # clear whole display
 CMD_SET_CURSOR = 0x10     # followed by ONE position byte
 CMD_HIDE_CURSOR = 0x14    # hides the cursor; see "any write re-enables it" below
 
+# Brightness is TWO discrete levels only (bench-confirmed). It is NOT a 0-255
+# scale and NOT four levels — other level bytes are ignored by the display.
+# Applies live (no redraw needed).
+BRIGHTNESS = {"dim": b"\x04\x20", "bright": b"\x04\xff"}
+
 # Display geometry / addressing (position = line*20 + col).
 COLS = config.COLS
 ROWS = config.ROWS
@@ -180,15 +185,18 @@ class VFDDriver:
         self._hide_cursor(buf)
         self._write(bytes(buf))
 
-    def set_brightness(self, level: int) -> None:
-        """STUB — brightness byte is not yet bench-confirmed, so this is a no-op.
+    def set_brightness(self, level: str) -> None:
+        """Set display brightness to "dim" or "bright" (two discrete levels).
 
-        TODO: confirm on the bench, then implement. Candidate sequences:
-          - 0x04 followed by a level byte
-          - one of 0x20 / 0x40 / 0x60 / 0xFF
-        Do NOT send any of these at runtime until verified.
+        Raises ValueError for any other value — there is no 0-255 API. Applies
+        live and is independent of the cursor/scroll handling in show().
         """
-        return
+        try:
+            self._write(BRIGHTNESS[level])
+        except KeyError:
+            raise ValueError(
+                f"brightness must be one of {sorted(BRIGHTNESS)}, got {level!r}"
+            ) from None
 
     def blank(self) -> None:
         """Clear the display and leave it dark, with no cursor block remaining."""
