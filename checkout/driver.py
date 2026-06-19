@@ -113,9 +113,16 @@ class VFDDriver:
 
     # --- low-level write -----------------------------------------------------
     def _write(self, data: bytes) -> None:
-        """Send raw bytes; print hex in dry-run, else write to the port."""
+        """Send raw bytes as a single write.
+
+        Logs the outgoing bytes as hex when in dry-run, or when
+        ``CHECKOUT_DEBUG_TX=1`` on a live run (so the real on-the-wire stream can
+        be checked against the known-good frame). ``flush=True`` so the hexdump
+        is captured even when stdout is piped to a file.
+        """
+        if self.dry_run or config.DEBUG_TX:
+            print("TX " + " ".join(f"{b:02X}" for b in data), flush=True)
         if self.dry_run:
-            print("TX " + " ".join(f"{b:02X}" for b in data))
             return
         if self._serial is None:
             raise VFDError("serial port is not open")

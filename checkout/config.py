@@ -37,3 +37,8 @@ STATE_PATH: str = os.environ.get("CHECKOUT_STATE_PATH", "./state.json")
 # --- Frame rotation ----------------------------------------------------------
 # Single frame this phase; rotation lands in Phase 3.
 ROTATE: bool = False
+
+# --- Debug -------------------------------------------------------------------
+# CHECKOUT_DEBUG_TX=1 logs every actual serial write as hex (live or dry-run),
+# so the on-the-wire byte stream can be verified against the known-good frame.
+DEBUG_TX: bool = os.environ.get("CHECKOUT_DEBUG_TX") == "1"

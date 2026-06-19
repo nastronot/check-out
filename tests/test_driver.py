@@ -2,6 +2,7 @@
 
 import pytest
 
+from checkout import config
 from checkout.driver import CMD_HIDE_CURSOR, VFDDriver
 
 
@@ -93,6 +94,36 @@ def test_blank_ends_in_cursor_hide(driver, capsys):
     data = capture_bytes(capsys)
     assert data == [0x1F, 0x14]
     assert data[-1] == CMD_HIDE_CURSOR
+
+
+class _FakeSerial:
+    def __init__(self):
+        self.buf = bytearray()
+
+    def write(self, data):
+        self.buf += data
+
+    def close(self):
+        pass
+
+
+def test_debug_tx_logs_live_writes_and_still_writes_to_port(monkeypatch, capsys):
+    """CHECKOUT_DEBUG_TX=1 hexdumps the real (non-dry-run) write path."""
+    monkeypatch.setattr(config, "DEBUG_TX", True)
+    # Build a live driver but inject a fake port instead of opening /dev/ttyUSB0.
+    drv = VFDDriver.__new__(VFDDriver)
+    drv.dry_run = False
+    drv.port = "fake"
+    drv.baud = 9600
+    drv._serial = _FakeSerial()
+
+    drv.show("AB", "CD")
+
+    out = capsys.readouterr().out
+    assert out.strip().startswith("TX ")  # hexdump emitted on the live path
+    # The same bytes actually reached the port, ending in the cursor-hide.
+    assert drv._serial.buf[-1] == CMD_HIDE_CURSOR
+    assert drv._serial.buf[0:2] == bytes([0x10, 0x00])
 
 
 def test_show_sanitizes_non_ascii(driver, capsys):

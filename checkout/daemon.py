@@ -1,9 +1,11 @@
 """check-out daemon — the sole owner of the serial port.
 
-Each tick it reads ``state.json``, renders the active frame, and writes the
-result to the display only when it changed (diffed writes keep the slow 9600
-port from flooding and avoid flicker). It reconnects with backoff if the USB
-adapter drops, and clears the display on a clean shutdown.
+Each tick it reads ``state.json``, renders the active frame, and emits EXACTLY
+ONE ``show()`` frame (the known-good byte sequence) — never zero, never two. A
+single self-contained frame per tick is what keeps the display from scrolling:
+two writes in a tick, or a partial write, would advance past the 40th cell and
+scroll. It reconnects with backoff if the USB adapter drops, and blanks the
+display on a clean shutdown.
 
 Entrypoint::
 
@@ -81,7 +83,6 @@ def run(dry_run: bool = False) -> int:
         return 0
 
     tick = config.TICK_MS / 1000.0
-    last_shown: tuple[str, str] | None = None
     blanked = False
 
     try:
@@ -91,10 +92,11 @@ def run(dry_run: bool = False) -> int:
             state = load_state()
             try:
                 if state.get("blank"):
+                    # Blank is latched: blank once, then emit nothing until the
+                    # state changes (re-clearing every tick would flicker).
                     if not blanked:
                         driver.blank()
                         blanked = True
-                        last_shown = None
                         log("display blanked")
                 else:
                     if blanked:
@@ -103,9 +105,10 @@ def run(dry_run: bool = False) -> int:
                     frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
                     top, bottom = frame.render(datetime.now(), state)
                     top, bottom = render_lines(top, bottom)
-                    if (top, bottom) != last_shown:
-                        driver.show(top, bottom)
-                        last_shown = (top, bottom)
+                    # Exactly ONE complete frame per tick. The frame is the full
+                    # known-good sequence and is idempotent, so redrawing every
+                    # tick is safe; emitting a second write here would scroll.
+                    driver.show(top, bottom)
             except VFDError as exc:
                 log(f"serial error: {exc}; reconnecting")
                 driver.close()
@@ -113,7 +116,6 @@ def run(dry_run: bool = False) -> int:
                 if reconnected is None:
                     break
                 driver = reconnected
-                last_shown = None
                 blanked = False
                 continue
             time.sleep(tick)
