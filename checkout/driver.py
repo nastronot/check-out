@@ -12,13 +12,14 @@ from . import config
 # --- Confirmed command bytes (single-byte control codes; NOT ESC/POS) --------
 CMD_CLEAR = 0x1F          # clear whole display
 CMD_SET_CURSOR = 0x10     # followed by ONE position byte
+CMD_HIDE_CURSOR = 0x14    # hides the cursor; see "any write re-enables it" below
 
 # Display geometry / addressing (position = line*20 + col).
 COLS = config.COLS
 ROWS = config.ROWS
 POS_TOP = 0x00            # top line starts here
 POS_BOTTOM = 0x14         # bottom line starts here (20)
-POS_MAX = ROWS * COLS - 1  # 0x27
+POS_MAX = ROWS * COLS - 1  # 0x27 — the 40th cell (bottom-right)
 
 # Printable ASCII window. Anything outside is replaced so we never accidentally
 # emit a control byte (e.g. a stray 0x1F would clear the display).
@@ -134,14 +135,50 @@ class VFDDriver:
             raise ValueError(f"position {pos:#04x} out of range 0x00–{POS_MAX:#04x}")
         self._write(bytes([CMD_SET_CURSOR, pos]) + _sanitize(text))
 
-    def show(self, top: str, bottom: str) -> None:
-        """Overwrite both lines in place (no clear, so no visible flash).
+    def _hide_cursor(self, buf: bytearray) -> None:
+        """Append the cursor-hide byte (0x14) to ``buf``.
 
-        Each line is padded/truncated to exactly 20 chars and written at its
-        line origin. Overwrite-in-place avoids the flicker a 0x1F clear causes.
+        CRITICAL: 0x14 hides the cursor, but ANY subsequent write RE-ENABLES it.
+        There is no persistent "cursor off" and no separate "cursor on" byte.
+        Therefore this MUST be the LAST byte of every frame update, after all
+        positioning and text. Do not remove or reorder it.
         """
-        self.write_at(POS_TOP, _pad(top))
-        self.write_at(POS_BOTTOM, _pad(bottom))
+        buf.append(CMD_HIDE_CURSOR)
+
+    def show(self, top: str, bottom: str) -> None:
+        """Overwrite both lines in place as a single buffered write.
+
+        Emits this exact sequence (no 0x1F clear, so no flash):
+
+            0x10 0x00  <top: 20 ASCII bytes>
+            0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
+            0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
+            0x10 0x00  # reposition to SUPPRESS the scroll the 40th write causes
+            0x14       # hide cursor — MUST be last
+
+        Why the bottom line is split 19+1: writing the last cell (0x27) auto-
+        advances the cursor PAST the end, which scrolls the whole display up and
+        loses the top line. Re-anchoring with a reposition (0x10 0x00) right
+        after suppresses that scroll while preserving content. The top line does
+        NOT need the split: its auto-advance lands on 0x14, which we immediately
+        overwrite with a position command anyway.
+
+        Built as one buffer + one serial write so there's no flicker and the
+        cursor-hide is reliably the final byte.
+        """
+        top_b = _sanitize(_pad(top))      # exactly 20 bytes
+        bottom_b = _sanitize(_pad(bottom))  # exactly 20 bytes
+
+        buf = bytearray()
+        buf += bytes([CMD_SET_CURSOR, POS_TOP])
+        buf += top_b
+        buf += bytes([CMD_SET_CURSOR, POS_BOTTOM])
+        buf += bottom_b[:19]                       # cells 0x14..0x26
+        buf += bytes([CMD_SET_CURSOR, POS_MAX])    # 0x27, the 40th cell
+        buf += bottom_b[19:20]                     # the 20th char of the bottom
+        buf += bytes([CMD_SET_CURSOR, POS_TOP])    # suppress the 40th-cell scroll
+        self._hide_cursor(buf)
+        self._write(bytes(buf))
 
     def set_brightness(self, level: int) -> None:
         """STUB — brightness byte is not yet bench-confirmed, so this is a no-op.
@@ -154,5 +191,7 @@ class VFDDriver:
         return
 
     def blank(self) -> None:
-        """Clear the display and leave it dark."""
-        self.clear()
+        """Clear the display and leave it dark, with no cursor block remaining."""
+        buf = bytearray([CMD_CLEAR])
+        self._hide_cursor(buf)  # 0x14 last, so no cursor block on the dark screen
+        self._write(bytes(buf))
