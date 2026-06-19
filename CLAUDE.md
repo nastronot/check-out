@@ -30,28 +30,39 @@ command bytes below are confirmed safe — never emit anything else.
 | Top line    | `0x00`–`0x13` (0–19)  |
 | Bottom line | `0x14`–`0x27` (20–39) |
 
-All 40 cells are usable via the split-write + reposition trick (rule 2).
+The 40th cell (`0x27`) is only written for a visible glyph (rule 2); with a
+space there it's left untouched, so effective width is 39 in that case.
 
 ### Behavioral rules (bench-verified — do not regress)
 1. **Cursor-hide last.** `0x14` hides the cursor, but ANY subsequent write
    re-enables it (no persistent off, no separate on byte). So `0x14` must be the
    FINAL byte of every frame update.
-2. **40th-cell scroll suppression.** Writing cell `0x27` (bottom-right) advances
-   the cursor past the end and scrolls the display up. Immediately reposition
-   (`0x10 0x00`) after writing `0x27` to suppress the scroll; content is kept.
-3. **Brightness = two levels only.** DIM (`0x04 0x20`) / BRIGHT (`0x04 0xFF`).
+2. **40th-cell scroll — only a VISIBLE glyph anchors.** Writing cell `0x27`
+   (bottom-right) advances the cursor past the end and scrolls the display up. A
+   reposition (`0x10 0x00`) right after suppresses that scroll — but ONLY when a
+   visible glyph was written. Writing a SPACE (`0x20`) into `0x27` does NOT
+   anchor the cursor, so it scrolls anyway. Rule: write `0x27` only for a visible
+   char; if the 40th char is a space, DON'T write `0x27` at all (the cursor sits
+   at `0x27` after the 19-char write without advancing). Effective usable width
+   is 39 cells whenever the 40th char is a space.
+3. **No leading clear.** A `0x1F` immediately before a full-frame write scrolls
+   the display. Frames overwrite in place; `0x1F` is for explicit `clear()`/
+   `blank()` only.
+4. **Brightness = two levels only.** DIM (`0x04 0x20`) / BRIGHT (`0x04 0xFF`).
    Other level bytes are ignored — not a 0–255 scale, not four levels. Live, no
    redraw needed.
 
-### `show()` byte sequence (encodes rules 1 & 2 — keep intact)
+### `show()` byte sequence (encodes rules 1–3 — keep intact)
 ```
 0x10 0x00  <top: 20 ASCII bytes>
 0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
+# IF the 40th char is a visible glyph:
 0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
-0x10 0x00  # reposition — suppresses the 40th-cell scroll
+0x10 0x00  # reposition — anchors cursor, suppresses the 40th-cell scroll
+# ELSE (40th char is a space): emit nothing for 0x27.
 0x14       # hide cursor — MUST be last
 ```
-One buffered serial write (no flicker). Overwrite-in-place, no `0x1F` clear.
+One buffered serial write (no flicker). Overwrite-in-place, NO `0x1F` clear.
 
 ### Pin map (RJ-style connector)
 | Pin | Use                                            |

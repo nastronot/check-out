@@ -18,6 +18,9 @@ python -m checkout.daemon --dry-run
 
 # 3. Run live against the display
 python -m checkout.daemon
+
+# Emit a single frame then exit (leaves it on screen) — handy for hardware tests
+python -m checkout.daemon --once
 ```
 
 You should see a centered date on the top line and a ticking `HH:MM:SS` on the

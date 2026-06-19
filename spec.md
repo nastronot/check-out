@@ -106,7 +106,8 @@ ESC-prefixed commands do not apply). Verified by sending bytes and observing the
 - Top line:    positions `0x00`–`0x13` (0–19)
 - Bottom line: positions `0x14`–`0x27` (20–39)
 - `position = line * 20 + column` (line 0 = top, line 1 = bottom)
-- The full 40-cell field is usable via the split-write + reposition trick (rule 2).
+- The 40th cell (`0x27`) is written only for a visible glyph (rule 2); a space there is
+  left untouched, so the effective width is 39 whenever the 40th char is a space.
 
 **Behavioral rules (bench-verified — ground truth):**
 
@@ -116,28 +117,38 @@ ESC-prefixed commands do not apply). Verified by sending bytes and observing the
    frame update, after all positioning and text. (The v0.1.0 clock omitted this, so a
    cursor block appeared on screen — fixed in v0.1.1.)
 
-2. **40th cell scrolls — suppress it.** Writing the last cell (`0x27`, bottom-right)
-   auto-advances the cursor PAST the end, which scrolls the whole display up and loses the
-   top line. To use all 40 cells without scrolling: after writing cell `0x27`, immediately
-   send a reposition (`0x10 0x00`). This re-anchors the cursor and suppresses the scroll;
-   content is preserved.
+2. **40th cell scrolls — and only a VISIBLE glyph anchors it.** Writing the last cell
+   (`0x27`, bottom-right) auto-advances the cursor PAST the end, which scrolls the whole
+   display up and loses the top line. A reposition (`0x10 0x00`) right after writing `0x27`
+   suppresses that scroll — BUT only when a visible glyph was written. Writing a SPACE
+   (`0x20`) into `0x27` does NOT anchor the cursor, so the reposition fires too late and it
+   scrolls anyway (bench-verified: same frame with `X` at `0x27` holds; with a space it
+   wraps). Rule: write `0x27` only for a visible char; if the 40th char is a space, don't
+   write `0x27` at all — the cursor sits at `0x27` after the 19-char write without
+   advancing. So the effective usable width is 39 cells whenever the 40th char is a space.
 
-3. **Brightness is two discrete levels only** — DIM (`0x04 0x20`) and BRIGHT (`0x04 0xFF`).
+3. **No leading clear.** Sending `0x1F` immediately before a full-frame write scrolls the
+   display (bench-verified: an all-`#` fill that holds wraps when prefixed with `0x1F`).
+   Frames must overwrite in place; `0x1F` is for explicit `clear()`/`blank()` only.
+
+4. **Brightness is two discrete levels only** — DIM (`0x04 0x20`) and BRIGHT (`0x04 0xFF`).
    Other level bytes (`0x00`–`0x03`, `0x40`, `0x60`, `0x80`, `0xC0`) are IGNORED. It is NOT
    a 0–255 scale and NOT four levels. Brightness applies live (no redraw needed).
 
-**`show()` byte sequence (do not regress — encodes rules 1 and 2):**
+**`show()` byte sequence (do not regress — encodes rules 1–3):**
 ```
 0x10 0x00  <top: 20 ASCII bytes>
 0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
+# IF the 40th char is a visible glyph:
 0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
-0x10 0x00  # reposition — suppresses the scroll the 40th write would cause
+0x10 0x00  # reposition — anchors the cursor, suppresses the 40th-cell scroll
+# ELSE (40th char is a space): emit nothing for 0x27 (a space there would scroll).
 0x14       # hide cursor — MUST be the final byte
 ```
 Built as one buffered serial write (no flicker, cursor-hide reliably last). The bottom
 line is split 19+1; the top line needs no split (its auto-advance lands on `0x14`, which
 the next position command overwrites anyway). `show()` does NOT clear first — it overwrites
-in place to avoid the flash a `0x1F` clear causes.
+in place (a leading `0x1F` clear would scroll, per rule 3).
 
 **Driver primitives** wrap exactly the confirmed bytes, so the app never emits raw bytes:
 - `clear()` → `0x1F`

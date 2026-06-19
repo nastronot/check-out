@@ -31,6 +31,7 @@ POS_MAX = ROWS * COLS - 1  # 0x27 — the 40th cell (bottom-right)
 _PRINTABLE_MIN = 0x20
 _PRINTABLE_MAX = 0x7E
 _REPLACEMENT = "?"
+_SPACE = 0x20  # a space in the 40th cell (0x27) doesn't anchor the cursor
 
 
 class VFDError(Exception):
@@ -194,35 +195,60 @@ class VFDDriver:
     def show(self, top: str, bottom: str) -> None:
         """Overwrite both lines in place as a single buffered write.
 
-        Emits this exact sequence (no 0x1F clear, so no flash):
+        NO leading 0x1F clear — a clear immediately before a full-frame write
+        scrolls the display (bench-verified). Overwrite-in-place is correct;
+        clear-then-write is not.
+
+        Emits (for a VISIBLE 40th char):
 
             0x10 0x00  <top: 20 ASCII bytes>
             0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
             0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
-            0x10 0x00  # reposition to SUPPRESS the scroll the 40th write causes
+            0x10 0x00  # reposition — anchors the cursor, suppresses the scroll
             0x14       # hide cursor — MUST be last
 
-        Why the bottom line is split 19+1: writing the last cell (0x27) auto-
-        advances the cursor PAST the end, which scrolls the whole display up and
-        loses the top line. Re-anchoring with a reposition (0x10 0x00) right
-        after suppresses that scroll while preserving content. The top line does
-        NOT need the split: its auto-advance lands on 0x14, which we immediately
-        overwrite with a position command anyway.
+        The 40th cell (0x27) is special: writing it auto-advances the cursor PAST
+        the end, which scrolls the whole display up. A reposition (0x10 0x00)
+        immediately after re-anchors and suppresses that scroll — BUT only when a
+        VISIBLE glyph was written; writing a SPACE (0x20) into 0x27 does NOT
+        anchor the cursor, so the reposition fires too late and it still scrolls
+        (bench-verified).
+
+        Therefore the 40th cell is written conditionally:
+          - 40th char visible  -> write it at 0x27, then reposition (0x10 0x00).
+          - 40th char is space -> DON'T touch 0x27 at all. After the 19-char write
+            the cursor sits at 0x27 without advancing past the end, so no scroll.
+
+        DEFAULT/limitation: usable width is effectively 39 cells whenever the 40th
+        char is a space — we never write a space to 0x27. Most content (the
+        centered clock) has a space there anyway, so this is invisible in
+        practice and guaranteed not to scroll. CAVEAT: if a prior frame wrote a
+        visible glyph at 0x27 and the new frame's 40th char is a space, the old
+        glyph is left in place (we can't blank it without writing a space, which
+        scrolls). Acceptable for current content; revisit if a frame needs to
+        toggle the 40th cell from glyph to blank.
+
+        The top line never needs this treatment: its 20-char write auto-advances
+        to 0x14, which we immediately overwrite with an explicit position command
+        before the cursor can scroll.
 
         Built as one buffer + one serial write so there's no flicker and the
         cursor-hide is reliably the final byte.
         """
         top_b = _sanitize(_pad(top))      # exactly 20 bytes
         bottom_b = _sanitize(_pad(bottom))  # exactly 20 bytes
+        cell40 = bottom_b[19]             # the 40th-cell byte (int)
 
         buf = bytearray()
         buf += bytes([CMD_SET_CURSOR, POS_TOP])
         buf += top_b
         buf += bytes([CMD_SET_CURSOR, POS_BOTTOM])
         buf += bottom_b[:19]                       # cells 0x14..0x26
-        buf += bytes([CMD_SET_CURSOR, POS_MAX])    # 0x27, the 40th cell
-        buf += bottom_b[19:20]                     # the 20th char of the bottom
-        buf += bytes([CMD_SET_CURSOR, POS_TOP])    # suppress the 40th-cell scroll
+        if cell40 != _SPACE:
+            buf += bytes([CMD_SET_CURSOR, POS_MAX])  # 0x27, the 40th cell
+            buf += bytes([cell40])                   # a VISIBLE glyph
+            buf += bytes([CMD_SET_CURSOR, POS_TOP])  # anchor + suppress scroll
+        # else: leave 0x27 untouched — a space there would scroll, not anchor.
         self._hide_cursor(buf)
         self._write(bytes(buf))
 

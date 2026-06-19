@@ -68,18 +68,44 @@ def open_driver(dry_run: bool) -> VFDDriver | None:
 
 
 def show_banner(driver: VFDDriver) -> None:
+    # No leading clear(): a 0x1F immediately before a full-frame write scrolls
+    # the display. show() overwrites all cells in place instead.
     top, bottom = render_lines(BANNER_TOP, BANNER_BOTTOM)
-    driver.clear()
     driver.show(top, bottom)
     time.sleep(BANNER_SECONDS)
 
 
-def run(dry_run: bool = False) -> int:
+def render_active(state: dict) -> tuple[str, str] | None:
+    """Render the active frame for ``state``, or None if the display is blank."""
+    if state.get("blank"):
+        return None
+    frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
+    top, bottom = frame.render(datetime.now(), state)
+    return render_lines(top, bottom)
+
+
+def run(dry_run: bool = False, once: bool = False) -> int:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
     driver = open_driver(dry_run)
     if driver is None:
+        return 0
+
+    if once:
+        # Single-frame mode for hardware testing: emit exactly one frame and
+        # exit WITHOUT blanking, so the frame stays on screen for inspection.
+        try:
+            lines = render_active(load_state())
+            if lines is None:
+                driver.blank()
+            else:
+                driver.show(*lines)
+            log("emitted one frame (--once)")
+        except VFDError as exc:
+            log(f"serial error: {exc}")
+        finally:
+            driver.close()
         return 0
 
     tick = config.TICK_MS / 1000.0
@@ -91,7 +117,8 @@ def run(dry_run: bool = False) -> int:
         while not _stop:
             state = load_state()
             try:
-                if state.get("blank"):
+                lines = render_active(state)
+                if lines is None:
                     # Blank is latched: blank once, then emit nothing until the
                     # state changes (re-clearing every tick would flicker).
                     if not blanked:
@@ -102,13 +129,10 @@ def run(dry_run: bool = False) -> int:
                     if blanked:
                         blanked = False
                         log("display resumed")
-                    frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
-                    top, bottom = frame.render(datetime.now(), state)
-                    top, bottom = render_lines(top, bottom)
                     # Exactly ONE complete frame per tick. The frame is the full
                     # known-good sequence and is idempotent, so redrawing every
                     # tick is safe; emitting a second write here would scroll.
-                    driver.show(top, bottom)
+                    driver.show(*lines)
             except VFDError as exc:
                 log(f"serial error: {exc}; reconnecting")
                 driver.close()
@@ -138,8 +162,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print outgoing bytes as hex instead of opening the serial port",
     )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="emit exactly one frame then exit (no banner/loop); leaves it on screen",
+    )
     args = parser.parse_args(argv)
-    return run(dry_run=args.dry_run)
+    return run(dry_run=args.dry_run, once=args.once)
 
 
 if __name__ == "__main__":
