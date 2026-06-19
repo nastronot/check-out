@@ -20,6 +20,9 @@ command bytes below are confirmed safe — never emit anything else.
 | Clear whole display   | `0x1F`                         |
 | Set cursor position   | `0x10` then ONE position byte  |
 | Write text            | printable ASCII at cursor (auto-advances + wraps) |
+| Hide cursor           | `0x14` (must be sent LAST — see rule 1) |
+| Brightness DIM        | `0x04 0x20`                    |
+| Brightness BRIGHT     | `0x04 0xFF`                    |
 
 ### Addressing (linear: `position = line*20 + col`)
 | Line        | Range        |
@@ -27,10 +30,28 @@ command bytes below are confirmed safe — never emit anything else.
 | Top line    | `0x00`–`0x13` (0–19)  |
 | Bottom line | `0x14`–`0x27` (20–39) |
 
-### Brightness — NOT yet confirmed
-`set_brightness()` is a runtime no-op. Do **not** send unconfirmed bytes.
-Candidate sequences to test on the bench: `0x04` + level, or one of
-`0x20 / 0x40 / 0x60 / 0xFF`.
+All 40 cells are usable via the split-write + reposition trick (rule 2).
+
+### Behavioral rules (bench-verified — do not regress)
+1. **Cursor-hide last.** `0x14` hides the cursor, but ANY subsequent write
+   re-enables it (no persistent off, no separate on byte). So `0x14` must be the
+   FINAL byte of every frame update.
+2. **40th-cell scroll suppression.** Writing cell `0x27` (bottom-right) advances
+   the cursor past the end and scrolls the display up. Immediately reposition
+   (`0x10 0x00`) after writing `0x27` to suppress the scroll; content is kept.
+3. **Brightness = two levels only.** DIM (`0x04 0x20`) / BRIGHT (`0x04 0xFF`).
+   Other level bytes are ignored — not a 0–255 scale, not four levels. Live, no
+   redraw needed.
+
+### `show()` byte sequence (encodes rules 1 & 2 — keep intact)
+```
+0x10 0x00  <top: 20 ASCII bytes>
+0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
+0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
+0x10 0x00  # reposition — suppresses the 40th-cell scroll
+0x14       # hide cursor — MUST be last
+```
+One buffered serial write (no flicker). Overwrite-in-place, no `0x1F` clear.
 
 ### Pin map (RJ-style connector)
 | Pin | Use                                            |
@@ -81,4 +102,4 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **Phase 2:** FastAPI web UI that writes `state.json` (custom message, mode,
   flash patterns, blank, brightness).
 - **Phase 3:** more frames + rotation + Docker for arda.
-- Outstanding: confirm the brightness byte.
+- Brightness byte confirmed in v0.1.1 (two levels: dim/bright).
