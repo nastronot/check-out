@@ -1,0 +1,158 @@
+"""VFDDriver — the only component that emits raw bytes to the display.
+
+Hardware is a salvaged IBM SurePOS 2x20 VFD on a WRITE-ONLY 9600 8N1 serial link.
+Only the bench-confirmed command bytes below are ever sent; nothing else in the
+app touches the port. See CLAUDE.md for the full hardware reference.
+"""
+
+from __future__ import annotations
+
+from . import config
+
+# --- Confirmed command bytes (single-byte control codes; NOT ESC/POS) --------
+CMD_CLEAR = 0x1F          # clear whole display
+CMD_SET_CURSOR = 0x10     # followed by ONE position byte
+
+# Display geometry / addressing (position = line*20 + col).
+COLS = config.COLS
+ROWS = config.ROWS
+POS_TOP = 0x00            # top line starts here
+POS_BOTTOM = 0x14         # bottom line starts here (20)
+POS_MAX = ROWS * COLS - 1  # 0x27
+
+# Printable ASCII window. Anything outside is replaced so we never accidentally
+# emit a control byte (e.g. a stray 0x1F would clear the display).
+_PRINTABLE_MIN = 0x20
+_PRINTABLE_MAX = 0x7E
+_REPLACEMENT = "?"
+
+
+class VFDError(Exception):
+    """Raised on a serial write failure (e.g. USB adapter unplugged).
+
+    The daemon catches this to drive its reconnect/backoff loop.
+    """
+
+
+def _sanitize(text: str) -> bytes:
+    """Map a string to safe printable-ASCII bytes.
+
+    Non-encodable or non-printable characters become ``?`` so the byte stream
+    can never contain a control code that the display would interpret.
+    """
+    out = bytearray()
+    for ch in text:
+        o = ord(ch)
+        if _PRINTABLE_MIN <= o <= _PRINTABLE_MAX:
+            out.append(o)
+        else:
+            out.append(ord(_REPLACEMENT))
+    return bytes(out)
+
+
+def _pad(text: str) -> str:
+    """Pad/truncate to exactly COLS chars (driver-side safety net)."""
+    return text[:COLS].ljust(COLS)
+
+
+class VFDDriver:
+    """Owns the serial port and all outgoing command bytes.
+
+    Use as a context manager so the port is always closed::
+
+        with VFDDriver() as vfd:
+            vfd.show("hello", "world")
+
+    ``dry_run=True`` prints the outgoing byte stream as hex instead of opening
+    the port, so the logic is exercisable on any machine with no display.
+    """
+
+    def __init__(
+        self,
+        port: str | None = None,
+        baud: int | None = None,
+        dry_run: bool = False,
+    ) -> None:
+        self.port = port if port is not None else config.PORT
+        self.baud = baud if baud is not None else config.BAUD
+        self.dry_run = dry_run
+        self._serial = None
+        if not dry_run:
+            self.open()
+
+    # --- lifecycle -----------------------------------------------------------
+    def open(self) -> None:
+        """Open the serial port (no-op in dry-run)."""
+        if self.dry_run:
+            return
+        import serial  # imported lazily so dry-run needs no pyserial
+
+        try:
+            self._serial = serial.Serial(self.port, self.baud, timeout=0)
+        except (serial.SerialException, OSError) as exc:
+            raise VFDError(f"could not open {self.port}: {exc}") from exc
+
+    def close(self) -> None:
+        if self._serial is not None:
+            try:
+                self._serial.close()
+            finally:
+                self._serial = None
+
+    def __enter__(self) -> "VFDDriver":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    # --- low-level write -----------------------------------------------------
+    def _write(self, data: bytes) -> None:
+        """Send raw bytes; print hex in dry-run, else write to the port."""
+        if self.dry_run:
+            print("TX " + " ".join(f"{b:02X}" for b in data))
+            return
+        if self._serial is None:
+            raise VFDError("serial port is not open")
+        import serial
+
+        try:
+            self._serial.write(data)
+        except (serial.SerialException, OSError) as exc:
+            raise VFDError(f"write to {self.port} failed: {exc}") from exc
+
+    # --- public command surface ----------------------------------------------
+    def clear(self) -> None:
+        """Clear the whole display (0x1F)."""
+        self._write(bytes([CMD_CLEAR]))
+
+    def write_at(self, pos: int, text: str) -> None:
+        """Set the cursor to ``pos`` then write sanitized ASCII text.
+
+        ``pos`` is a linear address 0x00–0x27 (line*20 + col).
+        """
+        if not (POS_TOP <= pos <= POS_MAX):
+            raise ValueError(f"position {pos:#04x} out of range 0x00–{POS_MAX:#04x}")
+        self._write(bytes([CMD_SET_CURSOR, pos]) + _sanitize(text))
+
+    def show(self, top: str, bottom: str) -> None:
+        """Overwrite both lines in place (no clear, so no visible flash).
+
+        Each line is padded/truncated to exactly 20 chars and written at its
+        line origin. Overwrite-in-place avoids the flicker a 0x1F clear causes.
+        """
+        self.write_at(POS_TOP, _pad(top))
+        self.write_at(POS_BOTTOM, _pad(bottom))
+
+    def set_brightness(self, level: int) -> None:
+        """STUB — brightness byte is not yet bench-confirmed, so this is a no-op.
+
+        TODO: confirm on the bench, then implement. Candidate sequences:
+          - 0x04 followed by a level byte
+          - one of 0x20 / 0x40 / 0x60 / 0xFF
+        Do NOT send any of these at runtime until verified.
+        """
+        return
+
+    def blank(self) -> None:
+        """Clear the display and leave it dark."""
+        self.clear()
