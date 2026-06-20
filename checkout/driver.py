@@ -16,6 +16,8 @@ linear ``col + row*20``.
 
 from __future__ import annotations
 
+import re
+
 from . import config
 
 # --- Futaba M202MD10C protocol commands (authoritative, bench-confirmed) ------
@@ -48,14 +50,34 @@ INIT_SEQUENCE = bytes([RESET, EXTENDED_MODE, EXTENDED_ON, DISABLE_VERTICAL_SCROL
 # now. TODO: retest the intermediate level bytes under extended mode.
 BRIGHTNESS = {"dim": b"\x04\x20", "bright": b"\x04\xff"}
 
-# User-defined characters: 9 glyphs (index 0..8), each a 5x7 cell — 7 row bytes,
-# only the low 5 bits of each row are meaningful (5-pixel-wide cell).
-MAX_USER_GLYPHS = 9
+# User-defined characters (bench-confirmed). 9 glyph slots live at NON-CONTIGUOUS
+# character codes (0x1B is skipped). slot index 0..8 -> the code byte, used BOTH
+# to define the glyph (0x03 <code> ...) and to display it (write the code byte).
+GLYPH_CODES = (0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1C, 0x1D, 0x1E)
+MAX_USER_GLYPHS = len(GLYPH_CODES)  # 9
 GLYPH_ROWS = 7
-GLYPH_ROW_MASK = 0x1F
+# Bitmap encoding (bench-confirmed): 7 row bytes, top row first. The display
+# reads the 5 columns from bits 3-7 of each byte:
+#   column 1 (leftmost)  = bit 3 (0x08) ... column 5 (rightmost) = bit 7 (0x80).
+# The PUBLIC api takes editor-natural rows where the LOW 5 bits = columns 1..5
+# (bit0=col1 ... bit4=col5); each row is translated to the wire byte by <<3.
+#   hw_byte = (row & 0x1F) << 3   (e.g. 0x1F -> 0xF8, 0x01 -> 0x08, 0x10 -> 0x80)
+GLYPH_PIXEL_MASK = 0x1F
+GLYPH_COL_SHIFT = 3
 
-# Code pages: 12 selectable pages (0..11).
-CODE_PAGES = 12
+# Code pages (SelectCodePage 0x02 + page byte). 12 pages total (0..11); names
+# from the SNMetamorph library. select_code_page() accepts a name below or a raw
+# int 0..11. Pages 6..11 exist per the library but are not yet identified on our
+# unit, so only the confirmed names are mapped here.
+CODE_PAGES = {
+    "default": 0,
+    "japanese": 1,   # CP897
+    "cp850": 2,      # Western Europe (Fr/De/Es/Pt)
+    "cp852": 3,      # Central Europe (Latin-2)
+    "cp855": 4,      # Cyrillic
+    "cp857": 5,      # Turkish
+}
+NUM_CODE_PAGES = 12
 
 # Display geometry / addressing (position = col + row*20, row 0 = top).
 COLS = config.COLS
@@ -65,10 +87,16 @@ POS_BOTTOM = 0x14         # bottom line starts here (20)
 POS_MAX = ROWS * COLS - 1  # 0x27 — the 40th cell (now fully writable)
 
 # Printable ASCII window. Anything outside is replaced so we never accidentally
-# emit a control byte (e.g. a stray 0x1F would reset the display).
+# emit a control byte (e.g. a stray 0x1F would reset the display). The user-glyph
+# codes (0x15-0x1E) sit below this window but are legitimate display characters,
+# so they are allowed through explicitly.
 _PRINTABLE_MIN = 0x20
 _PRINTABLE_MAX = 0x7E
 _REPLACEMENT = "?"
+_GLYPH_CODE_SET = frozenset(GLYPH_CODES)
+
+# {g0}..{g8} placeholders in message text -> the glyph code char for that slot.
+_GLYPH_PLACEHOLDER_RE = re.compile(r"\{g([0-8])\}")
 
 
 class VFDError(Exception):
@@ -78,16 +106,41 @@ class VFDError(Exception):
     """
 
 
-def _sanitize(text: str) -> bytes:
-    """Map a string to safe printable-ASCII bytes.
+def glyph_code(slot_index: int) -> int:
+    """Return the character-code byte that displays user glyph ``slot_index`` (0..8).
 
-    Non-encodable or non-printable characters become ``?`` so the byte stream
-    can never contain a control code that the display would interpret.
+    The codes are non-contiguous (0x1B is skipped), so this is the canonical map
+    from slot to wire byte — use it both to define and to display a glyph.
+    """
+    if not (0 <= slot_index < MAX_USER_GLYPHS):
+        raise ValueError(
+            f"glyph slot {slot_index} out of range 0..{MAX_USER_GLYPHS - 1}"
+        )
+    return GLYPH_CODES[slot_index]
+
+
+def apply_glyph_placeholders(text: str) -> str:
+    """Replace ``{g0}``..``{g8}`` in ``text`` with the glyph code char for each slot.
+
+    Lets users mix custom glyphs into a message; the substituted char survives
+    :func:`_sanitize` (glyph codes are allow-listed) and renders the user glyph.
+    """
+    return _GLYPH_PLACEHOLDER_RE.sub(
+        lambda m: chr(GLYPH_CODES[int(m.group(1))]), text
+    )
+
+
+def _sanitize(text: str) -> bytes:
+    """Map a string to safe display bytes.
+
+    Printable ASCII and the user-glyph codes pass through; anything else becomes
+    ``?`` so the byte stream can never contain a control code the display would
+    interpret.
     """
     out = bytearray()
     for ch in text:
         o = ord(ch)
-        if _PRINTABLE_MIN <= o <= _PRINTABLE_MAX:
+        if _PRINTABLE_MIN <= o <= _PRINTABLE_MAX or o in _GLYPH_CODE_SET:
             out.append(o)
         else:
             out.append(ord(_REPLACEMENT))
@@ -298,39 +351,51 @@ class VFDDriver:
             bytes([ENABLE_VERTICAL_SCROLL if enabled else DISABLE_VERTICAL_SCROLL])
         )
 
-    def define_character(self, index: int, rows7) -> None:
-        """Define user glyph ``index`` (0..8) from 7 row bytes (DefineCharacter).
+    def define_character(self, slot_index: int, rows) -> None:
+        """Define user glyph ``slot_index`` (0..8) from 7 rows (DefineCharacter).
 
-        Emits ``0x03 <index> <7 row bytes> 0x00``. Each row is a 5-pixel-wide
-        cell, so only the low 5 bits are used (masked to be safe — this also
-        guarantees a row byte can never look like a control code mid-frame).
+        Emits ``0x03 <code> <7 translated row bytes> 0x00`` where ``code`` is
+        ``GLYPH_CODES[slot_index]`` (the non-contiguous slot byte).
 
-        CONFIRM (bench): which character code(s) render a defined glyph after
-        this call. Probe by defining glyph 0, then writing bytes 0x00..0x08 and
-        observing which shows it; document the code->glyph mapping. The caller
-        should re-run initialize() afterward — defining a character may reset the
-        display's extended-mode/scroll state.
+        ``rows`` is the glyph as 7 ints, top row first, in the editor-natural
+        convention: the LOW 5 bits are columns 1..5 (bit0=col1 ... bit4=col5).
+        The display reads columns from bits 3-7, so each row is translated to the
+        wire byte by ``(row & 0x1F) << 3`` (e.g. 0x1F -> 0xF8, full row).
+
+        The caller should re-run initialize() afterward — defining a character
+        may reset the display's extended-mode/scroll state.
         """
-        if not (0 <= index < MAX_USER_GLYPHS):
+        if not (0 <= slot_index < MAX_USER_GLYPHS):
             raise ValueError(
-                f"glyph index {index} out of range 0..{MAX_USER_GLYPHS - 1}"
+                f"glyph slot {slot_index} out of range 0..{MAX_USER_GLYPHS - 1}"
             )
-        rows = list(rows7)
+        rows = list(rows)
         if len(rows) != GLYPH_ROWS:
             raise ValueError(f"glyph needs exactly {GLYPH_ROWS} rows, got {len(rows)}")
         try:
-            masked = bytes((int(r) & GLYPH_ROW_MASK) for r in rows)
+            wire = bytes(
+                ((int(r) & GLYPH_PIXEL_MASK) << GLYPH_COL_SHIFT) for r in rows
+            )
         except (TypeError, ValueError) as exc:
             raise ValueError(f"glyph rows must be ints: {exc}") from None
-        self._write(bytes([DEFINE_CHARACTER, index]) + masked + bytes([0x00]))
+        code = GLYPH_CODES[slot_index]
+        self._write(bytes([DEFINE_CHARACTER, code]) + wire + bytes([0x00]))
 
-    def select_code_page(self, page: int) -> None:
-        """Select character code page ``page`` (0..11) — ``0x02 <page>``.
+    def select_code_page(self, page) -> None:
+        """Select a character code page — ``0x02 <page>``.
 
-        CONFIRM (bench): whether the pages visibly change glyph sets on our unit.
+        ``page`` may be a name from :data:`CODE_PAGES` (e.g. ``"cp850"``) or a raw
+        int 0..11.
         """
-        if not (0 <= page < CODE_PAGES):
-            raise ValueError(f"code page {page} out of range 0..{CODE_PAGES - 1}")
+        if isinstance(page, str):
+            try:
+                page = CODE_PAGES[page.lower()]
+            except KeyError:
+                raise ValueError(
+                    f"unknown code page {page!r}; known names: {sorted(CODE_PAGES)}"
+                ) from None
+        if not (0 <= page < NUM_CODE_PAGES):
+            raise ValueError(f"code page {page} out of range 0..{NUM_CODE_PAGES - 1}")
         self._write(bytes([SELECT_CODE_PAGE, page]))
 
     def self_test(self) -> None:
