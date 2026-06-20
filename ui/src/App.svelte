@@ -23,16 +23,23 @@
 
   // Preview mirrors /api/status; glyph bitmaps come from the desired state.
   $: glyphs = $appState?.glyphs ?? {};
+
+  // App version (Vite-injected from package.json, so it never goes stale).
+  const version = __APP_VERSION__;
 </script>
 
 <div class="shell">
   <header class="masthead">
     <div class="masthead__brand">
-      <span class="masthead__dot"></span>
-      <h1>check&#8209;out</h1>
+      <span
+        class="masthead__dot"
+        class:masthead__dot--dead={!$health.daemon_alive}
+        title={$health.daemon_alive ? 'daemon alive' : 'daemon offline'}
+      ></span>
+      <img class="masthead__logo" src="/logo.png" alt="check-out" />
       <span class="tag">control surface</span>
     </div>
-    <span class="masthead__sub">phosphor status board · v0.4.0</span>
+    <span class="masthead__sub">phosphor status board · v{version}</span>
   </header>
 
   <main class="layout">
@@ -83,14 +90,24 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
+    flex: none;
     background: var(--phosphor);
     box-shadow: 0 0 10px var(--phosphor);
+    transition: background 0.2s, box-shadow 0.2s;
   }
 
-  h1 {
-    font-size: 20px;
-    letter-spacing: 0.08em;
-    color: var(--phosphor-ink);
+  .masthead__dot--dead {
+    background: var(--red-dead);
+    box-shadow: 0 0 10px rgba(240, 85, 61, 0.6);
+  }
+
+  .masthead__logo {
+    display: block;
+    height: 34px;
+    width: auto;
+    /* crisp scaling for the dot-matrix wordmark */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
   }
 
   .masthead__sub {
