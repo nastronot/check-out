@@ -33,11 +33,24 @@ def test_defaults_include_full_phase2_schema(state_path):
     assert loaded["code_page"] == 0
     assert loaded["scroll_speed_ms"] == 300
     assert loaded["animation"] == "none"
-    assert loaded["animation_params"] == {"on_ms": 500, "off_ms": 500}
+    assert loaded["animation_params"] == {"on_ms": 500, "off_ms": 500, "step_ms": 200}
     assert loaded["glyphs"] == {}
     assert loaded["command"] == {"id": None, "action": None, "args": {}}
     assert loaded["align_top"] == "center"
     assert loaded["align_bottom"] == "center"
+
+
+def test_pulse_animation_and_step_ms_accepted(state_path):
+    import json
+
+    state_path.write_text(
+        json.dumps({"animation": "pulse", "animation_params": {"step_ms": 120}})
+    )
+    loaded = state.load_state()
+    assert loaded["animation"] == "pulse"
+    # Partial animation_params merges: step_ms set, on_ms/off_ms keep defaults.
+    assert loaded["animation_params"]["step_ms"] == 120
+    assert loaded["animation_params"]["on_ms"] == 500
 
 
 def test_partial_write_backfills_alignment_and_keeps_set_value(state_path):
@@ -94,7 +107,7 @@ def test_partial_nested_animation_params_merged(state_path):
 
     state_path.write_text(json.dumps({"animation_params": {"on_ms": 100}}))
     loaded = state.load_state()
-    assert loaded["animation_params"] == {"on_ms": 100, "off_ms": 500}
+    assert loaded["animation_params"] == {"on_ms": 100, "off_ms": 500, "step_ms": 200}
 
 
 def test_status_round_trip(tmp_path, monkeypatch):

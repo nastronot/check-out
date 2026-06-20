@@ -87,6 +87,27 @@ def test_blink_pulses_brightness_min_on_off_phase():
     assert daemon.animation_brightness(600, "none", p, 2) == 2
 
 
+def test_pulse_is_a_triangle_wave_through_four_levels():
+    p = {"step_ms": 100}
+    # One step per 100ms -> the level sweeps 0,1,2,3,2,1, then repeats.
+    seq = [daemon.animation_brightness(t * 100, "pulse", p, 3) for t in range(12)]
+    assert seq == [0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1]
+    # pulse OVERRIDES the static base (sweeps the full range regardless of base).
+    assert daemon.animation_brightness(0, "pulse", p, 1) == 0
+    assert daemon.animation_brightness(300, "pulse", p, 1) == 3
+
+
+def test_pulse_distinct_from_blink_and_flash():
+    p = {"on_ms": 500, "off_ms": 500, "step_ms": 100}
+    # pulse never blanks (resolve_emit always shows the frame)...
+    assert daemon.resolve_emit(300, "pulse", p, "T", "B") == ("show", "T", "B")
+    # ...and it's a 4-level sweep, not blink's 2-state snap (0 or base):
+    pulse_levels = {daemon.animation_brightness(t * 100, "pulse", p, 3) for t in range(6)}
+    blink_levels = {daemon.animation_brightness(t * 100, "blink", p, 3) for t in range(20)}
+    assert pulse_levels == {0, 1, 2, 3}
+    assert blink_levels == {0, 3}  # blink only snaps between MIN and the base
+
+
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
