@@ -24,7 +24,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,6 +37,7 @@ from checkout.state import (
     save_state,
     status_defaults,
 )
+from web import library
 
 # A status.json older than this (or missing) means the daemon isn't running.
 STALE_SECONDS = 5.0
@@ -122,6 +123,61 @@ def post_command(body: CommandBody) -> dict:
 def get_health() -> dict:
     """Liveness derived from status.json freshness."""
     return {"ok": True, "daemon_alive": _daemon_alive(load_status())}
+
+
+# --- library (web-owned; daemon never reads it) ----------------------------
+@app.get("/api/library")
+def get_library() -> dict:
+    """The full saved library of messages + glyphs."""
+    return library.load_library()
+
+
+@app.post("/api/library/messages")
+def save_message(payload: dict) -> dict:
+    """Save the current composable state (message/mode/align/brightness/glyphs)."""
+    try:
+        return library.add_message(payload or {})
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@app.delete("/api/library/messages/{item_id}")
+def remove_message(item_id: str) -> dict:
+    try:
+        library.delete_message(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="message not found") from None
+    return {"ok": True}
+
+
+@app.post("/api/library/messages/{item_id}/recall")
+def recall_message(item_id: str) -> dict:
+    """Apply a saved message to the live state (fields + its glyphs)."""
+    try:
+        item = library.get_message(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="message not found") from None
+    merged = merge_patch(load_state(), library.message_to_state_patch(item))
+    save_state(merged)
+    return load_state()
+
+
+@app.post("/api/library/glyphs")
+def save_glyph(payload: dict) -> dict:
+    """Save a glyph bitmap (name + 7 low-5-bit rows) to the library."""
+    try:
+        return library.add_glyph(payload or {})
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@app.delete("/api/library/glyphs/{item_id}")
+def remove_glyph(item_id: str) -> dict:
+    try:
+        library.delete_glyph(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="glyph not found") from None
+    return {"ok": True}
 
 
 # --- static UI (mounted last so /api/* wins) -------------------------------

@@ -38,6 +38,9 @@ RECONNECT_BACKOFF_MAX: float = 5.0
 # ownership one-directional, so there are no races between daemon and web.
 STATE_PATH: str = os.environ.get("CHECKOUT_STATE_PATH", "./state.json")
 STATUS_PATH: str = os.environ.get("CHECKOUT_STATUS_PATH", "./status.json")
+# LIBRARY_PATH: web-owned store of saved messages + glyphs. The daemon NEVER
+# reads it; recalling a library item writes state.json via the existing path.
+LIBRARY_PATH: str = os.environ.get("CHECKOUT_LIBRARY_PATH", "./library.json")
 
 # --- Frame rotation ----------------------------------------------------------
 # Single frame this phase; rotation lands in Phase 3.

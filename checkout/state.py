@@ -96,7 +96,13 @@ def status_defaults() -> dict:
     }
 
 
-def _atomic_write_json(path: str, data: dict, prefix: str) -> None:
+def atomic_write_json(path: str, data, prefix: str = ".tmp-") -> None:
+    """Public atomic JSON writer (temp file + ``os.replace``), reused by the
+    web library store so it gets the same crash-safe write as state/status."""
+    _atomic_write_json(path, data, prefix)
+
+
+def _atomic_write_json(path: str, data, prefix: str) -> None:
     """Serialize ``data`` to ``path`` atomically (temp file + ``os.replace``)."""
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)

@@ -1,9 +1,11 @@
 # Runtime state written by the daemon / web UI
 state.json
 status.json
+library.json
 *.state.tmp*
 .state-*.tmp
 .status-*.tmp
+.library-*.tmp
 
 # Node / Vite (web UI)
 node_modules/
