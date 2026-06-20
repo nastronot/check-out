@@ -5,6 +5,7 @@
   export let patch: (p: Partial<AppState>) => void;
 
   const MODES: Mode[] = ['clock', 'message', 'ticker'];
+  const BRIGHTNESSES: Brightness[] = ['dim', 'bright'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink'];
   const CODE_PAGES: { value: number; label: string }[] = [
     { value: 0, label: 'Default' },
@@ -32,9 +33,36 @@
   $: budget = messageDraft.length;
   $: overBudget = budget > 40;
 
+  // Typed handlers. Svelte parses markup expressions with acorn (not TS), so no
+  // casts/annotations can live in the template — keep all TS in here.
   function num(e: Event): number {
     return Number((e.target as HTMLInputElement | HTMLSelectElement).value);
   }
+  function checked(e: Event): boolean {
+    return (e.currentTarget as HTMLInputElement).checked;
+  }
+
+  const setMode = (m: Mode) => patch({ mode: m });
+  const setBrightness = (b: Brightness) => patch({ brightness: b });
+  const setAnimation = (a: Animation) => patch({ animation: a });
+  const setBlank = (e: Event) => patch({ blank: checked(e) });
+  const setScroll = (e: Event) => patch({ scroll: checked(e) });
+  const setCodePage = (e: Event) => patch({ code_page: num(e) });
+  const setTickerSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
+  const setOnMs = (e: Event) =>
+    patch({
+      animation_params: {
+        on_ms: num(e),
+        off_ms: state?.animation_params.off_ms ?? 500,
+      },
+    });
+  const setOffMs = (e: Event) =>
+    patch({
+      animation_params: {
+        on_ms: state?.animation_params.on_ms ?? 500,
+        off_ms: num(e),
+      },
+    });
 </script>
 
 <section class="panel">
@@ -51,7 +79,7 @@
           <button
             type="button"
             aria-pressed={state.mode === m}
-            on:click={() => patch({ mode: m })}>{m}</button
+            on:click={() => setMode(m)}>{m}</button
           >
         {/each}
       </div>
@@ -80,11 +108,11 @@
     <div class="field">
       <span class="field__label">Brightness</span>
       <div class="seg">
-        {#each ['dim', 'bright'] as b}
+        {#each BRIGHTNESSES as b}
           <button
             type="button"
             aria-pressed={state.brightness === b}
-            on:click={() => patch({ brightness: b as Brightness })}>{b}</button
+            on:click={() => setBrightness(b)}>{b}</button
           >
         {/each}
       </div>
@@ -92,21 +120,13 @@
 
     <div class="row switches">
       <label class="switch">
-        <input
-          type="checkbox"
-          checked={state.blank}
-          on:change={(e) => patch({ blank: e.currentTarget.checked })}
-        />
+        <input type="checkbox" checked={state.blank} on:change={setBlank} />
         <span class="switch__track"></span>
         <span class="switch__label">Blank</span>
       </label>
 
       <label class="switch" title="Hardware vertical scroll — for marquee effects">
-        <input
-          type="checkbox"
-          checked={state.scroll}
-          on:change={(e) => patch({ scroll: e.currentTarget.checked })}
-        />
+        <input type="checkbox" checked={state.scroll} on:change={setScroll} />
         <span class="switch__track"></span>
         <span class="switch__label">HW scroll</span>
       </label>
@@ -115,10 +135,7 @@
     <!-- Code page -->
     <div class="field">
       <span class="field__label">Code page</span>
-      <select
-        value={state.code_page}
-        on:change={(e) => patch({ code_page: num(e) })}
-      >
+      <select value={state.code_page} on:change={setCodePage}>
         {#each CODE_PAGES as cp}
           <option value={cp.value}>{cp.value} · {cp.label}</option>
         {/each}
@@ -133,7 +150,7 @@
           <button
             type="button"
             aria-pressed={state.animation === a}
-            on:click={() => patch({ animation: a })}>{a}</button
+            on:click={() => setAnimation(a)}>{a}</button
           >
         {/each}
       </div>
@@ -145,13 +162,7 @@
               min="50"
               step="50"
               value={state.animation_params.on_ms}
-              on:change={(e) =>
-                patch({
-                  animation_params: {
-                    on_ms: num(e),
-                    off_ms: state?.animation_params.off_ms ?? 500,
-                  },
-                })}
+              on:change={setOnMs}
             /> ms</label>
           <label class="field__hint">off
             <input
@@ -159,13 +170,7 @@
               min="50"
               step="50"
               value={state.animation_params.off_ms}
-              on:change={(e) =>
-                patch({
-                  animation_params: {
-                    on_ms: state?.animation_params.on_ms ?? 500,
-                    off_ms: num(e),
-                  },
-                })}
+              on:change={setOffMs}
             /> ms</label>
         </div>
       {/if}
@@ -181,7 +186,7 @@
             min="50"
             step="50"
             value={state.scroll_speed_ms}
-            on:change={(e) => patch({ scroll_speed_ms: num(e) })}
+            on:change={setTickerSpeed}
           /> ms / step
         </label>
       </div>

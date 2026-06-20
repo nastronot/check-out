@@ -6,7 +6,7 @@
   const slots = GLYPH_CODES.map((code, i) => ({ i, code }));
 </script>
 
-<section class="panel panel--disabled glyphs" aria-disabled="true">
+<section class="panel panel--disabled glyphs">
   <div class="panel__title">
     Glyph editor <span class="tag">coming next</span>
   </div>
