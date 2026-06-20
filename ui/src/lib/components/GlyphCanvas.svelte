@@ -10,7 +10,8 @@
   export let dotSize = 6;
   /** Center-to-center dot pitch (logical px). */
   export let pitch = 8;
-  export let bright = true;
+  /** Phosphor intensity 0..3; the editor draws glyphs at full brightness. */
+  export let level = 3;
   /** When true, pointer-drag paints cells and emits `paint` events. */
   export let interactive = false;
 
@@ -38,7 +39,7 @@
   });
 
   // Redraw on data change (explicit deps so it survives minification).
-  $: if (ctx) draw(rows, bright);
+  $: if (ctx) draw(rows, level);
 
   function sizeAndDraw(): void {
     if (!canvas || !ctx) return;
@@ -53,10 +54,10 @@
       const s = (cssW / W) * dpr;
       ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    draw(rows, bright);
+    draw(rows, level);
   }
 
-  function draw(g: number[], isBright: boolean): void {
+  function draw(g: number[], lvl: number): void {
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = GLASS_BG;
@@ -65,7 +66,7 @@
       for (let c = 0; c < CELL_COLS; c++) {
         const x = ORIGIN + c * pitch;
         const y = ORIGIN + r * pitch;
-        paintCell(ctx, x, y, bitOf(g, r, c), { dotSize, bright: isBright });
+        paintCell(ctx, x, y, bitOf(g, r, c), { dotSize, level: lvl });
       }
     }
   }

@@ -49,7 +49,10 @@
   $: blank = !!status?.blank;
   $: top = blank ? '' : status?.top ?? '';
   $: bottom = blank ? '' : status?.bottom ?? '';
-  $: bright = status?.brightness !== 'dim';
+  // Brightness is a level index 0..3 (default Maximum if unset).
+  $: level = typeof status?.brightness === 'number' ? status.brightness : 3;
+  const LEVEL_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
+  $: levelLabel = LEVEL_LABELS[Math.max(0, Math.min(3, Math.round(level)))];
 
   onMount(() => {
     // Init order: get the 2D context, size the buffer, THEN draw. Drawing into
@@ -63,7 +66,7 @@
   });
 
   // Redraw whenever the mirrored data changes (every poll / glyph edit).
-  $: if (ctx) drawFrame(top, bottom, bright, glyphs);
+  $: if (ctx) drawFrame(top, bottom, level, glyphs);
 
   /** Size the drawing buffer to the rendered width (×dpr), then draw. */
   function sizeAndDraw(): void {
@@ -82,13 +85,13 @@
       const s = (cssW / W) * dpr;
       ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    drawFrame(top, bottom, bright, glyphs);
+    drawFrame(top, bottom, level, glyphs);
   }
 
   function drawFrame(
     topLine: string,
     bottomLine: string,
-    isBright: boolean,
+    brightnessLevel: number,
     glyphMap: GlyphMap,
   ): void {
     if (!ctx) return;
@@ -99,8 +102,6 @@
     ctx.fillRect(0, 0, W, H);
 
     const lines = [topLine, bottomLine].map((l) => lineToCells(l, glyphMap));
-    // Bloom kept modest so tight square dots stay distinct, not merged.
-    const litBlur = isBright ? 10 : 6;
     let litDots = 0;
 
     for (let li = 0; li < 2; li++) {
@@ -118,8 +119,7 @@
             // Same shared square-dot render as the glyph editor.
             paintCell(ctx, x, y, lit, {
               dotSize: DOT_SIZE,
-              bright: isBright,
-              blur: litBlur,
+              level: brightnessLevel,
             });
           }
         }
@@ -159,7 +159,7 @@
   <div class="vfd__caption">
     <span class="tag">IBM SUREPOS 2×20 VFD</span>
     <span class="vfd__cap-right">
-      {status?.blank ? 'BLANK' : (status?.brightness ?? '—').toUpperCase()}
+      {status?.blank ? 'BLANK' : levelLabel}
     </span>
   </div>
 </div>

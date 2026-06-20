@@ -1,7 +1,8 @@
 // Mirrors checkout/state.py — keep in sync with the daemon's schema.
 
 export type Mode = 'clock' | 'message' | 'ticker';
-export type Brightness = 'dim' | 'bright';
+/** Brightness is a discrete level index 0..3 (0 Min, 1 Med, 2 Med+, 3 Max). */
+export type Brightness = 0 | 1 | 2 | 3;
 export type Animation = 'none' | 'flash' | 'blink';
 export type Align = 'left' | 'center' | 'right';
 
