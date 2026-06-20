@@ -117,6 +117,8 @@ port owner). The web UI is just a writer of this file.
 {
   "mode": "clock" | "message" | "ticker",   // active frame
   "message": "text for message/ticker mode",
+  "align_top": "left" | "center" | "right",     // line 1 justification (default center)
+  "align_bottom": "left" | "center" | "right",  // line 2 justification (default center)
   "brightness": "dim" | "bright",
   "blank": false,
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
@@ -151,8 +153,13 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
 
 ### Modes & animations
 - **Modes:** `clock` (date/time), `message` (static; newline splits the two
-  lines, else word-wrapped/centered, ≤40 chars), `ticker` (software horizontal
+  lines, else word-wrapped, ≤40 chars), `ticker` (software horizontal
   scroll of a long message on the top line, `scroll_speed_ms` per step).
+- **Per-line justify:** `align_top` / `align_bottom` (`left`/`center`/`right`,
+  default `center`) independently justify line 1 / line 2. Applied at the
+  `render_lines` fit step on RENDERED cells (a `{gN}` glyph counts as one cell);
+  the daemon coerces an invalid value to `center`. Ticker's scrolling top line is
+  20 cells wide so alignment is a no-op there.
 - **Animations:** `none` (show when changed), `flash` (alternate frame / real
   `blank()`), `blink` (alternate frame / blank lines — display stays on), timed
   by `animation_params.on_ms`/`off_ms`.
@@ -340,6 +347,12 @@ sudo usermod -aG uucp "$USER"   # then re-login
   on a shared `dotrender.paintCell`, `glyphedit.ts` low-5-bit encode, debounced
   auto-push (`setGlyphLocal` + `pushGlyphs`). VfdPreview refactored onto the same
   `paintCell` so editor and preview render identically.
+- **v0.5.1–v0.5.3:** message textarea (Enter = line break) + per-line 20-char
+  budget; status heartbeat every tick (alive in static modes); `{gN}` counted/fit
+  as one cell (fixed glyph-codes-as-whitespace dropping slots 6–8).
+- **v0.6.0:** independent per-line justification — `align_top` / `align_bottom`
+  (`left`/`center`/`right`) wired through `render_lines`, with per-line LEFT/
+  CENTER/RIGHT controls in the UI.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

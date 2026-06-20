@@ -221,6 +221,8 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
 {
   "mode": "clock" | "message" | "ticker",
   "message": "text for message/ticker mode",
+  "align_top": "left" | "center" | "right",     // line 1 justify (default center)
+  "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
   "brightness": "dim" | "bright",
   "blank": false,
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
@@ -253,8 +255,14 @@ ignored. All actions are idempotent — safe to re-run once on restart: `self_te
 `state.glyphs`, then re-initializes).
 
 **Modes.** `clock` (date + HH:MM:SS); `message` (static — a newline splits the two
-lines, else greedy word-wrap/center, ≤40 chars); `ticker` (software horizontal scroll of
+lines, else greedy word-wrap, ≤40 chars); `ticker` (software horizontal scroll of
 a long message on the top line at `scroll_speed_ms`/step, via `renderer.ticker_window`).
+
+**Per-line justify.** `align_top` / `align_bottom` (`left`/`center`/`right`, default
+`center`) independently justify line 1 / line 2 at the `render_lines` fit step, on RENDERED
+cells (a `{gN}` glyph is one cell). The daemon coerces an invalid value to `center`. A
+ticker's scrolling top line is already 20 cells wide, so alignment is a no-op there;
+a static bottom line honors `align_bottom`.
 
 **Animations** (timed by `animation_params.on_ms`/`off_ms`): `none` (show on change),
 `flash` (alternate the frame with a real `blank()` — display goes dark), `blink`
