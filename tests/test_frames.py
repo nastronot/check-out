@@ -5,9 +5,11 @@ from datetime import datetime
 from checkout.driver import GLYPH_CODES
 from checkout.frames.message import MessageFrame, _wrap_two_lines
 from checkout.frames.ticker import TickerFrame
-from checkout.renderer import ticker_window
+from checkout.renderer import render_lines, ticker_window
 
 NOW = datetime(2026, 6, 19, 12, 0, 0)
+
+ALL_GLYPHS = "".join(f"{{g{n}}}" for n in range(9))  # {g0}..{g8}
 
 
 def test_message_newline_splits_top_bottom():
@@ -88,4 +90,31 @@ def test_ticker_glyph_placeholder_substitution():
     msg = "scrolling status with a glyph {g3} mixed into the long text here"
     top, _ = TickerFrame().render(NOW, {"message": msg, "scroll_speed_ms": 100})
     assert "{g3}" not in top
+    assert len(top) == 20
+
+
+def test_message_all_nine_glyphs_render_as_cells():
+    # Regression: glyph codes 0x1C-0x1E (slots 6-8) are Python whitespace, so the
+    # old str.split() word-wrap silently dropped them (a 9-glyph line showed ~6).
+    top, bottom = MessageFrame().render(NOW, {"message": ALL_GLYPHS})
+    assert top == "".join(chr(c) for c in GLYPH_CODES)  # all 9, in order
+    assert len(top) == 9
+    assert bottom == ""
+
+
+def test_message_glyph_line_fits_20_truncates_21():
+    # Each {gN} is one cell; up to 20 fit a line, 21 truncates to 20 (renderer).
+    top20, _ = render_lines(*MessageFrame().render(NOW, {"message": "{g8}" * 20}))
+    assert top20 == chr(GLYPH_CODES[8]) * 20
+    top21, _ = render_lines(*MessageFrame().render(NOW, {"message": "{g8}" * 21}))
+    assert len(top21) == 20
+    assert top21 == chr(GLYPH_CODES[8]) * 20
+
+
+def test_ticker_advances_one_cell_per_glyph():
+    # All 9 glyph cells survive in the ticker window (no whitespace-drop), and the
+    # window is exactly one display line wide.
+    top, _ = TickerFrame().render(NOW, {"message": ALL_GLYPHS, "scroll_speed_ms": 300})
+    for code in GLYPH_CODES:
+        assert chr(code) in top
     assert len(top) == 20
