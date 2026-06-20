@@ -67,3 +67,11 @@ export const saveGlyph = (name: string, rows: number[]) =>
 
 export const deleteGlyph = (id: string) =>
   req<{ ok: boolean }>(`/api/library/glyphs/${id}`, { method: 'DELETE' });
+
+/** Persist a new glyph order (drag-to-reorder); returns the reordered glyphs. */
+export const reorderGlyphs = (ids: string[]) =>
+  req<{ glyphs: LibraryGlyph[] }>('/api/library/glyphs/order', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ids }),
+  });

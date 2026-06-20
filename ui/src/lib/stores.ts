@@ -7,7 +7,14 @@
 //   canonical, backfilled result).
 
 import { get, writable } from 'svelte/store';
-import { getHealth, getLibrary, getState, getStatus, putState } from './api';
+import {
+  getHealth,
+  getLibrary,
+  getState,
+  getStatus,
+  putState,
+  reorderGlyphs,
+} from './api';
 import { normGlyph } from './glyphedit';
 import type { AppState, Health, Library, Status } from './types';
 
@@ -134,4 +141,27 @@ export async function refreshLibrary(): Promise<void> {
 /** Replace appState from a recall response (library -> live). */
 export function applyState(next: AppState): void {
   appState.set(next);
+}
+
+/** Load a saved library glyph (by id) into an editor slot — shared push path. */
+export function loadGlyphFromLibrary(slot: number, id: string): boolean {
+  const g = get(library).glyphs.find((x) => x.id === id);
+  if (!g) return false;
+  selectedGlyphSlot.set(slot);
+  commitGlyph(slot, normGlyph(g.rows));
+  return true;
+}
+
+/** Optimistically reorder the library glyphs, then persist (revert on failure). */
+export async function reorderLibraryGlyphs(ids: string[]): Promise<void> {
+  const prev = get(library).glyphs;
+  const byId = new Map(prev.map((g) => [g.id, g]));
+  const next = ids.map((id) => byId.get(id)).filter((g): g is NonNullable<typeof g> => !!g);
+  if (next.length !== prev.length) return; // ids drifted; skip
+  library.update((lib) => ({ ...lib, glyphs: next })); // optimistic
+  try {
+    await reorderGlyphs(ids);
+  } catch {
+    library.update((lib) => ({ ...lib, glyphs: prev })); // revert
+  }
 }

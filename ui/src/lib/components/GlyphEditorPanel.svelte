@@ -4,10 +4,29 @@
     appState,
     commitGlyph,
     glyphSync,
+    loadGlyphFromLibrary,
     selectedGlyphSlot,
   } from '../stores';
   import { EMPTY_GLYPH, copyFromChar, normGlyph, withBit } from '../glyphedit';
+  import { GLYPH_DND_TYPE } from '../dnd';
   import GlyphCanvas from './GlyphCanvas.svelte';
+
+  // The slot currently hovered by a dragged library glyph (highlight).
+  let dropSlot = -1;
+
+  function onSlotDragOver(e: DragEvent, i: number): void {
+    if (!e.dataTransfer?.types.includes(GLYPH_DND_TYPE)) return;
+    e.preventDefault(); // mark as a valid drop target (load)
+    e.dataTransfer.dropEffect = 'copy';
+    dropSlot = i;
+  }
+
+  function onSlotDrop(e: DragEvent, i: number): void {
+    e.preventDefault();
+    dropSlot = -1;
+    const id = e.dataTransfer?.getData(GLYPH_DND_TYPE);
+    if (id) loadGlyphFromLibrary(i, id); // selects slot i + auto-pushes
+  }
 
   const SLOTS = GLYPH_CODES.map((code, i) => ({
     i,
@@ -67,10 +86,14 @@
       <button
         class="slot"
         class:selected={selected === s.i}
+        class:dropping={dropSlot === s.i}
         role="tab"
         aria-selected={selected === s.i}
-        title={`slot ${s.i} → code 0x${s.code.toString(16).toUpperCase()}`}
+        title={`slot ${s.i} → code 0x${s.code.toString(16).toUpperCase()} (drop a library glyph here to load)`}
         on:click={() => selectedGlyphSlot.set(s.i)}
+        on:dragover={(e) => onSlotDragOver(e, s.i)}
+        on:dragleave={() => (dropSlot = dropSlot === s.i ? -1 : dropSlot)}
+        on:drop={(e) => onSlotDrop(e, s.i)}
       >
         <span class="slot__thumb"><GlyphCanvas rows={slotRows[s.i]} dotSize={5} pitch={6} /></span>
         <span class="slot__label">
@@ -172,6 +195,12 @@
   .slot.selected {
     border-color: var(--phosphor);
     box-shadow: 0 0 0 1px var(--phosphor), 0 0 12px rgba(61, 240, 200, 0.18);
+  }
+
+  /* a dragged library glyph is hovering this slot — drop to load */
+  .slot.dropping {
+    border-color: var(--phosphor);
+    box-shadow: 0 0 0 2px var(--phosphor), 0 0 16px rgba(61, 240, 200, 0.45);
   }
 
   .slot__thumb {
