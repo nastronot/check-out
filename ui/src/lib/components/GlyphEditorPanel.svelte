@@ -1,81 +1,311 @@
 <script lang="ts">
-  // PLACEHOLDER (Phase 2c). Reserves layout space for the 9-slot 5x7 editor so
-  // the grid doesn't reflow when it lands. No editing here yet.
-  import { GLYPH_CODES } from '../font5x7';
+  import { FONT5x7, GLYPH_CODES } from '../font5x7';
+  import { appState, pushGlyphs, setGlyphLocal } from '../stores';
+  import { EMPTY_GLYPH, copyFromChar, normGlyph, withBit } from '../glyphedit';
+  import GlyphCanvas from './GlyphCanvas.svelte';
 
-  const slots = GLYPH_CODES.map((code, i) => ({ i, code }));
+  const SLOTS = GLYPH_CODES.map((code, i) => ({
+    i,
+    code,
+    token: `{g${i}}`,
+  }));
+
+  let selected = 0;
+
+  // Live glyphs from the desired state. Derive reactively (NOT via a function
+  // that hides $appState) so the strip + editor update when glyphs change.
+  $: glyphMap = $appState?.glyphs ?? {};
+  $: slotRows = SLOTS.map((s) => normGlyph(glyphMap[String(s.i)]));
+  $: selectedRows = slotRows[selected];
+
+  // --- debounced auto-push ------------------------------------------------
+  type SyncState = 'idle' | 'syncing' | 'synced' | 'error';
+  let sync: Record<number, SyncState> = {};
+  let pending = new Set<number>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function commit(slot: number, rows: number[]): void {
+    setGlyphLocal(String(slot), rows); // optimistic: strip + main preview update now
+    pending.add(slot);
+    sync = { ...sync, [slot]: 'syncing' };
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(flush, 400);
+  }
+
+  async function flush(): Promise<void> {
+    timer = null;
+    const flushing = [...pending];
+    pending = new Set();
+    const slots: Record<string, number[]> = {};
+    for (const s of flushing) slots[String(s)] = normGlyph(glyphMap[String(s)]);
+    const ok = await pushGlyphs(slots);
+    const next = { ...sync };
+    for (const s of flushing) next[s] = ok ? 'synced' : 'error';
+    sync = next;
+  }
+
+  // --- editing ------------------------------------------------------------
+  function onPaint(
+    e: CustomEvent<{ row: number; col: number; on: boolean }>,
+  ): void {
+    const { row, col, on } = e.detail;
+    commit(selected, withBit(selectedRows, row, col, on));
+  }
+
+  function clearSlot(): void {
+    commit(selected, EMPTY_GLYPH.slice());
+  }
+
+  let charInput = '';
+  function loadChar(): void {
+    const rows = copyFromChar(charInput.slice(0, 1));
+    if (rows) commit(selected, rows);
+  }
+  $: charKnown =
+    charInput.length > 0 && FONT5x7[charInput.charCodeAt(0)] !== undefined;
+
+  // --- reference token ----------------------------------------------------
+  let copied = false;
+  async function copyToken(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(SLOTS[selected].token);
+      copied = true;
+      setTimeout(() => (copied = false), 1200);
+    } catch {
+      /* clipboard unavailable (insecure context) — token is shown anyway */
+    }
+  }
 </script>
 
-<section class="panel panel--disabled glyphs">
-  <div class="panel__title">
-    Glyph editor <span class="tag">coming next</span>
-  </div>
-  <div class="glyphs__grid">
-    {#each slots as s}
-      <div class="slot" title={`slot ${s.i} → code 0x${s.code.toString(16)}`}>
-        <div class="slot__cell">
-          {#each Array(7) as _, r}
-            <div class="slot__row">
-              {#each Array(5) as _, c}
-                <span class="slot__dot"></span>
-              {/each}
-            </div>
-          {/each}
-        </div>
-        <span class="slot__label">g{s.i}</span>
-      </div>
+<section class="panel glyphs">
+  <div class="panel__title">Glyph editor</div>
+
+  <!-- slot strip -->
+  <div class="strip" role="tablist" aria-label="glyph slots">
+    {#each SLOTS as s}
+      <button
+        class="slot"
+        class:selected={selected === s.i}
+        role="tab"
+        aria-selected={selected === s.i}
+        title={`slot ${s.i} → code 0x${s.code.toString(16).toUpperCase()}`}
+        on:click={() => (selected = s.i)}
+      >
+        <span class="slot__thumb"><GlyphCanvas rows={slotRows[s.i]} dotSize={5} pitch={6} /></span>
+        <span class="slot__label">
+          g{s.i}
+          <span
+            class="syncdot"
+            class:syncing={sync[s.i] === 'syncing'}
+            class:synced={sync[s.i] === 'synced'}
+            class:error={sync[s.i] === 'error'}
+          ></span>
+        </span>
+      </button>
     {/each}
   </div>
+
+  <!-- editor + tools -->
+  <div class="editor">
+    <div class="editor__grid">
+      <GlyphCanvas
+        rows={selectedRows}
+        dotSize={22}
+        pitch={32}
+        interactive
+        on:paint={onPaint}
+      />
+    </div>
+
+    <div class="editor__tools">
+      <div class="ref">
+        <span>use <code>{SLOTS[selected].token}</code> in a message</span>
+        <button class="btn btn--mini" on:click={copyToken}>
+          {copied ? 'copied ✓' : 'copy'}
+        </button>
+      </div>
+
+      <div class="tool">
+        <span class="tool__label">seed from char</span>
+        <div class="row">
+          <input
+            type="text"
+            maxlength="1"
+            bind:value={charInput}
+            placeholder="A"
+            spellcheck="false"
+            on:keydown={(e) => e.key === 'Enter' && loadChar()}
+          />
+          <button class="btn btn--mini" on:click={loadChar} disabled={!charKnown}>
+            load
+          </button>
+        </div>
+      </div>
+
+      <div class="tool">
+        <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
+        <span class="sync-label">
+          {#if sync[selected] === 'syncing'}syncing…
+          {:else if sync[selected] === 'synced'}synced ✓
+          {:else if sync[selected] === 'error'}sync failed
+          {/if}
+        </span>
+      </div>
+    </div>
+  </div>
+
   <p class="field__hint">
-    Draw 9 custom 5×7 glyphs, push them to the daemon, and reference them in
-    messages with <code>{'{g0}'}</code>…<code>{'{g8}'}</code>.
+    Click or drag to draw g{selected}. Edits auto-push to the daemon (~400 ms),
+    which defines the glyph on the display; reference it in a message as
+    <code>{SLOTS[selected].token}</code>.
   </p>
 </section>
 
 <style>
-  .glyphs__grid {
+  /* slot strip */
+  .strip {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
   }
 
   .slot {
+    appearance: none;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    padding: 6px 4px;
+    background: #04090a;
+    border: 1px solid var(--bezel);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: border-color 0.12s, box-shadow 0.12s;
   }
 
-  .slot__cell {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 5px;
-    background: #03090a;
-    border: 1px solid var(--rule);
-    border-radius: 4px;
+  .slot:hover {
+    border-color: var(--phosphor-dim);
   }
 
-  .slot__row {
-    display: flex;
-    gap: 2px;
+  .slot.selected {
+    border-color: var(--phosphor);
+    box-shadow: 0 0 0 1px var(--phosphor), 0 0 12px rgba(61, 240, 200, 0.18);
   }
 
-  .slot__dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: rgba(61, 240, 200, 0.06);
+  .slot__thumb {
+    display: block;
+    width: 100%;
   }
 
   .slot__label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-size: 10px;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
+    color: var(--text-mute);
+  }
+
+  .syncdot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .syncdot.syncing {
+    background: var(--amber-warn);
+    box-shadow: 0 0 6px var(--amber-warn);
+  }
+  .syncdot.synced {
+    background: var(--phosphor);
+    box-shadow: 0 0 6px var(--phosphor);
+  }
+  .syncdot.error {
+    background: var(--red-dead);
+    box-shadow: 0 0 6px var(--red-dead);
+  }
+
+  /* editor */
+  .editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .editor__grid {
+    background: #03090a;
+    border: 1px solid var(--bezel);
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: var(--shadow-inset);
+  }
+
+  .editor__tools {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .ref {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-mute);
+  }
+
+  .tool {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tool__label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-mute);
+  }
+
+  .tool .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .tool input[type='text'] {
+    width: 48px;
+    text-align: center;
+  }
+
+  .btn--mini {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  .sync-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
     color: var(--text-faint);
+    min-height: 14px;
   }
 
   code {
     color: var(--phosphor);
+    background: #04090a;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rule);
     font-size: 11px;
+  }
+
+  @media (max-width: 560px) {
+    .editor {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

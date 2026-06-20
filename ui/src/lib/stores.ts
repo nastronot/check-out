@@ -62,3 +62,24 @@ export async function patchState(patch: Partial<AppState>): Promise<void> {
     await loadState();
   }
 }
+
+/** Optimistically set ONE glyph slot locally, keeping the other slots intact. */
+export function setGlyphLocal(slot: string, rows: number[]): void {
+  appState.update((s) =>
+    s ? { ...s, glyphs: { ...(s.glyphs ?? {}), [slot]: rows } } : s,
+  );
+}
+
+/** Persist glyph slots to the daemon (backend deep-merges into state.glyphs).
+ *  Does NOT overwrite local glyphs from the response — the editor's optimistic
+ *  state is authoritative, so an in-flight push can't clobber a newer edit. */
+export async function pushGlyphs(
+  slots: Record<string, number[]>,
+): Promise<boolean> {
+  try {
+    await putState({ glyphs: slots });
+    return true;
+  } catch {
+    return false;
+  }
+}
