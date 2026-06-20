@@ -289,6 +289,44 @@ name or int `0..11` (12 total). Confirmed: `0` default, `1` japanese (CP897), `2
 (Fr/De/Es/Pt), `3` cp852, `4` cp855, `5` cp857 (Turkish). Pages 6–11 exist per the library
 but are not yet identified on our unit. `state.code_page` drives this.
 
+### 4.6 Phase 2b — web control surface (v0.4.0)
+A single-page **Svelte + Vite + TypeScript** app (`ui/`) served by a **FastAPI** backend
+(`web/`). **The daemon is untouched and stays the sole serial-port owner.** The web layer
+only touches the JSON files the daemon already uses, preserving single-writer-per-file:
+
+```
+ui/ (Svelte)  ──HTTP /api──▶  web/ (FastAPI)  ──writes state.json──▶  daemon ──▶ VFD
+   ▲ polls /api/status              ▲ reads status.json ◀───────────────  (daemon writes)
+```
+
+- **FastAPI never opens the serial port.** It reuses `checkout.state` (schema, defaults,
+  atomic write, plus new `load_status` + `merge_patch`) so the on-disk format matches the
+  daemon exactly. Paths come from the same env (`CHECKOUT_STATE_PATH` /
+  `CHECKOUT_STATUS_PATH`), so a deployment just shares those two files on a volume.
+- **Endpoints:**
+  - `GET /api/status` — the daemon's mirror of the glass (top/bottom/mode/brightness/
+    blank/scroll/last_command_id/alive/updated_at).
+  - `GET /api/state` / `PUT /api/state` — read / deep merge-patch the desired state.
+  - `POST /api/command` `{action,args}` — stamps `state.command = {id:<uuid>,...}` so the
+    daemon runs it once (self_test | reset | redefine_glyphs).
+  - `GET /api/health` — `{ok, daemon_alive}`; `daemon_alive` is derived from status.json
+    freshness (< 5 s old + `alive`).
+  - `/` — serves the built UI (`ui/dist`).
+- **Preview mirrors status, not the controls.** `VfdPreview` renders a pixel-accurate
+  2×20 of 5×7 phosphor dots from `/api/status` (so it shows real clock ticks, ticker
+  motion, brightness, blank). A built-in 5×7 font covers ASCII `0x20–0x7E`; the 9 user
+  glyph codes render from `state.glyphs` using the shared low-5-bit convention (§4.5).
+- **Aesthetic:** blue-green VFD phosphor (`#3df0c8`) on black, POS/rack-gear faceplate —
+  thin rules, monospaced labels, subtle bevels, tactile switches, a faint scanline/bloom
+  on the preview only. Plain hand-tuned CSS.
+- **Controls** (`PUT /api/state` on change): mode, message (+40-char budget, `{gN}` hint),
+  brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker speed.
+  `CommandBar` fires once; `StatusReadout` shows daemon health; `GlyphEditorPanel` is a
+  reserved placeholder — the full 9-slot editor lands next phase.
+- **Dev/build:** vite dev server proxies `/api` → uvicorn:8000; `npm run build` → `ui/dist`
+  which uvicorn serves in prod. Docker is deferred to Phase 3 but the layout is
+  container-ready. See `web/README.md` and `ui/README.md`.
+
 ---
 
 ## 5. Open items

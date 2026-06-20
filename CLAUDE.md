@@ -197,17 +197,54 @@ There are **9 user-glyph slots** at **non-contiguous** character codes
 (Fr/De/Es/Pt), `3` cp852, `4` cp855, `5` cp857 (Turkish). Pages 6–11 exist per
 the library but are not yet identified on our unit. `state.code_page` drives this.
 
+## Phase 2b — web control surface (v0.4.0)
+A single-page **Svelte** app (`ui/`) served by a **FastAPI** backend (`web/`).
+The daemon is UNTOUCHED and remains the sole serial-port owner. Two processes,
+filesystem-coupled, single-writer-per-file:
+
+```
+ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
+   ^  polls /api/status         ^  reads status.json  <----------  (writes it)
+```
+
+- **FastAPI never opens the serial port.** It only reads `status.json` and
+  writes `state.json`, reusing `checkout.state` (schema, defaults, atomic write,
+  `merge_patch`, `load_status`) so the format matches the daemon byte-for-byte.
+- **Endpoints:** `GET /api/status` (the glass mirror), `GET /api/state`,
+  `PUT /api/state` (deep merge-patch), `POST /api/command` (stamps a fresh
+  `command.id` nonce → daemon runs once), `GET /api/health`
+  (`daemon_alive` = status.json fresh < 5s), `/` serves the built UI (`ui/dist`).
+- **Preview mirrors status, not controls.** `VfdPreview` renders a pixel-accurate
+  2×20 of 5×7 phosphor dots from `/api/status`, so it shows real clock ticks /
+  ticker motion / brightness / blank. Built-in 5×7 font for ASCII; the 9 user
+  glyph codes render from `state.glyphs` via the shared low-5-bit convention.
+- **Controls** (`PUT /api/state` on change): mode, message (+`{gN}` hint),
+  brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker
+  speed. `CommandBar` fires self_test/reset; `StatusReadout` shows daemon health.
+  `GlyphEditorPanel` is a placeholder (full editor next phase).
+- **Config:** `CHECKOUT_STATE_PATH` / `CHECKOUT_STATUS_PATH` (shared with daemon)
+  via `checkout.config`; `CHECKOUT_UI_DIST` for the built UI. Docker is Phase 3.
+
+See `web/README.md` and `ui/README.md` for run instructions.
+
 ## Versioning
 Semver `major.minor.patch` read as **"big.small.bug"**.
 
 ## How to run
 ```bash
+# Daemon (owns the serial port)
 pip install -r requirements.txt
 python -m checkout.daemon --dry-run   # no display; prints outgoing bytes as hex
 python -m checkout.daemon             # live, opens the serial port
+
+# Web control surface (Phase 2b) — separate process, never opens the port
+pip install -r web/requirements.txt
+( cd ui && npm install && npm run build )   # build the Svelte app -> ui/dist
+uvicorn web.app:app --port 8000             # serves UI + /api; shares state/status json
+# dev: `uvicorn web.app:app --reload` + `cd ui && npm run dev` (vite proxies /api)
 ```
 Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_TICK_MS`,
-`CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`.
+`CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`, `CHECKOUT_UI_DIST`.
 
 ## Serial permissions
 The dev user must belong to the device's group (on Arch this is `uucp`) or run
@@ -221,7 +258,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **Phase 2a (v0.3.0):** rich `state.json` schema + `status.json`; message/ticker
   frames; flash/blink animation; command nonce (self_test/reset/redefine_glyphs);
   glyphs + code pages wired. All driven by `state.json` (no web yet). (done)
-- **Phase 2b:** Svelte/FastAPI web UI that writes `state.json` + reads `status.json`.
+- **Phase 2b (v0.4.0):** Svelte/FastAPI web control surface — FastAPI reads
+  status.json / writes state.json (never the port) + serves the UI; Svelte app
+  with the live phosphor preview + core controls. Glyph editor scaffolded. (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte confirmed in v0.1.1 (two levels: dim/bright).
 - **v0.2.0:** adopted the authoritative Futaba M202MD10C command set + extended-mode
@@ -230,6 +269,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v0.3.1:** bench-confirmed the user-glyph pipeline — 9 non-contiguous codes,
   bitmap columns in bits 3-7 (fixed the v0.3.0 low-5-bit encoding), `{gN}` message
   placeholders, code-page name map. Glyph + code-page bench TODOs resolved.
+- **v0.4.0:** web control surface — FastAPI (`web/`) over the JSON files +
+  Svelte phosphor UI (`ui/`) with the live preview and core controls. Daemon
+  untouched. `checkout.state` gained `load_status` + `merge_patch` for reuse.
 
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):
