@@ -206,7 +206,8 @@ data sources ──► frame builder ──► 2x20 renderer ──► serial dr
   for emphasis. The limitation is the charm.
 
 ### 4.4 Initial frames (v0.1.x)
-- Clock (HH:MM:SS + date) — proves the full path end to end.
+- Clock (date + time) — proves the full path end to end. Format (v0.6.1):
+  `DD MON YYYY` top, `HH:MM:SS AM/PM` bottom.
 Then iterate: weather line, Docker/container health, print-queue or job counts,
 rotating short messages.
 
@@ -254,7 +255,9 @@ ignored. All actions are idempotent — safe to re-run once on restart: `self_te
 `reset` (both re-initialize the display afterward), `redefine_glyphs` (defines
 `state.glyphs`, then re-initializes).
 
-**Modes.** `clock` (date + HH:MM:SS); `message` (static — a newline splits the two
+**Modes.** `clock` (top `DD MON YYYY` e.g. `05 JUN 2026`; bottom 12-hour
+`HH:MM:SS AM/PM` e.g. `08:47:03 PM` — hand-formatted, locale-independent);
+`message` (static — a newline splits the two
 lines, else greedy word-wrap, ≤40 chars); `ticker` (software horizontal scroll of
 a long message on the top line at `scroll_speed_ms`/step, via `renderer.ticker_window`).
 

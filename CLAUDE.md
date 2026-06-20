@@ -152,7 +152,8 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
 `redefine_glyphs` (defines `state.glyphs`, then re-initializes).
 
 ### Modes & animations
-- **Modes:** `clock` (date/time), `message` (static; newline splits the two
+- **Modes:** `clock` (`DD MON YYYY` top / `HH:MM:SS AM/PM` 12-hour bottom, e.g.
+  `05 JUN 2026` / `08:47:03 PM`; locale-independent), `message` (static; newline splits the two
   lines, else word-wrapped, ≤40 chars), `ticker` (software horizontal
   scroll of a long message on the top line, `scroll_speed_ms` per step).
 - **Per-line justify:** `align_top` / `align_bottom` (`left`/`center`/`right`,
@@ -353,6 +354,8 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v0.6.0:** independent per-line justification — `align_top` / `align_bottom`
   (`left`/`center`/`right`) wired through `render_lines`, with per-line LEFT/
   CENTER/RIGHT controls in the UI.
+- **v0.6.1:** clock format `DD MON YYYY` / `HH:MM:SS AM/PM` (12-hour,
+  locale-independent month abbreviations).
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
