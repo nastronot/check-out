@@ -168,6 +168,32 @@ def delete_glyph(item_id: str) -> None:
     save_library(library)
 
 
+def reorder_glyphs(ids) -> list[dict]:
+    """Reorder the glyph library to match ``ids`` (a list of glyph ids).
+
+    Tolerant: ids not in the library are ignored, and any saved glyphs not
+    named in ``ids`` keep their relative order at the end (so a stale client
+    order can't drop items). Returns the new glyph list.
+    """
+    if not isinstance(ids, (list, tuple)):
+        raise LibraryError("ids must be a list")
+    library = load_library()
+    by_id = {g.get("id"): g for g in library["glyphs"]}
+    ordered: list[dict] = []
+    seen = set()
+    for gid in ids:
+        g = by_id.get(gid)
+        if g is not None and gid not in seen:
+            ordered.append(g)
+            seen.add(gid)
+    for g in library["glyphs"]:  # append any the client didn't mention
+        if g.get("id") not in seen:
+            ordered.append(g)
+    library["glyphs"] = ordered
+    save_library(library)
+    return ordered
+
+
 def _safe_brightness(value) -> int:
     try:
         return normalize_brightness(value if value is not None else 3)

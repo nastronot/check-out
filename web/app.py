@@ -171,6 +171,16 @@ def save_glyph(payload: dict) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
+@app.post("/api/library/glyphs/order")
+def reorder_glyphs(body: dict) -> dict:
+    """Persist a new order for the saved glyphs (drag-to-reorder)."""
+    try:
+        glyphs = library.reorder_glyphs((body or {}).get("ids"))
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return {"glyphs": glyphs}
+
+
 @app.delete("/api/library/glyphs/{item_id}")
 def remove_glyph(item_id: str) -> dict:
     try:
