@@ -210,6 +210,64 @@ data sources ──► frame builder ──► 2x20 renderer ──► serial dr
 Then iterate: weather line, Docker/container health, print-queue or job counts,
 rotating short messages.
 
+### 4.5 Phase 2 — control surface (v0.3.0)
+Everything the display can do is driven by **two JSON files** with one-directional
+ownership, so the daemon (sole serial-port owner) and the future web UI never race:
+the **web writes `state.json`**, the **daemon writes `status.json`**. Phase 2a wires
+this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
+
+**`state.json`** (web writes, daemon reads each tick):
+```jsonc
+{
+  "mode": "clock" | "message" | "ticker",
+  "message": "text for message/ticker mode",
+  "brightness": "dim" | "bright",
+  "blank": false,
+  "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
+  "code_page": 0,                  // 0..11
+  "scroll_speed_ms": 300,          // ticker software-scroll step
+  "animation": "none" | "flash" | "blink",
+  "animation_params": { "on_ms": 500, "off_ms": 500 },
+  "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 user glyphs, 7 ints (low 5 bits)
+  "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
+  "updated_at": "iso"
+}
+```
+`load_state()` backfills every missing key from defaults (nested `command` and
+`animation_params` are merged, not wholesale-replaced), so a partial web write never
+breaks the daemon. Atomic save (temp file + `os.replace`).
+
+**`status.json`** (daemon writes — sole writer, web reads):
+```jsonc
+{ "alive": true, "mode": "...", "top": "....20....", "bottom": "....20....",
+  "brightness": "...", "blank": false, "scroll": false,
+  "last_command_id": "...", "updated_at": "iso" }
+```
+Written atomically on change. The UI uses it to mirror the real display and daemon health.
+
+**Command nonce.** `command.id` is a nonce; the daemon runs `command.action` once per
+*new* id (tracked in-memory as `last_command_id`), null id is a no-op, a repeated id is
+ignored. All actions are idempotent — safe to re-run once on restart: `self_test` and
+`reset` (both re-initialize the display afterward), `redefine_glyphs` (defines
+`state.glyphs`, then re-initializes).
+
+**Modes.** `clock` (date + HH:MM:SS); `message` (static — a newline splits the two
+lines, else greedy word-wrap/center, ≤40 chars); `ticker` (software horizontal scroll of
+a long message on the top line at `scroll_speed_ms`/step, via `renderer.ticker_window`).
+
+**Animations** (timed by `animation_params.on_ms`/`off_ms`): `none` (show on change),
+`flash` (alternate the frame with a real `blank()` — display goes dark), `blink`
+(alternate the frame with blank lines — display stays on).
+
+**Re-init rule.** After `self_test()`, `reset()`, or `define_character()` the display may
+drop extended-mode/scroll-off; `initialize()` is re-run before the next `show()`. The
+`self_test`/`reset` driver methods do this themselves; the daemon re-inits after a glyph batch.
+
+**Hardware-confirm TODOs (bench):** which character code(s) render the 9 user glyphs
+after `define_character` (probe: define glyph 0, write bytes `0x00`..`0x08`, see which
+shows it — document the mapping); whether code pages (`0x02` + page) visibly change the
+glyph set. These don't block the code — the commands are wired; confirm exact codes on glass.
+
 ---
 
 ## 5. Open items

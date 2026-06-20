@@ -90,20 +90,76 @@ One buffered serial write (no flicker). Overwrite-in-place, NO leading clear, NO
 
 ## Architecture
 The daemon is the **sole owner** of the serial port (only one process may hold
-it). The web UI (Phase 2) communicates *only* by writing `state.json`.
+it). The web UI (Phase 2b) communicates *only* by writing `state.json`; the
+daemon communicates back *only* by writing `status.json`. One-directional file
+ownership = no races.
 
 ```
-state.json (atomic) <-- web UI (Phase 2, not built yet)
-     |  read each tick
-     v
+state.json  (web WRITES, daemon reads)  ──┐
+                                          v
 daemon loop --> active frame --> renderer (fit to 2x20) --> driver --> serial
+                                          │
+status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + health)
 ```
 
 - `driver.py` — `VFDDriver`, owns **all** raw command bytes; nothing else emits bytes.
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
-- `frames/base.py` — `Frame` interface; `frames/clock.py` — `ClockFrame`.
-- `state.py` — atomic load/save of `state.json`.
+- `frames/base.py` — `Frame` interface; `frames/{clock,message,ticker}.py`.
+- `state.py` — atomic load/save of `state.json` + `status.json`.
 - `daemon.py` — main loop + entrypoint; diffs frames, reconnects, shuts down clean.
+
+## Phase 2 — control surface (v0.3.0)
+Everything the display can do is driven by `state.json` (the daemon stays sole
+port owner). The web UI is just a writer of this file.
+
+### `state.json` (web writes, daemon reads each tick)
+```jsonc
+{
+  "mode": "clock" | "message" | "ticker",   // active frame
+  "message": "text for message/ticker mode",
+  "brightness": "dim" | "bright",
+  "blank": false,
+  "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
+  "code_page": 0,                  // 0..11
+  "scroll_speed_ms": 300,          // ticker software-scroll step
+  "animation": "none" | "flash" | "blink",
+  "animation_params": { "on_ms": 500, "off_ms": 500 },
+  "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 user glyphs, 7 ints (low 5 bits)
+  "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
+  "updated_at": "iso"
+}
+```
+`load_state()` backfills every missing key from defaults (nested `command` /
+`animation_params` are merged, not replaced), so a partial write never breaks the
+daemon.
+
+### `status.json` (daemon writes, web reads)
+```jsonc
+{ "alive": true, "mode": "...", "top": "....20....", "bottom": "....20....",
+  "brightness": "...", "blank": false, "scroll": false,
+  "last_command_id": "...", "updated_at": "iso" }
+```
+Written atomically on change. This is how the UI mirrors the real display + daemon health.
+
+### Command nonce
+`command.id` is a nonce. The daemon runs `command.action` once per *new* id
+(tracked in-memory) and records it as `last_command_id`. A null id is a no-op;
+re-using an id is ignored. All actions are idempotent (so re-running once on
+restart is safe): `self_test`, `reset` (both re-initialize the display after),
+`redefine_glyphs` (defines `state.glyphs`, then re-initializes).
+
+### Modes & animations
+- **Modes:** `clock` (date/time), `message` (static; newline splits the two
+  lines, else word-wrapped/centered, ≤40 chars), `ticker` (software horizontal
+  scroll of a long message on the top line, `scroll_speed_ms` per step).
+- **Animations:** `none` (show when changed), `flash` (alternate frame / real
+  `blank()`), `blink` (alternate frame / blank lines — display stays on), timed
+  by `animation_params.on_ms`/`off_ms`.
+
+> **Re-init rule:** after `self_test()`, `reset()`, or `define_character()` the
+> display may drop extended-mode/scroll-off, so `initialize()` is re-run before
+> the next `show()`. The driver methods `self_test`/`reset` do this themselves;
+> the daemon re-inits after a glyph batch.
 
 ## Versioning
 Semver `major.minor.patch` read as **"big.small.bug"**.
@@ -115,7 +171,7 @@ python -m checkout.daemon --dry-run   # no display; prints outgoing bytes as hex
 python -m checkout.daemon             # live, opens the serial port
 ```
 Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_TICK_MS`,
-`CHECKOUT_STATE_PATH`.
+`CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`.
 
 ## Serial permissions
 The dev user must belong to the device's group (on Arch this is `uucp`) or run
@@ -126,10 +182,19 @@ sudo usermod -aG uucp "$USER"   # then re-login
 
 ## Roadmap
 - **Phase 1:** driver, renderer, clock frame, daemon, state seam. (done)
-- **Phase 2:** FastAPI web UI that writes `state.json` (custom message, mode,
-  flash patterns, blank, brightness).
+- **Phase 2a (v0.3.0):** rich `state.json` schema + `status.json`; message/ticker
+  frames; flash/blink animation; command nonce (self_test/reset/redefine_glyphs);
+  glyphs + code pages wired. All driven by `state.json` (no web yet). (done)
+- **Phase 2b:** Svelte/FastAPI web UI that writes `state.json` + reads `status.json`.
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte confirmed in v0.1.1 (two levels: dim/bright).
 - **v0.2.0:** adopted the authoritative Futaba M202MD10C command set + extended-mode
   init sequence — all 40 cells now writable, the old 39-cell/scroll workarounds removed.
   Vertical scroll exposed as a controllable feature. TODO: retest 4-level brightness.
+
+## Hardware-confirm TODOs (bench)
+- Which character code(s) render the 9 user glyphs after `define_character` (probe:
+  define glyph 0, then write bytes `0x00`..`0x08` and see which shows it). Document the
+  code→glyph mapping.
+- Whether code pages (`0x02` + page) visibly change the glyph set on our unit.
+- Whether extended mode exposes the library's claimed 4 brightness levels.
