@@ -35,6 +35,16 @@ def test_fit_line_unknown_align():
         fit_line("x", align="middle")
 
 
+def test_fit_line_counts_glyph_cells_as_one():
+    from checkout.driver import GLYPH_CODES
+
+    # A substituted glyph is a SINGLE byte/cell, so it pads by char count.
+    glyphs = chr(GLYPH_CODES[0]) + chr(GLYPH_CODES[8])  # 2 cells (0x15, 0x1E)
+    out = fit_line(glyphs, align="right")
+    assert out == " " * 18 + glyphs
+    assert len(out) == 20
+
+
 def test_ticker_short_text_no_scroll():
     # Text that fits is left-justified and ignores the offset.
     assert ticker_window("short", 0) == "short".ljust(20)

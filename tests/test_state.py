@@ -36,6 +36,17 @@ def test_defaults_include_full_phase2_schema(state_path):
     assert loaded["animation_params"] == {"on_ms": 500, "off_ms": 500}
     assert loaded["glyphs"] == {}
     assert loaded["command"] == {"id": None, "action": None, "args": {}}
+    assert loaded["align_top"] == "center"
+    assert loaded["align_bottom"] == "center"
+
+
+def test_partial_write_backfills_alignment_and_keeps_set_value(state_path):
+    import json
+
+    state_path.write_text(json.dumps({"align_bottom": "right"}))
+    loaded = state.load_state()
+    assert loaded["align_bottom"] == "right"   # set value kept
+    assert loaded["align_top"] == "center"     # missing key backfilled
 
 
 def test_round_trip_save_load(state_path):

@@ -62,6 +62,14 @@ def test_put_state_nested_merge_keeps_siblings(client):
     assert data["animation_params"]["off_ms"] == 500  # sibling default kept
 
 
+def test_put_alignment_merges(client):
+    client.put("/api/state", json={"align_top": "right"})
+    client.put("/api/state", json={"align_bottom": "left"})
+    data = client.get("/api/state").json()
+    assert data["align_top"] == "right"     # preserved across the second patch
+    assert data["align_bottom"] == "left"
+
+
 def test_put_message_preserves_newline(client):
     # A two-line message round-trips with its '\n' intact (MessageFrame splits on it).
     client.put("/api/state", json={"message": "HELLO\nWORLD"})

@@ -93,6 +93,15 @@ def test_ticker_glyph_placeholder_substitution():
     assert len(top) == 20
 
 
+def test_message_per_line_alignment():
+    # align_top=right + align_bottom=left, applied via render_lines (the daemon
+    # path), pad each line independently on its own side.
+    logical = MessageFrame().render(NOW, {"message": "HI\nYO"})
+    top, bottom = render_lines(*logical, top_align="right", bottom_align="left")
+    assert top == " " * 18 + "HI"
+    assert bottom == "YO" + " " * 18
+
+
 def test_message_all_nine_glyphs_render_as_cells():
     # Regression: glyph codes 0x1C-0x1E (slots 6-8) are Python whitespace, so the
     # old str.split() word-wrap silently dropped them (a 9-glyph line showed ~6).
