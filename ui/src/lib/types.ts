@@ -3,7 +3,7 @@
 export type Mode = 'clock' | 'message' | 'ticker';
 /** Brightness is a discrete level index 0..3 (0 Min, 1 Med, 2 Med+, 3 Max). */
 export type Brightness = 0 | 1 | 2 | 3;
-export type Animation = 'none' | 'flash' | 'blink';
+export type Animation = 'none' | 'flash' | 'blink' | 'pulse';
 export type Align = 'left' | 'center' | 'right';
 
 /** {"0".."8"} -> 7 row ints (low 5 bits = columns 1..5). Shared with state.glyphs. */
@@ -26,7 +26,7 @@ export interface AppState {
   code_page: number;
   scroll_speed_ms: number;
   animation: Animation;
-  animation_params: { on_ms: number; off_ms: number };
+  animation_params: { on_ms: number; off_ms: number; step_ms: number };
   glyphs: Record<string, number[]>;
   command: CommandRef;
   updated_at?: string;

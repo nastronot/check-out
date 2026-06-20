@@ -8,7 +8,7 @@
   const MODES: Mode[] = ['clock', 'message', 'ticker'];
   // Brightness has FOUR discrete levels (index 0..3); a stepped slider, NOT a %.
   const BRIGHTNESS_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
-  const ANIMATIONS: Animation[] = ['none', 'flash', 'blink'];
+  const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
   const ALIGNS: Align[] = ['left', 'center', 'right'];
   const CODE_PAGES: { value: number; label: string }[] = [
     { value: 0, label: 'Default' },
@@ -58,20 +58,15 @@
   const setScroll = (e: Event) => patch({ scroll: checked(e) });
   const setCodePage = (e: Event) => patch({ code_page: num(e) });
   const setTickerSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
-  const setOnMs = (e: Event) =>
-    patch({
-      animation_params: {
-        on_ms: num(e),
-        off_ms: state?.animation_params.off_ms ?? 500,
-      },
-    });
-  const setOffMs = (e: Event) =>
-    patch({
-      animation_params: {
-        on_ms: state?.animation_params.on_ms ?? 500,
-        off_ms: num(e),
-      },
-    });
+  // Merge one animation_params field, keeping the siblings (full object so the
+  // Partial<AppState> type is satisfied; the backend deep-merges anyway).
+  function patchParams(field: 'on_ms' | 'off_ms' | 'step_ms', e: Event): void {
+    const cur = state?.animation_params ?? { on_ms: 500, off_ms: 500, step_ms: 200 };
+    patch({ animation_params: { ...cur, [field]: num(e) } });
+  }
+  const setOnMs = (e: Event) => patchParams('on_ms', e);
+  const setOffMs = (e: Event) => patchParams('off_ms', e);
+  const setStepMs = (e: Event) => patchParams('step_ms', e);
 </script>
 
 <section class="panel">
@@ -219,7 +214,7 @@
           >
         {/each}
       </div>
-      {#if state.animation !== 'none'}
+      {#if state.animation === 'flash' || state.animation === 'blink'}
         <div class="row timing">
           <label class="field__hint">on
             <input
@@ -237,6 +232,18 @@
               value={state.animation_params.off_ms}
               on:change={setOffMs}
             /> ms</label>
+        </div>
+      {:else if state.animation === 'pulse'}
+        <div class="row timing">
+          <label class="field__hint">step
+            <input
+              type="number"
+              min="50"
+              step="50"
+              value={state.animation_params.step_ms}
+              on:change={setStepMs}
+            /> ms</label>
+          <span class="field__hint">brightness breathes 0→3→0 (6 steps)</span>
         </div>
       {/if}
     </div>
