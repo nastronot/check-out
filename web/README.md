@@ -20,7 +20,16 @@ the two processes never race over the filesystem.
 | PUT    | `/api/state`   | Merge-patch a partial into `state.json` (deep-merge + atomic write); returns the new state |
 | POST   | `/api/command` | Body `{action, args}` → stamps `state.command = {id: <uuid>, action, args}` so the daemon runs it once |
 | GET    | `/api/health`  | `{ok, daemon_alive}` — `daemon_alive` is true iff `status.json` is fresh (< 5s) and marked alive |
+| GET    | `/api/library` | The saved library `{messages, glyphs}` (web-owned `library.json`) |
+| POST   | `/api/library/messages` | Save the current composable state (name + message/mode/align/brightness/glyphs) |
+| DELETE | `/api/library/messages/{id}` | Delete a saved message |
+| POST   | `/api/library/messages/{id}/recall` | Apply a saved message to `state.json` (fields + its glyphs) — the library→live bridge |
+| POST   | `/api/library/glyphs` | Save a glyph `{name, rows}` (7 low-5-bit ints) |
+| DELETE | `/api/library/glyphs/{id}` | Delete a saved glyph |
 | GET    | `/`            | The built UI (`ui/dist`), or a 503 hint if it isn't built yet |
+
+The library is **web-owned**: the daemon never reads `library.json`. Recall is the only
+action that crosses over, and it does so by writing `state.json` (the daemon's normal input).
 
 ## Config (shared with the daemon)
 
@@ -28,6 +37,7 @@ Paths come from the same env the daemon uses, via `checkout.config`:
 
 - `CHECKOUT_STATE_PATH`  (default `./state.json`)
 - `CHECKOUT_STATUS_PATH` (default `./status.json`)
+- `CHECKOUT_LIBRARY_PATH` (default `./library.json`) — web-only; the daemon ignores it
 - `CHECKOUT_UI_DIST`     (default `ui/dist`) — where the built UI lives
 
 In deployment both processes share these files via a mounted volume.

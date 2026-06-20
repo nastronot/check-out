@@ -269,9 +269,12 @@ cells (a `{gN}` glyph is one cell). The daemon coerces an invalid value to `cent
 ticker's scrolling top line is already 20 cells wide, so alignment is a no-op there;
 a static bottom line honors `align_bottom`.
 
-**Animations** (timed by `animation_params.on_ms`/`off_ms`): `none` (show on change),
-`flash` (alternate the frame with a real `blank()` — display goes dark), `blink`
-(alternate the frame with blank lines — display stays on).
+**Animations** (timed by `animation_params.on_ms`/`off_ms`): `none` (show on change);
+`flash` (alternate the frame with a real `blank()` — display goes fully DARK); `blink`
+(PULSE — the frame stays up but brightness dims to MIN on the off-phase, then back,
+v0.7.0). blink folds into the brightness step (no frame redraw). The daemon writes the
+on-glass result to status.json each tick — blank top/bottom for flash-off, the pulsed
+`brightness` for blink — so the preview animates both.
 
 **Re-init rule.** After `self_test()`, `reset()`, or `define_character()` the display may
 drop extended-mode/scroll-off; `initialize()` is re-run before the next `show()`. The
@@ -364,6 +367,27 @@ contract and `{gN}` references — **no new endpoints or schema changes**.
 - **Dev/build:** vite dev server proxies `/api` → uvicorn:8000; `npm run build` → `ui/dist`
   which uvicorn serves in prod. Docker is deferred to Phase 3 but the layout is
   container-ready. See `web/README.md` and `ui/README.md`.
+
+### 4.8 Phase 2d — saved library (v0.7.0)
+A persistent library of saved **messages** and **glyphs**, **web-owned** in `library.json`
+(env `CHECKOUT_LIBRARY_PATH`, default `./library.json`). **The daemon never reads it** —
+recalling an item writes `state.json` through the normal path, preserving single-writer
+ownership. `web/library.py` validates input and writes atomically (reusing
+`checkout.state.atomic_write_json`); each list is capped at 200.
+
+- **Schema:** `{ "messages": [{id, name, message, mode, align_top, align_bottom, brightness,
+  glyphs: {<slot>:[7 ints]}}], "glyphs": [{id, name, rows:[7 ints]}] }`. A saved message
+  carries the glyph defs it references, so recalling it makes its `{gN}` refs light up.
+- **Endpoints:** `GET /api/library`; `POST /api/library/messages` (saves the current
+  composable state) / `DELETE …/{id}` / `POST …/{id}/recall` (the one bridge from library
+  to live: merge-patches the message's fields + glyphs into `state.json`);
+  `POST /api/library/glyphs` `{name, rows}` / `DELETE …/{id}`.
+- **9 slots vs the library:** the 9 glyph **slots** are the live hardware registers the
+  daemon defines; the **library** is unlimited saved bitmaps you load *into* a slot.
+  Loading routes through the same optimistic + debounced push as drawing.
+- **UI:** `SavedMessages` (save current / recall / delete) and `GlyphLibrary` (save the
+  selected slot / load-into-selected-slot / delete; mini phosphor thumbnails via the shared
+  dot-render). The selected editor slot is a shared store so the library targets it.
 
 ---
 

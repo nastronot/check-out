@@ -164,8 +164,12 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
   the daemon coerces an invalid value to `center`. Ticker's scrolling top line is
   20 cells wide so alignment is a no-op there.
 - **Animations:** `none` (show when changed), `flash` (alternate frame / real
-  `blank()`), `blink` (alternate frame / blank lines — display stays on), timed
-  by `animation_params.on_ms`/`off_ms`.
+  `blank()` — display goes fully DARK), `blink` (PULSES brightness: the frame
+  stays up but dims to MIN on the off-phase — distinct from flash), timed by
+  `animation_params.on_ms`/`off_ms`. The daemon writes the on-glass result to
+  status.json each tick (blank top/bottom for flash-off, pulsed `brightness` for
+  blink), so the preview animates both. blink folds into the brightness step, so
+  it needs no frame redraw.
 
 > **Re-init rule:** after `self_test()`, `reset()`, or `define_character()` the
 > display may drop extended-mode/scroll-off, so `initialize()` is re-run before
@@ -223,7 +227,8 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
 - **Endpoints:** `GET /api/status` (the glass mirror), `GET /api/state`,
   `PUT /api/state` (deep merge-patch), `POST /api/command` (stamps a fresh
   `command.id` nonce → daemon runs once), `GET /api/health`
-  (`daemon_alive` = status.json fresh < 5s), `/` serves the built UI (`ui/dist`).
+  (`daemon_alive` = status.json fresh < 5s), the library endpoints (below),
+  `/` serves the built UI (`ui/dist`).
 - **Preview mirrors status, not controls.** `VfdPreview` renders a pixel-accurate
   2×20 of 5×7 phosphor dots from `/api/status`, so it shows real clock ticks /
   ticker motion / brightness / blank. Built-in 5×7 font for ASCII; the 9 user
@@ -261,6 +266,30 @@ The `GlyphEditorPanel` is now a real 9-slot 5×7 glyph editor, using the existin
   `copyFromChar` / `normGlyph`), so what you draw is exactly what the daemon
   defines and what the preview decodes — one round-trip, verified by test.
 
+## Phase 2d — saved library (v0.7.0)
+A persistent library of saved **messages** and **glyphs**, **web-owned** in
+`library.json` (env `CHECKOUT_LIBRARY_PATH`, default `./library.json`). The
+**daemon NEVER reads it** — recalling an item writes `state.json` via the normal
+path, which the daemon already consumes. `web/library.py` does atomic writes
+(reusing `checkout.state.atomic_write_json`); validation caps each list at 200.
+
+- **Schema:** `{ "messages": [{id,name,message,mode,align_top,align_bottom,
+  brightness,glyphs}], "glyphs": [{id,name,rows}] }`. A saved message carries the
+  `glyphs` it references, so recalling it lights up its `{gN}` refs.
+- **Endpoints:** `GET /api/library`; `POST /api/library/messages`
+  (saves the current composable state) / `DELETE …/{id}` /
+  `POST …/{id}/recall` (the one bridge library→live: PUTs the message's fields +
+  glyphs into `state.json`); `POST /api/library/glyphs` {name,rows} /
+  `DELETE …/{id}`.
+- **9 slots vs the library:** the **9 glyph slots** are the live hardware
+  registers the daemon defines; the **library** is unlimited saved bitmaps you
+  *load into* a slot. Loading a saved glyph routes through the same optimistic +
+  debounced push as drawing (`commitGlyph`).
+- **UI:** `SavedMessages` (save current / recall / delete) and `GlyphLibrary`
+  (save selected slot / load-into-selected-slot / delete, mini phosphor
+  thumbnails via the shared dot-render). The selected editor slot is a shared
+  store (`selectedGlyphSlot`) so the library targets it.
+
 ### UI toolchain + verify loop (MANDATORY)
 The UI is Svelte 4 + Vite 5 + TypeScript, built/tested with Node (Node 22 via nvm
 in this repo). Scripts in `ui/package.json`:
@@ -296,7 +325,8 @@ uvicorn web.app:app --port 8000             # serves UI + /api; shares state/sta
 # dev: `uvicorn web.app:app --reload` + `cd ui && npm run dev` (vite proxies /api)
 ```
 Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_TICK_MS`,
-`CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`, `CHECKOUT_UI_DIST`.
+`CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`, `CHECKOUT_LIBRARY_PATH`
+(web-only), `CHECKOUT_UI_DIST`.
 
 ## Serial permissions
 The dev user must belong to the device's group (on Arch this is `uucp`) or run
@@ -316,6 +346,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **Phase 2c (v0.5.0):** the glyph editor — 9-slot 5×7 draw grid with click-drag
   paint, slot strip (shared dot-render), debounced auto-push to `state.glyphs`,
   clear + copy-from-character (seed from the real font). (done)
+- **Phase 2d (v0.7.0):** saved library (`library.json`, web-owned) of messages +
+  glyphs with CRUD/recall endpoints + UI panels; `blink` reworked to a brightness
+  pulse (distinct from `flash`'s blank). (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
@@ -363,6 +396,13 @@ sudo usermod -aG uucp "$USER"   # then re-login
   bench-confirmed under extended mode. `state.brightness` is now an int 0..3
   (legacy `"dim"`/`"bright"` migrate to 0/3 and self-heal on load); UI 4-stop
   slider; preview renders 4 phosphor intensities.
+- **v0.6.3:** header is the phosphor-tinted logo (CSS mask) + dynamic version
+  from package.json.
+- **v0.7.0:** saved message/glyph library (`web/library.py` + `library.json`,
+  web-owned; daemon untouched) with CRUD + recall endpoints and `SavedMessages` /
+  `GlyphLibrary` UI panels; `blink` is now a brightness pulse (dims to MIN on the
+  off-phase) — clearly distinct from `flash`'s hard blank, and the preview
+  animates both via status.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
