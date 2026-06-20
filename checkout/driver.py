@@ -1,37 +1,65 @@
 """VFDDriver — the only component that emits raw bytes to the display.
 
-Hardware is a salvaged IBM SurePOS 2x20 VFD on a WRITE-ONLY 9600 8N1 serial link.
-Only the bench-confirmed command bytes below are ever sent; nothing else in the
-app touches the port. See CLAUDE.md for the full hardware reference.
+Hardware is a salvaged IBM SurePOS 2x20 VFD (Futaba **M202MD10C** board) on a
+WRITE-ONLY 9600 8N1 serial link. Only the documented command bytes below are
+ever sent; nothing else in the app touches the port. See CLAUDE.md for the full
+hardware reference.
+
+The command table is the authoritative Futaba M202MD10C protocol, recovered from
+the SNMetamorph ``FutabaVfdM202MD10C`` library source (our exact board) and
+bench-confirmed on this unit. The earlier "39-cell / 0x27 phantom scroll / no
+leading clear" findings were artifacts of a MISSING INITIALIZATION sequence (the
+display was never put into extended mode, and vertical scroll was left on). With
+the init sequence below all 40 cells are writable and addressing is the simple
+linear ``col + row*20``.
 """
 
 from __future__ import annotations
 
 from . import config
 
-# --- Confirmed command bytes (single-byte control codes; NOT ESC/POS) --------
-CMD_CLEAR = 0x1F          # clear whole display
-CMD_SET_CURSOR = 0x10     # followed by ONE position byte
-CMD_HIDE_CURSOR = 0x14    # hides the cursor; see "any write re-enables it" below
+# --- Futaba M202MD10C protocol commands (authoritative, bench-confirmed) ------
+# Named after the SNMetamorph FutabaVfdM202MD10C library's ProtocolCommands set.
+EXTENDED_MODE = 0x00            # + 0x01 enable / 0x00 disable
+SELECT_CODE_PAGE = 0x02         # + page byte (12 pages)        — wire later
+DEFINE_CHARACTER = 0x03         # + index + 7 bytes + 0x00 (9 user glyphs) — later
+DIMMING_MODE = 0x04            # + level byte (brightness)
+PRINT_TICKER_TEXT = 0x05        # hardware ticker, 45-char buffer — wire later
+BACKSPACE = 0x08
+SELF_TEST = 0x0F
+DISPLAY_POSITION = 0x10         # + position byte = col + row*20
+DISABLE_VERTICAL_SCROLL = 0x11
+ENABLE_VERTICAL_SCROLL = 0x12
+CURSOR_ON = 0x13
+CURSOR_OFF = 0x14
+RESET = 0x1F
 
-# Brightness is TWO discrete levels only (bench-confirmed). It is NOT a 0-255
-# scale and NOT four levels — other level bytes are ignored by the display.
-# Applies live (no redraw needed).
+# Extended-mode sub-command bytes.
+EXTENDED_ON = 0x01
+EXTENDED_OFF = 0x00
+
+# Mandatory init sequence (sent on every open/reconnect). Without the
+# extended-mode enable (0x00 0x01) and scroll disable (0x11) the display scrolls
+# when the 40th cell is written — that was the root cause of the old workarounds.
+INIT_SEQUENCE = bytes([RESET, EXTENDED_MODE, EXTENDED_ON, DISABLE_VERTICAL_SCROLL])
+
+# Brightness. Two confirmed discrete levels (dim/bright). The library claims 4
+# levels and extended mode may expose more; left at the two confirmed values for
+# now. TODO: retest the intermediate level bytes under extended mode.
 BRIGHTNESS = {"dim": b"\x04\x20", "bright": b"\x04\xff"}
 
-# Display geometry / addressing (position = line*20 + col).
+# Display geometry / addressing (position = col + row*20, row 0 = top).
 COLS = config.COLS
 ROWS = config.ROWS
 POS_TOP = 0x00            # top line starts here
 POS_BOTTOM = 0x14         # bottom line starts here (20)
-POS_MAX = ROWS * COLS - 1  # 0x27 — the 40th cell (bottom-right)
+POS_MAX = ROWS * COLS - 1  # 0x27 — the 40th cell (now fully writable)
 
 # Printable ASCII window. Anything outside is replaced so we never accidentally
-# emit a control byte (e.g. a stray 0x1F would clear the display).
+# emit a control byte (e.g. a stray 0x1F would reset the display).
 _PRINTABLE_MIN = 0x20
 _PRINTABLE_MAX = 0x7E
 _REPLACEMENT = "?"
-_SPACE = 0x20  # a space in the 40th cell (0x27) doesn't anchor the cursor
 
 
 class VFDError(Exception):
@@ -89,7 +117,7 @@ class VFDDriver:
 
     # --- lifecycle -----------------------------------------------------------
     def open(self) -> None:
-        """Open the serial port (no-op in dry-run)."""
+        """Open the serial port and initialize the display (no-op in dry-run)."""
         if self.dry_run:
             return
         import serial  # imported lazily so dry-run needs no pyserial
@@ -100,6 +128,17 @@ class VFDDriver:
             raise VFDError(f"could not open {self.port}: {exc}") from exc
         # Re-assert raw mode on every open (a fresh open resets termios).
         self._force_raw_mode()
+        # Put the display into the known-good state (extended mode, no scroll).
+        self.initialize()
+
+    def initialize(self) -> None:
+        """Send the mandatory init sequence: reset, extended-mode on, scroll off.
+
+        Bytes: ``0x1F 0x00 0x01 0x11``. This MUST run on every open/reconnect —
+        without extended mode + scroll-disable the display scrolls when the
+        bottom-right cell is written. One buffered write.
+        """
+        self._write(INIT_SEQUENCE)
 
     def _force_raw_mode(self) -> None:
         """Disable the tty line discipline's OUTPUT post-processing.
@@ -170,93 +209,56 @@ class VFDDriver:
 
     # --- public command surface ----------------------------------------------
     def clear(self) -> None:
-        """Clear the whole display (0x1F)."""
-        self._write(bytes([CMD_CLEAR]))
+        """Reset the whole display (0x1F).
+
+        NOTE: a bare reset also drops extended mode and re-enables scroll. Use
+        :meth:`blank` for a safe dark screen, or call :meth:`initialize` after.
+        """
+        self._write(bytes([RESET]))
 
     def write_at(self, pos: int, text: str) -> None:
         """Set the cursor to ``pos`` then write sanitized ASCII text.
 
-        ``pos`` is a linear address 0x00–0x27 (line*20 + col).
+        ``pos`` is a linear address 0x00–0x27 (col + row*20).
         """
         if not (POS_TOP <= pos <= POS_MAX):
             raise ValueError(f"position {pos:#04x} out of range 0x00–{POS_MAX:#04x}")
-        self._write(bytes([CMD_SET_CURSOR, pos]) + _sanitize(text))
-
-    def _hide_cursor(self, buf: bytearray) -> None:
-        """Append the cursor-hide byte (0x14) to ``buf``.
-
-        CRITICAL: 0x14 hides the cursor, but ANY subsequent write RE-ENABLES it.
-        There is no persistent "cursor off" and no separate "cursor on" byte.
-        Therefore this MUST be the LAST byte of every frame update, after all
-        positioning and text. Do not remove or reorder it.
-        """
-        buf.append(CMD_HIDE_CURSOR)
+        self._write(bytes([DISPLAY_POSITION, pos]) + _sanitize(text))
 
     def show(self, top: str, bottom: str) -> None:
         """Overwrite both lines in place as a single buffered write.
 
-        NO leading 0x1F clear — a clear immediately before a full-frame write
-        scrolls the display (bench-verified). Overwrite-in-place is correct;
-        clear-then-write is not.
+        With the display correctly initialized (extended mode + scroll off) all
+        40 cells are writable and the sequence is simply::
 
-        Emits (for a VISIBLE 40th char):
+            0x10 0x00  <top: 20 ASCII bytes>     # cells 0x00..0x13
+            0x10 0x14  <bottom: 20 ASCII bytes>   # cells 0x14..0x27
+            0x14       # cursor off — MUST be the final byte
 
-            0x10 0x00  <top: 20 ASCII bytes>
-            0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
-            0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
-            0x10 0x00  # reposition — anchors the cursor, suppresses the scroll
-            0x14       # hide cursor — MUST be last
+        Both lines are a full 20 chars. There is NO leading clear, NO 0x27
+        special-casing, and NO anchor/reposition trick — those were workarounds
+        for the missing init sequence and are gone.
 
-        The 40th cell (0x27) is special: writing it auto-advances the cursor PAST
-        the end, which scrolls the whole display up. A reposition (0x10 0x00)
-        immediately after re-anchors and suppresses that scroll — BUT only when a
-        VISIBLE glyph was written; writing a SPACE (0x20) into 0x27 does NOT
-        anchor the cursor, so the reposition fires too late and it still scrolls
-        (bench-verified).
-
-        Therefore the 40th cell is written conditionally:
-          - 40th char visible  -> write it at 0x27, then reposition (0x10 0x00).
-          - 40th char is space -> DON'T touch 0x27 at all. After the 19-char write
-            the cursor sits at 0x27 without advancing past the end, so no scroll.
-
-        DEFAULT/limitation: usable width is effectively 39 cells whenever the 40th
-        char is a space — we never write a space to 0x27. Most content (the
-        centered clock) has a space there anyway, so this is invisible in
-        practice and guaranteed not to scroll. CAVEAT: if a prior frame wrote a
-        visible glyph at 0x27 and the new frame's 40th char is a space, the old
-        glyph is left in place (we can't blank it without writing a space, which
-        scrolls). Acceptable for current content; revisit if a frame needs to
-        toggle the 40th cell from glyph to blank.
-
-        The top line never needs this treatment: its 20-char write auto-advances
-        to 0x14, which we immediately overwrite with an explicit position command
-        before the cursor can scroll.
-
-        Built as one buffer + one serial write so there's no flicker and the
-        cursor-hide is reliably the final byte.
+        ``0x14`` (cursor off) must be LAST: any write after it re-enables the
+        cursor block. Built as one buffer + one serial write so there is no
+        flicker and the cursor-hide is reliably the final byte.
         """
-        top_b = _sanitize(_pad(top))      # exactly 20 bytes
-        bottom_b = _sanitize(_pad(bottom))  # exactly 20 bytes
-        cell40 = bottom_b[19]             # the 40th-cell byte (int)
+        top_b = _sanitize(_pad(top))         # exactly 20 bytes
+        bottom_b = _sanitize(_pad(bottom))   # exactly 20 bytes
 
         buf = bytearray()
-        buf += bytes([CMD_SET_CURSOR, POS_TOP])
+        buf += bytes([DISPLAY_POSITION, POS_TOP])
         buf += top_b
-        buf += bytes([CMD_SET_CURSOR, POS_BOTTOM])
-        buf += bottom_b[:19]                       # cells 0x14..0x26
-        if cell40 != _SPACE:
-            buf += bytes([CMD_SET_CURSOR, POS_MAX])  # 0x27, the 40th cell
-            buf += bytes([cell40])                   # a VISIBLE glyph
-            buf += bytes([CMD_SET_CURSOR, POS_TOP])  # anchor + suppress scroll
-        # else: leave 0x27 untouched — a space there would scroll, not anchor.
-        self._hide_cursor(buf)
+        buf += bytes([DISPLAY_POSITION, POS_BOTTOM])
+        buf += bottom_b
+        buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
         self._write(bytes(buf))
 
     def set_brightness(self, level: str) -> None:
-        """Set display brightness to "dim" or "bright" (two discrete levels).
+        """Set display brightness to "dim" or "bright" (two confirmed levels).
 
-        Raises ValueError for any other value — there is no 0-255 API. Applies
-        live and is independent of the cursor/scroll handling in show().
+        Raises ValueError for any other value. Applies live (no redraw needed)
+        and is independent of show().
         """
         try:
             self._write(BRIGHTNESS[level])
@@ -265,8 +267,29 @@ class VFDDriver:
                 f"brightness must be one of {sorted(BRIGHTNESS)}, got {level!r}"
             ) from None
 
+    def set_vertical_scroll(self, enabled: bool) -> None:
+        """Enable (0x12) or disable (0x11) hardware vertical scroll.
+
+        Normal frames run with scroll DISABLED (set by initialize()). Enabling
+        it makes writing past the last cell scroll the display up — useful later
+        for ticker/marquee effects.
+        """
+        self._write(
+            bytes([ENABLE_VERTICAL_SCROLL if enabled else DISABLE_VERTICAL_SCROLL])
+        )
+
+    def self_test(self) -> None:
+        """Trigger the display's built-in self-test (0x0F)."""
+        self._write(bytes([SELF_TEST]))
+
     def blank(self) -> None:
-        """Clear the display and leave it dark, with no cursor block remaining."""
-        buf = bytearray([CMD_CLEAR])
-        self._hide_cursor(buf)  # 0x14 last, so no cursor block on the dark screen
+        """Clear the display to a dark screen, left in the known-good state.
+
+        Emits the full init sequence (reset + extended mode + scroll off) so the
+        display is never left in scroll mode after a blank, then cursor-off
+        (0x14) LAST so no cursor block lingers on the dark screen. The next
+        show() therefore holds a full 40-char frame without re-initializing.
+        """
+        buf = bytearray(INIT_SEQUENCE)
+        buf.append(CURSOR_OFF)  # last, so the dark screen has no cursor block
         self._write(bytes(buf))

@@ -1,11 +1,11 @@
 """check-out daemon — the sole owner of the serial port.
 
 Each tick it reads ``state.json``, renders the active frame, and emits EXACTLY
-ONE ``show()`` frame (the known-good byte sequence) — never zero, never two. A
-single self-contained frame per tick is what keeps the display from scrolling:
-two writes in a tick, or a partial write, would advance past the 40th cell and
-scroll. It reconnects with backoff if the USB adapter drops, and blanks the
-display on a clean shutdown.
+ONE ``show()`` frame (the known-good byte sequence). The display is initialized
+once on open (extended mode + vertical scroll off), so a full 40-cell frame
+holds in place with no scroll. It reconnects with backoff if the USB adapter
+drops (re-running the init sequence on reopen), and blanks the display on a
+clean shutdown.
 
 Entrypoint::
 
@@ -68,8 +68,8 @@ def open_driver(dry_run: bool) -> VFDDriver | None:
 
 
 def show_banner(driver: VFDDriver) -> None:
-    # No leading clear(): a 0x1F immediately before a full-frame write scrolls
-    # the display. show() overwrites all cells in place instead.
+    # show() overwrites all 40 cells in place; the display was initialized
+    # (extended mode + scroll off) on open, so a full frame holds without scroll.
     top, bottom = render_lines(BANNER_TOP, BANNER_BOTTOM)
     driver.show(top, bottom)
     time.sleep(BANNER_SECONDS)
@@ -130,8 +130,8 @@ def run(dry_run: bool = False, once: bool = False) -> int:
                         blanked = False
                         log("display resumed")
                     # Exactly ONE complete frame per tick. The frame is the full
-                    # known-good sequence and is idempotent, so redrawing every
-                    # tick is safe; emitting a second write here would scroll.
+                    # known-good sequence and is idempotent (each show()
+                    # repositions to 0x00), so redrawing every tick is safe.
                     driver.show(*lines)
             except VFDError as exc:
                 log(f"serial error: {exc}; reconnecting")
