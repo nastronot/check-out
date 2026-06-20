@@ -69,6 +69,48 @@ def test_set_vertical_scroll_enable(driver, capsys):
     assert capture_bytes(capsys) == [0x12]
 
 
+def test_define_character_sequence(driver, capsys):
+    rows = [0x1F, 0x11, 0x11, 0x1F, 0x04, 0x04, 0x04]
+    driver.define_character(3, rows)
+    # 0x03 <index> <7 row bytes> 0x00
+    assert capture_bytes(capsys) == [0x03, 0x03, *rows, 0x00]
+
+
+def test_define_character_masks_rows_to_low_5_bits(driver, capsys):
+    # 0xFF must be masked to 0x1F so a row byte never looks like a control code.
+    driver.define_character(0, [0xFF] * 7)
+    assert capture_bytes(capsys) == [0x03, 0x00, *([0x1F] * 7), 0x00]
+
+
+def test_define_character_validates(driver):
+    with pytest.raises(ValueError):
+        driver.define_character(9, [0] * 7)       # index out of range
+    with pytest.raises(ValueError):
+        driver.define_character(0, [0] * 6)       # wrong row count
+
+
+def test_select_code_page_sequence(driver, capsys):
+    driver.select_code_page(5)
+    assert capture_bytes(capsys) == [0x02, 0x05]
+
+
+def test_select_code_page_validates(driver):
+    with pytest.raises(ValueError):
+        driver.select_code_page(12)
+
+
+def test_self_test_reruns_initialize(driver, capsys):
+    driver.self_test()
+    # 0x0F then the init sequence (1F 00 01 11).
+    assert capture_bytes(capsys) == [0x0F, 0x1F, 0x00, 0x01, 0x11]
+
+
+def test_reset_reruns_initialize(driver, capsys):
+    driver.reset()
+    # A reset that restores the initialized state == the init sequence.
+    assert capture_bytes(capsys) == [0x1F, 0x00, 0x01, 0x11]
+
+
 def test_set_brightness_dim(driver, capsys):
     driver.set_brightness("dim")
     assert capture_bytes(capsys) == [0x04, 0x20]

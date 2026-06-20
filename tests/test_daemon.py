@@ -1,4 +1,6 @@
-"""Daemon-level tests, focused on the graceful-shutdown path."""
+"""Daemon-level tests: shutdown, command nonce, animation, status mirror."""
+
+from datetime import datetime
 
 import checkout.daemon as daemon
 from checkout.driver import VFDDriver
@@ -7,6 +9,110 @@ from checkout.driver import VFDDriver
 def _last_tx_bytes(out: str) -> list[str]:
     tx_lines = [ln.strip() for ln in out.splitlines() if ln.strip().startswith("TX")]
     return tx_lines[-1][2:].split()
+
+
+def _all_tx_bytes(out: str) -> list[int]:
+    data: list[int] = []
+    for ln in out.splitlines():
+        ln = ln.strip()
+        if ln.startswith("TX"):
+            data.extend(int(t, 16) for t in ln[2:].split())
+    return data
+
+
+NOW = datetime(2026, 6, 19, 12, 0, 0)
+
+
+# --- command nonce -----------------------------------------------------------
+def test_command_nonce_processed_once_then_reprocessed(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+
+    def tick_with(cmd_id):
+        state = {
+            "mode": "clock",
+            "command": {"id": cmd_id, "action": "self_test", "args": {}},
+        }
+        capsys.readouterr()  # clear
+        daemon.tick_once(drv, state, ctx, now=NOW)
+        return _all_tx_bytes(capsys.readouterr().out).count(0x0F)
+
+    assert tick_with("c1") == 1   # first time: self_test runs (emits 0x0F)
+    assert tick_with("c1") == 0   # same nonce: not re-run
+    assert tick_with("c2") == 1   # new nonce: runs again
+
+
+def test_command_null_id_is_noop(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock", "command": {"id": None, "action": "self_test"}}
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    assert 0x0F not in _all_tx_bytes(capsys.readouterr().out)
+
+
+# --- animation ---------------------------------------------------------------
+def test_resolve_emit_none_always_shows():
+    p = {"on_ms": 500, "off_ms": 500}
+    assert daemon.resolve_emit(0, "none", p, "T", "B") == ("show", "T", "B")
+    assert daemon.resolve_emit(999, "none", p, "T", "B") == ("show", "T", "B")
+
+
+def test_resolve_emit_flash_toggles_to_blank():
+    p = {"on_ms": 500, "off_ms": 500}
+    assert daemon.resolve_emit(0, "flash", p, "T", "B") == ("show", "T", "B")
+    assert daemon.resolve_emit(600, "flash", p, "T", "B") == ("blank",)
+
+
+def test_resolve_emit_blink_swaps_to_blank_lines():
+    p = {"on_ms": 500, "off_ms": 500}
+    assert daemon.resolve_emit(0, "blink", p, "T", "B") == ("show", "T", "B")
+    off = daemon.resolve_emit(600, "blink", p, "T", "B")
+    # blink keeps the display ON: it shows blank LINES, not a real blank().
+    assert off == ("show", " " * 20, " " * 20)
+
+
+def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {
+        "mode": "clock",
+        "animation": "flash",
+        "animation_params": {"on_ms": 500, "off_ms": 500},
+    }
+    on_now = datetime(2026, 6, 19, 12, 0, 0, 0)        # phase ON
+    off_now = datetime(2026, 6, 19, 12, 0, 0, 600000)  # phase OFF (same second)
+
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=on_now)
+    on_bytes = _all_tx_bytes(capsys.readouterr().out)
+    assert 0x10 in on_bytes  # a show() frame (DisplayPosition) was emitted
+
+    daemon.tick_once(drv, state, ctx, now=off_now)
+    off_bytes = _all_tx_bytes(capsys.readouterr().out)
+    # OFF phase blanks: init-seq + cursor-off, and no show() this tick.
+    assert off_bytes == [0x1F, 0x00, 0x01, 0x11, 0x14]
+
+
+# --- status mirror -----------------------------------------------------------
+def test_status_written_with_expected_fields(monkeypatch):
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock", "brightness": "dim", "blank": False, "scroll": False}
+    daemon.tick_once(drv, state, ctx, now=NOW)
+
+    assert written, "status should be written"
+    status = written[-1]
+    for key in ("alive", "mode", "top", "bottom", "brightness", "blank",
+                "scroll", "last_command_id"):
+        assert key in status
+    assert status["alive"] is True
+    assert status["mode"] == "clock"
+    assert len(status["top"]) == 20 and len(status["bottom"]) == 20
 
 
 def test_shutdown_blanks_with_cursor_hidden(monkeypatch, capsys):
@@ -31,7 +137,7 @@ def test_shutdown_blanks_with_cursor_hidden(monkeypatch, capsys):
 
 
 class _CountingDriver:
-    """Records show()/blank() calls without touching a port."""
+    """Full no-op driver that records show()/blank() calls without a port."""
 
     port = "fake"
     baud = 9600
@@ -40,7 +146,28 @@ class _CountingDriver:
         self.shows = 0
         self.blanks = 0
 
+    def initialize(self):
+        pass
+
     def clear(self):
+        pass
+
+    def reset(self):
+        pass
+
+    def self_test(self):
+        pass
+
+    def define_character(self, index, rows7):
+        pass
+
+    def select_code_page(self, page):
+        pass
+
+    def set_brightness(self, level):
+        pass
+
+    def set_vertical_scroll(self, enabled):
         pass
 
     def show(self, top, bottom):
@@ -53,31 +180,31 @@ class _CountingDriver:
         pass
 
 
-def test_exactly_one_show_per_tick_no_double_write(monkeypatch):
-    """Each clock tick must emit exactly one show() — never zero, never two."""
+def test_show_emitted_once_per_change_no_double_write(monkeypatch):
+    """A tick emits at most one show/blank, and re-shows only when content changes."""
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = _CountingDriver()
-    monkeypatch.setattr(daemon, "open_driver", lambda dry_run: drv)
-    monkeypatch.setattr(daemon, "show_banner", lambda d: None)
-    monkeypatch.setattr(daemon, "_stop", False)
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock"}
 
-    # Count loop iterations (one load_state per tick) and stop after 3.
-    ticks = {"n": 0}
-    real_load = daemon.load_state
+    t0 = datetime(2026, 6, 19, 12, 0, 0)
+    daemon.tick_once(drv, state, ctx, now=t0)
+    assert drv.shows == 1                      # first frame drawn
+    daemon.tick_once(drv, state, ctx, now=t0)  # same second -> no change
+    assert drv.shows == 1                      # not redrawn (never double-write)
 
-    def counting_load():
-        ticks["n"] += 1
-        return real_load()
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    assert drv.shows == 2                      # clock advanced -> one redraw
+    assert drv.blanks == 0
 
-    monkeypatch.setattr(daemon, "load_state", counting_load)
 
-    def fake_sleep(_seconds):
-        if ticks["n"] >= 3:
-            daemon._stop = True
+def test_blank_state_blanks_once_then_latches(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock", "blank": True}
 
-    monkeypatch.setattr(daemon.time, "sleep", fake_sleep)
-
-    daemon.run(dry_run=True)
-
-    # Exactly one show() per tick: not zero (diffed-away) and not two (scroll).
-    assert drv.shows == ticks["n"] == 3
-    assert drv.blanks == 1  # the single shutdown blank
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    assert drv.blanks == 1  # latched: blanked once, not every tick
+    assert drv.shows == 0
