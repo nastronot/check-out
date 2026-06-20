@@ -99,8 +99,8 @@ extended mode (`0x00 0x01`) was the missing initialization that the v0.1.x findi
 | Command | Bytes | Behavior |
 |---------|-------|----------|
 | **Extended mode** | `0x00` + `0x01` enable / `0x00` disable | required for full 40-cell, no-scroll operation |
-| **Select code page** | `0x02` + page byte | 12 code pages (wire later) |
-| **Define character** | `0x03` + index + 7 bytes + `0x00` | 9 user-definable glyphs (wire later) |
+| **Select code page** | `0x02` + page byte | 12 code pages (see §4.5 glyph contract) |
+| **Define character** | `0x03` + code + 7 row bytes + `0x00` | 9 user glyphs at non-contiguous codes (see §4.5) |
 | **Dimming / brightness** | `0x04` + level byte | DIM `0x04 0x20`, BRIGHT `0x04 0xFF` |
 | **Print ticker text** | `0x05` | hardware ticker, 45-char buffer (wire later) |
 | **Backspace** | `0x08` | |
@@ -228,7 +228,8 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   "scroll_speed_ms": 300,          // ticker software-scroll step
   "animation": "none" | "flash" | "blink",
   "animation_params": { "on_ms": 500, "off_ms": 500 },
-  "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 user glyphs, 7 ints (low 5 bits)
+  "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 glyphs; 7 ints, low 5 bits = cols 1..5
+  // place a glyph in `message` with {g0}..{g8}
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
   "updated_at": "iso"
 }
@@ -263,10 +264,30 @@ a long message on the top line at `scroll_speed_ms`/step, via `renderer.ticker_w
 drop extended-mode/scroll-off; `initialize()` is re-run before the next `show()`. The
 `self_test`/`reset` driver methods do this themselves; the daemon re-inits after a glyph batch.
 
-**Hardware-confirm TODOs (bench):** which character code(s) render the 9 user glyphs
-after `define_character` (probe: define glyph 0, write bytes `0x00`..`0x08`, see which
-shows it — document the mapping); whether code pages (`0x02` + page) visibly change the
-glyph set. These don't block the code — the commands are wired; confirm exact codes on glass.
+**User glyphs (bench-confirmed, v0.3.1).** 9 glyph slots live at **non-contiguous**
+character codes (`0x1B` is skipped):
+
+| slot | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|------|`0x15`|`0x16`|`0x17`|`0x18`|`0x19`|`0x1A`|`0x1C`|`0x1D`|`0x1E`|
+
+- **Define:** `0x03 <code> <7 row bytes> 0x00` (top row first). **Display:** write the
+  slot's code byte. `_sanitize` allow-lists these codes so they survive into `show()`.
+- **Bitmap encoding:** the display reads the 5 columns from **bits 3-7** of each row byte
+  (column 1 = bit 3 `0x08` … column 5 = bit 7 `0x80`; a lit pixel in column C sets bit
+  (C+2); full row = `0xF8`; bits 0-2 ignored). v0.3.0 masked to the *low* 5 bits, which
+  was wrong and dropped the pixels.
+- **Input convention:** `define_character(slot, rows)` and `state.glyphs` take
+  **editor-natural** rows — 7 ints whose **low 5 bits are columns 1..5** (`bit0`=col1 …
+  `bit4`=col5). The driver translates each to the wire byte by `(row & 0x1F) << 3`
+  (`0x1F`→`0xF8`, `0x01`→`0x08`, `0x10`→`0x80`). One convention shared by the future
+  editor/preview and the daemon; the `<<3` lives only in the driver.
+- **Placeholders:** `{g0}`..`{g8}` in a `message` are replaced (message/ticker frames) by
+  the slot's code byte, so text + glyphs mix freely, e.g. `"TEMP {g0}C"`.
+
+**Code pages (confirmed available).** `select_code_page(page)` → `0x02 <page>`; `page` is a
+name or int `0..11` (12 total). Confirmed: `0` default, `1` japanese (CP897), `2` cp850
+(Fr/De/Es/Pt), `3` cp852, `4` cp855, `5` cp857 (Turkish). Pages 6–11 exist per the library
+but are not yet identified on our unit. `state.code_page` drives this.
 
 ---
 
@@ -277,6 +298,9 @@ glyph set. These don't block the code — the commands are wired; confirm exact 
 - [x] ~~Confirm command bytes~~ — adopted the authoritative Futaba M202MD10C set (§3) with
   the extended-mode init sequence; all 40 cells writable. Done (v0.2.0).
 - [x] ~~Confirm brightness command~~ — two levels: DIM `0x04 0x20`, BRIGHT `0x04 0xFF`. Done.
+- [x] ~~Confirm user-glyph codes + bitmap encoding~~ — 9 non-contiguous codes,
+  columns in bits 3-7 (§4.5). Done (v0.3.1).
+- [x] ~~Confirm code pages~~ — 12 pages, names 0–5 confirmed (§4.5). Done (v0.3.1).
 - [ ] Decide frame rotation timing and data-source set for v0.1.
 - [ ] Seal the enclosure once interface dev is far enough along to stop probing.
 

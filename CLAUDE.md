@@ -124,7 +124,8 @@ port owner). The web UI is just a writer of this file.
   "scroll_speed_ms": 300,          // ticker software-scroll step
   "animation": "none" | "flash" | "blink",
   "animation_params": { "on_ms": 500, "off_ms": 500 },
-  "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 user glyphs, 7 ints (low 5 bits)
+  "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 glyphs; 7 ints, low 5 bits = cols 1..5
+  // place a glyph in `message` with {g0}..{g8}
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
   "updated_at": "iso"
 }
@@ -161,6 +162,41 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
 > the next `show()`. The driver methods `self_test`/`reset` do this themselves;
 > the daemon re-inits after a glyph batch.
 
+### User glyphs (bench-confirmed, v0.3.1)
+There are **9 user-glyph slots** at **non-contiguous** character codes
+(`0x1B` is skipped):
+
+| slot | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|------|---|---|---|---|---|---|---|---|---|
+| code |`0x15`|`0x16`|`0x17`|`0x18`|`0x19`|`0x1A`|`0x1C`|`0x1D`|`0x1E`|
+
+- **Define:** `0x03 <code> <7 row bytes> 0x00` (top row first).
+- **Display:** write the slot's code byte (e.g. `0x15` for slot 0). `glyph_code(n)`
+  returns it; `_sanitize` allow-lists these codes so they survive into `show()`.
+- **Bitmap (the v0.3.0 bug):** the display reads the 5 columns from **bits 3-7**
+  of each row byte, NOT the low 5 bits:
+
+  | column | 1 (left) | 2 | 3 | 4 | 5 (right) |
+  |--------|----------|---|---|---|-----------|
+  | bit    | 3 (`0x08`)|4 (`0x10`)|5 (`0x20`)|6 (`0x40`)|7 (`0x80`)|
+
+  A lit pixel in column C sets bit (C+2); a full row = `0xF8`; bits 0-2 ignored.
+- **Input convention:** `define_character(slot, rows)` takes **editor-natural**
+  rows — 7 ints whose **low 5 bits are columns 1..5** (`bit0`=col1 … `bit4`=col5).
+  The driver translates each to the wire byte by `(row & 0x1F) << 3`
+  (e.g. `0x1F`→`0xF8`, `0x01`→`0x08`, `0x10`→`0x80`). The public API is intuitive;
+  the `<<3` lives in the driver only. `state.glyphs` uses this same low-5-bit
+  convention, so the future editor/preview and the daemon share one format.
+- **Placing glyphs in text:** `{g0}`..`{g8}` in a `message` are replaced (in the
+  message/ticker frames) by the slot's code byte, so you can mix text + glyphs,
+  e.g. `"TEMP {g0}C"`.
+
+### Code pages (confirmed available)
+`select_code_page(page)` → `0x02 <page>`; `page` is a name or int `0..11`
+(12 total). Confirmed names: `0` default, `1` japanese (CP897), `2` cp850
+(Fr/De/Es/Pt), `3` cp852, `4` cp855, `5` cp857 (Turkish). Pages 6–11 exist per
+the library but are not yet identified on our unit. `state.code_page` drives this.
+
 ## Versioning
 Semver `major.minor.patch` read as **"big.small.bug"**.
 
@@ -191,10 +227,14 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v0.2.0:** adopted the authoritative Futaba M202MD10C command set + extended-mode
   init sequence — all 40 cells now writable, the old 39-cell/scroll workarounds removed.
   Vertical scroll exposed as a controllable feature. TODO: retest 4-level brightness.
+- **v0.3.1:** bench-confirmed the user-glyph pipeline — 9 non-contiguous codes,
+  bitmap columns in bits 3-7 (fixed the v0.3.0 low-5-bit encoding), `{gN}` message
+  placeholders, code-page name map. Glyph + code-page bench TODOs resolved.
 
 ## Hardware-confirm TODOs (bench)
-- Which character code(s) render the 9 user glyphs after `define_character` (probe:
-  define glyph 0, then write bytes `0x00`..`0x08` and see which shows it). Document the
-  code→glyph mapping.
-- Whether code pages (`0x02` + page) visibly change the glyph set on our unit.
+- [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):
+  9 non-contiguous codes `0x15`–`0x1A`, `0x1C`–`0x1E` (`0x1B` skipped); bitmap
+  columns are bits 3-7. See "User glyphs" above.
+- [x] ~~Whether code pages (`0x02` + page) change the glyph set~~ — RESOLVED
+  (v0.3.1): yes; 12 pages, confirmed names 0–5. See "Code pages" above.
 - Whether extended mode exposes the library's claimed 4 brightness levels.
