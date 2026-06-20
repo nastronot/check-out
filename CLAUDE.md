@@ -221,11 +221,35 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
 - **Controls** (`PUT /api/state` on change): mode, message (+`{gN}` hint),
   brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker
   speed. `CommandBar` fires self_test/reset; `StatusReadout` shows daemon health.
-  `GlyphEditorPanel` is a placeholder (full editor next phase).
 - **Config:** `CHECKOUT_STATE_PATH` / `CHECKOUT_STATUS_PATH` (shared with daemon)
   via `checkout.config`; `CHECKOUT_UI_DIST` for the built UI. Docker is Phase 3.
 
 See `web/README.md` and `ui/README.md` for run instructions.
+
+## Phase 2c — glyph editor (v0.5.0)
+The `GlyphEditorPanel` is now a real 9-slot 5×7 glyph editor, using the existing
+`state.glyphs` contract (no schema/endpoint changes):
+
+- **Slot strip:** 9 thumbnails (g0–g8) rendered through the SAME dot-draw as the
+  main preview (`dotrender.paintCell` + `font5x7` decode), so a glyph looks
+  identical everywhere. Selected slot highlighted; a per-slot sync dot.
+- **Draw grid:** a 5×7 canvas (`GlyphCanvas.svelte`) with click + **click-drag
+  paint** (pointer events, mouse + touch). The first cell sets the paint value
+  (lit → erase, empty → paint); dragging applies it. Lit cells are phosphor
+  squares, empty cells faint — matching the preview.
+- **Tools:** **Clear**, and **copy-from-character** — type any printable char to
+  seed the grid from the REAL `font5x7` bitmap, then tweak. Plus the `{gN}`
+  reference token for the selected slot with a one-click copy.
+- **Debounced auto-push:** an edit updates local state instantly (slot strip +
+  main preview reflect it — optimistic via `setGlyphLocal`), then ~400 ms after
+  the last edit a single `PUT /api/state` sends `{glyphs:{"<slot>":[7 ints]}}`
+  (`pushGlyphs`). The backend deep-merges one slot (`merge_patch`) without
+  touching the others; the daemon defines it on the display next tick (the v0.3.1
+  glyph path). Never push per-toggle — the debounce is the contract. A per-slot
+  indicator shows syncing… / synced ✓.
+- **Encoding** is the shared low-5-bit convention (`glyphedit.ts`: `withBit` /
+  `copyFromChar` / `normGlyph`), so what you draw is exactly what the daemon
+  defines and what the preview decodes — one round-trip, verified by test.
 
 ### UI toolchain + verify loop (MANDATORY)
 The UI is Svelte 4 + Vite 5 + TypeScript, built/tested with Node (Node 22 via nvm
@@ -279,6 +303,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **Phase 2b (v0.4.0):** Svelte/FastAPI web control surface — FastAPI reads
   status.json / writes state.json (never the port) + serves the UI; Svelte app
   with the live phosphor preview + core controls. Glyph editor scaffolded. (done)
+- **Phase 2c (v0.5.0):** the glyph editor — 9-slot 5×7 draw grid with click-drag
+  paint, slot strip (shared dot-render), debounced auto-push to `state.glyphs`,
+  clear + copy-from-character (seed from the real font). (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte confirmed in v0.1.1 (two levels: dim/bright).
 - **v0.2.0:** adopted the authoritative Futaba M202MD10C command set + extended-mode
@@ -307,6 +334,12 @@ sudo usermod -aG uucp "$USER"   # then re-login
   charset, decoded from photos of our exact panel (one per char code) in
   Eigenbaukombinat/vfd_kassendisplay. The preview now matches the glass
   dot-for-dot (e.g. 'A' lights 16 dots, not the placeholder's 18).
+- **v0.4.5–v0.4.8:** preview polish — square dots (rounded), tighter intra-cell
+  dot pitch (denser glyphs, character spacing unchanged), final `DOT_PITCH_X` 5.8.
+- **v0.5.0:** the glyph editor (Phase 2c) — `GlyphCanvas` draw grid + slot strip
+  on a shared `dotrender.paintCell`, `glyphedit.ts` low-5-bit encode, debounced
+  auto-push (`setGlyphLocal` + `pushGlyphs`). VfdPreview refactored onto the same
+  `paintCell` so editor and preview render identically.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
