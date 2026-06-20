@@ -31,7 +31,7 @@
 <div class="shell">
   <header class="masthead">
     <div class="masthead__brand">
-      <img class="masthead__logo" src="/logo.png" alt="check-out" />
+      <span class="masthead__logo" role="img" aria-label="check-out"></span>
     </div>
     <span class="masthead__sub">phosphor status board · v{version}</span>
   </header>
@@ -82,10 +82,13 @@
   .masthead__logo {
     display: block;
     height: 34px;
-    width: auto;
-    /* crisp scaling for the dot-matrix wordmark */
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
+    aspect-ratio: 923 / 121; /* the logo PNG's intrinsic ratio */
+    /* Tint the (white/transparent) wordmark to the app's phosphor accent: use
+       the logo's alpha as a mask and fill with the accent color. The scanline
+       gaps stay transparent, so the dot-matrix look is preserved. */
+    background-color: var(--phosphor);
+    -webkit-mask: url(/logo.png) no-repeat center / contain;
+    mask: url(/logo.png) no-repeat center / contain;
   }
 
   .masthead__sub {
