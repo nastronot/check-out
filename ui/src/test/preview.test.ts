@@ -19,23 +19,36 @@ describe('VfdPreview font mapping', () => {
     expect(top[0][0].length).toBe(5);
   });
 
-  it('maps a known character to the right lit-dot count', () => {
-    // 'A' in the built-in 5x7 font lights exactly 18 dots.
-    expect(litCount('A'.charCodeAt(0))).toBe(18);
+  it('maps known characters to the real M202MD10C lit-dot counts', () => {
+    // Counts decoded from the real charset photos (Eigenbaukombinat). These pin
+    // the actual panel glyphs, not the old hand-drawn placeholder.
+    const counts: Record<string, number> = {
+      A: 16,
+      G: 17,
+      M: 18,
+      Q: 17,
+      '&': 15,
+      '@': 21,
+      '4': 14,
+      '0': 16,
+    };
+    for (const [ch, n] of Object.entries(counts)) {
+      expect(litCount(ch.charCodeAt(0))).toBe(n);
+    }
     // Space lights nothing.
     expect(litCount(0x20)).toBe(0);
   });
 
   it('canvas decode path lights the same dots as litCount (one shared font)', () => {
     // draw() lights a dot exactly when lineToCells(line)[ci][r][c] is truthy.
-    // Assert THAT path lights 18 dots for 'A', matching litCount — so a blank
-    // preview is never a font/decode bug, only a data/redraw one.
+    // Assert THAT path lights 16 dots for 'A' (real charset), matching litCount —
+    // so a blank preview is never a font/decode bug, only a data/redraw one.
     const cells = lineToCells('A', {});
     const litInFirstCell = cells[0].reduce(
       (n, row) => n + row.filter(Boolean).length,
       0,
     );
-    expect(litInFirstCell).toBe(18);
+    expect(litInFirstCell).toBe(16);
     expect(litInFirstCell).toBe(litCount('A'.charCodeAt(0)));
   });
 
