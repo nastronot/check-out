@@ -62,6 +62,19 @@ def test_put_state_nested_merge_keeps_siblings(client):
     assert data["animation_params"]["off_ms"] == 500  # sibling default kept
 
 
+def test_put_partial_glyphs_merges_one_slot(client):
+    # The glyph editor pushes one slot at a time — other slots must survive.
+    client.put(
+        "/api/state",
+        json={"glyphs": {"0": [1, 2, 3, 4, 5, 6, 7], "5": [7, 6, 5, 4, 3, 2, 1]}},
+    )
+    client.put("/api/state", json={"glyphs": {"3": [31, 0, 31, 0, 31, 0, 31]}})
+    glyphs = client.get("/api/state").json()["glyphs"]
+    assert glyphs["0"] == [1, 2, 3, 4, 5, 6, 7]  # preserved
+    assert glyphs["5"] == [7, 6, 5, 4, 3, 2, 1]  # preserved
+    assert glyphs["3"] == [31, 0, 31, 0, 31, 0, 31]  # merged in
+
+
 def test_post_command_sets_new_id_each_call(client):
     first = client.post("/api/command", json={"action": "self_test"}).json()
     second = client.post("/api/command", json={"action": "reset", "args": {}}).json()
