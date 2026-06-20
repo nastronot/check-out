@@ -88,74 +88,91 @@ voltage); only then wire the adapter to the data pin; then send text.
 
 ---
 
-## 3. Command set (BENCH-CONFIRMED on this unit)
+## 3. Command set — authoritative Futaba M202MD10C protocol
 
-Single-byte control codes (this is NOT ESC/POS — `0x1B 0x40` printed a literal "@", so
-ESC-prefixed commands do not apply). Verified by sending bytes and observing the display:
+Single-byte control codes (NOT ESC/POS — `0x1B 0x40` printed a literal "@", so ESC-prefixed
+commands do not apply). This is the authoritative command table, recovered from the
+SNMetamorph `FutabaVfdM202MD10C` library source (our exact board) and bench-confirmed on this
+unit. Credit the SNMetamorph library + the `abomin` "extended mode" discovery — enabling
+extended mode (`0x00 0x01`) was the missing initialization that the v0.1.x findings lacked.
 
 | Command | Bytes | Behavior |
 |---------|-------|----------|
-| **Clear** | `0x1F` | clears the whole display |
-| **Set cursor position** | `0x10` then one position byte | moves cursor to absolute position |
+| **Extended mode** | `0x00` + `0x01` enable / `0x00` disable | required for full 40-cell, no-scroll operation |
+| **Select code page** | `0x02` + page byte | 12 code pages (wire later) |
+| **Define character** | `0x03` + index + 7 bytes + `0x00` | 9 user-definable glyphs (wire later) |
+| **Dimming / brightness** | `0x04` + level byte | DIM `0x04 0x20`, BRIGHT `0x04 0xFF` |
+| **Print ticker text** | `0x05` | hardware ticker, 45-char buffer (wire later) |
+| **Backspace** | `0x08` | |
+| **Self test** | `0x0F` | built-in self test |
+| **Set cursor position** | `0x10` + position byte | moves cursor to absolute position |
+| **Disable vertical scroll** | `0x11` | normal frame mode |
+| **Enable vertical scroll** | `0x12` | writing past the end scrolls (ticker effects) |
+| **Cursor on** | `0x13` | |
+| **Cursor off** | `0x14` | hides cursor block (rule 1 — must be sent last) |
+| **Reset** | `0x1F` | resets the display |
 | **Write text** | printable ASCII | prints at cursor, cursor auto-advances |
-| **Hide cursor** | `0x14` | hides the cursor block (see rule 1 — must be sent last) |
-| **Brightness DIM** | `0x04 0x20` | dim level |
-| **Brightness BRIGHT** | `0x04 0xFF` | bright level |
 
-**Addressing (linear):**
+### 3.1 Required INIT sequence (mandatory on every open/reconnect)
+```
+0x1F            reset
+0x00 0x01       enable extended mode   <-- THIS was the missing piece
+0x11            disable vertical scroll
+```
+Without `0x00 0x01` + `0x11` the display scrolls when the bottom-right cell is written —
+that was the root cause of the v0.1.x "40th-cell scroll" workarounds. `VFDDriver.initialize()`
+sends exactly these bytes from `open()` (and on every reconnect).
+
+### 3.2 Addressing (linear)
 - Top line:    positions `0x00`–`0x13` (0–19)
 - Bottom line: positions `0x14`–`0x27` (20–39)
-- `position = line * 20 + column` (line 0 = top, line 1 = bottom)
-- The 40th cell (`0x27`) is written only for a visible glyph (rule 2); a space there is
-  left untouched, so the effective width is 39 whenever the 40th char is a space.
+- `position = column + row * 20` (row 0 = top, row 1 = bottom)
+- **ALL 40 CELLS ARE WRITABLE** once the display is initialized correctly.
+
+> **Historical note (resolved):** earlier versions documented a "39-cell" limit, a `0x27`
+> "phantom scroll", a glyph-only-anchors rule, and a "no leading clear" rule. Those were
+> ALL artifacts of MISSING INITIALIZATION (extended mode never enabled, vertical scroll left
+> on). With the init sequence above they no longer occur — all 40 cells hold, and a leading
+> reset only matters because it drops the init state (re-init, don't avoid it).
 
 **Behavioral rules (bench-verified — ground truth):**
 
-1. **Cursor hide must be last.** `0x14` hides the cursor, but ANY subsequent write
-   RE-ENABLES it. There is no persistent "cursor off" and no separate "cursor on" byte —
-   writing implicitly turns it back on. Therefore `0x14` must be the LAST byte of every
-   frame update, after all positioning and text. (The v0.1.0 clock omitted this, so a
-   cursor block appeared on screen — fixed in v0.1.1.)
+1. **Cursor off must be last.** `0x14` hides the cursor, but ANY subsequent write RE-ENABLES
+   it. There is no persistent "cursor off" and no separate "cursor on" byte — writing
+   implicitly turns it back on. Therefore `0x14` must be the LAST byte of every frame update.
 
-2. **40th cell scrolls — and only a VISIBLE glyph anchors it.** Writing the last cell
-   (`0x27`, bottom-right) auto-advances the cursor PAST the end, which scrolls the whole
-   display up and loses the top line. A reposition (`0x10 0x00`) right after writing `0x27`
-   suppresses that scroll — BUT only when a visible glyph was written. Writing a SPACE
-   (`0x20`) into `0x27` does NOT anchor the cursor, so the reposition fires too late and it
-   scrolls anyway (bench-verified: same frame with `X` at `0x27` holds; with a space it
-   wraps). Rule: write `0x27` only for a visible char; if the 40th char is a space, don't
-   write `0x27` at all — the cursor sits at `0x27` after the 19-char write without
-   advancing. So the effective usable width is 39 cells whenever the 40th char is a space.
+2. **Initialize before drawing.** Extended mode + scroll-off (§3.1) must be set before any
+   full frame, or the display scrolls when the 40th cell is written. `open()` runs the init
+   sequence; `blank()` re-asserts it so the display is never left in scroll mode.
 
-3. **No leading clear.** Sending `0x1F` immediately before a full-frame write scrolls the
-   display (bench-verified: an all-`#` fill that holds wraps when prefixed with `0x1F`).
-   Frames must overwrite in place; `0x1F` is for explicit `clear()`/`blank()` only.
+3. **Vertical scroll is a controllable mode.** `0x12` enables it, `0x11` disables it. Normal
+   frames run with it disabled; enabling it is reserved for later ticker/marquee effects.
+   Exposed as `set_vertical_scroll(bool)`.
 
-4. **Brightness is two discrete levels only** — DIM (`0x04 0x20`) and BRIGHT (`0x04 0xFF`).
-   Other level bytes (`0x00`–`0x03`, `0x40`, `0x60`, `0x80`, `0xC0`) are IGNORED. It is NOT
-   a 0–255 scale and NOT four levels. Brightness applies live (no redraw needed).
+4. **Brightness is two confirmed levels** — DIM (`0x04 0x20`) and BRIGHT (`0x04 0xFF`),
+   applied live (no redraw needed). The library claims 4 levels and extended mode may expose
+   more; left at the two confirmed values for now (TODO: retest the intermediate level bytes
+   under extended mode).
 
-**`show()` byte sequence (do not regress — encodes rules 1–3):**
+**`show()` byte sequence (do not regress):**
 ```
-0x10 0x00  <top: 20 ASCII bytes>
-0x10 0x14  <bottom: first 19 ASCII bytes>   # cells 0x14..0x26
-# IF the 40th char is a visible glyph:
-0x10 0x27  <bottom: 20th ASCII byte>         # the 40th cell
-0x10 0x00  # reposition — anchors the cursor, suppresses the 40th-cell scroll
-# ELSE (40th char is a space): emit nothing for 0x27 (a space there would scroll).
-0x14       # hide cursor — MUST be the final byte
+0x10 0x00  <top: EXACTLY 20 ASCII bytes>     # cells 0x00..0x13
+0x10 0x14  <bottom: EXACTLY 20 ASCII bytes>   # cells 0x14..0x27 — full 20
+0x14       # cursor off — MUST be the final byte
 ```
-Built as one buffered serial write (no flicker, cursor-hide reliably last). The bottom
-line is split 19+1; the top line needs no split (its auto-advance lands on `0x14`, which
-the next position command overwrites anyway). `show()` does NOT clear first — it overwrites
-in place (a leading `0x1F` clear would scroll, per rule 3).
+Built as one buffered serial write (no flicker, cursor-off reliably last). Both lines are a
+full 20 chars; overwrite-in-place. No leading clear, no `0x27` special-case, no
+anchor/reposition trick — all removed now that the init sequence is correct.
 
-**Driver primitives** wrap exactly the confirmed bytes, so the app never emits raw bytes:
-- `clear()` → `0x1F`
+**Driver primitives** wrap exactly these bytes, so the app never emits raw bytes:
+- `initialize()` → `0x1F 0x00 0x01 0x11` (reset + extended mode + scroll off)
+- `clear()` → `0x1F` (note: drops the init state; prefer `blank()`)
 - `write_at(pos, text)` → `0x10`, `chr(pos)`, then ASCII text
-- `show(top, bottom)` → the buffered sequence above (overwrite-in-place, cursor-hide last)
+- `show(top, bottom)` → the buffered sequence above (overwrite-in-place, cursor-off last)
 - `set_brightness("dim"|"bright")` → `0x04 0x20` / `0x04 0xFF`
-- `blank()` → `0x1F` then `0x14` (dark screen, no lingering cursor block)
+- `set_vertical_scroll(bool)` → `0x12` (enable) / `0x11` (disable)
+- `self_test()` → `0x0F`
+- `blank()` → `0x1F 0x00 0x01 0x11 0x14` (dark screen, re-initialized, no lingering cursor)
 
 ---
 
@@ -173,8 +190,9 @@ in place (a leading `0x1F` clear would scroll, per rule 3).
 data sources ──► frame builder ──► 2x20 renderer ──► serial driver ──► /dev/ttyUSB*
                                        (40-char budget, fit/scroll)
 ```
-- **Driver layer:** opens the port (9600 8N1), exposes `clear`, `write_at`,
-  `set_brightness`, `show`. Owns all command bytes. Write-only.
+- **Driver layer:** opens the port (9600 8N1), runs the init sequence, and exposes
+  `initialize`, `clear`, `write_at`, `show`, `set_brightness`, `set_vertical_scroll`,
+  `self_test`, `blank`. Owns all command bytes. Write-only.
 - **Renderer:** enforces the **2 lines × 20 chars** budget. Truncate, pad, or scroll.
   A line longer than 20 chars uses a ticker; format with spaces/newlines so each frame
   is ≤40 chars total.
@@ -198,7 +216,8 @@ rotating short messages.
 - [x] ~~Confirm DB9 pin mapping~~ — DATA=3, GND=5, +12 V=8, back-feed=1 (open). Done.
 - [x] ~~Confirm power~~ — 12 V alone. Done.
 - [x] ~~Confirm bring-up matrix~~ — RS-232 / inversion OFF / 9600 8N1. Done.
-- [x] ~~Confirm command bytes~~ — clear `0x1F`, position `0x10`+byte, ASCII text. Done.
+- [x] ~~Confirm command bytes~~ — adopted the authoritative Futaba M202MD10C set (§3) with
+  the extended-mode init sequence; all 40 cells writable. Done (v0.2.0).
 - [x] ~~Confirm brightness command~~ — two levels: DIM `0x04 0x20`, BRIGHT `0x04 0xFF`. Done.
 - [ ] Decide frame rotation timing and data-source set for v0.1.
 - [ ] Seal the enclosure once interface dev is far enough along to stop probing.
