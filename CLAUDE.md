@@ -297,6 +297,12 @@ sudo usermod -aG uucp "$USER"   # then re-login
   ResizeObserver (ctx → size → draw, dpr-scaled, never 0×0) with reactive redraw
   each poll. Daemon coerces an invalid brightness to "bright" once (no per-tick
   log spam). Added a favicon.
+- **v0.4.3:** VfdPreview redraw now uses explicit reactive data deps (derived
+  top/bottom/bright passed to drawFrame, not a strippable `void` no-op) and an
+  un-gated first-frame diagnostic log; added a test tying the canvas decode path
+  to litCount. Daemon: after self_test/reset/reconnect it invalidates the
+  display-state cache AND skips the rest of that tick, so the NEXT tick re-asserts
+  scroll/brightness/code-page/glyphs — fixes the clock scrolling after a self-test.
 
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):

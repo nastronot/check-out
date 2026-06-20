@@ -26,46 +26,50 @@
   let ctx: CanvasRenderingContext2D | null = null;
   let ro: ResizeObserver | undefined;
   let lastCssW = -1;
-  let selfChecked = false;
+  let logged = false;
+
+  // Derived draw inputs as their OWN reactive statements, passed explicitly to
+  // drawFrame() below. This makes the redraw's dependency on status/glyphs
+  // UNAMBIGUOUS: the previous `$: { void status; draw(); }` relied on a no-op
+  // expression that a minifier can strip, which left the canvas frozen on its
+  // first (empty) frame in the production build.
+  $: blank = !!status?.blank;
+  $: top = blank ? '' : status?.top ?? '';
+  $: bottom = blank ? '' : status?.bottom ?? '';
+  $: bright = status?.brightness !== 'dim';
 
   onMount(() => {
     // Init order: get the 2D context, size the buffer, THEN draw. Drawing into
     // an unsized (0x0) canvas paints nothing — size first.
     ctx = canvas.getContext('2d');
-    resize();
+    sizeAndDraw();
     // Re-size + redraw when the element's box changes (responsive + crisp).
-    ro = new ResizeObserver(() => resize());
+    ro = new ResizeObserver(() => sizeAndDraw());
     ro.observe(canvas);
     return () => ro?.disconnect();
   });
 
-  /** Size the drawing buffer to the rendered width (×dpr) and redraw. */
-  function resize(): void {
+  // Redraw whenever the mirrored data changes (every poll / glyph edit).
+  $: if (ctx) drawFrame(top, bottom, bright, glyphs);
+
+  /** Size the drawing buffer to the rendered width (×dpr), then draw. */
+  function sizeAndDraw(): void {
     if (!canvas || !ctx) return;
     const cssW = canvas.clientWidth || W; // rendered CSS px (fallback pre-layout)
-    if (cssW === lastCssW) {
-      draw();
-      return;
+    if (cssW !== lastCssW) {
+      lastCssW = cssW;
+      const dpr = window.devicePixelRatio || 1;
+      const cssH = (cssW * H) / W; // preserve the 2x20 aspect
+      // Explicit CSS height so the element never collapses to 0; buffer dpr-scaled.
+      canvas.style.height = `${cssH}px`;
+      canvas.width = Math.max(1, Math.round(cssW * dpr));
+      canvas.height = Math.max(1, Math.round(cssH * dpr));
+      // Map logical (W x H) coords -> device pixels. Setting width above reset
+      // the transform, so set it fresh — never accumulate.
+      const s = (cssW / W) * dpr;
+      ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    lastCssW = cssW;
-    const dpr = window.devicePixelRatio || 1;
-    const cssH = (cssW * H) / W; // preserve the 2x20 aspect
-    // Explicit CSS height so the element never collapses to 0; buffer is dpr-scaled.
-    canvas.style.height = `${cssH}px`;
-    canvas.width = Math.max(1, Math.round(cssW * dpr));
-    canvas.height = Math.max(1, Math.round(cssH * dpr));
-    // Map logical (W x H) coords -> device pixels (setting width above reset the
-    // transform, so set it fresh — never accumulate).
-    const s = (cssW / W) * dpr;
-    ctx.setTransform(s, 0, 0, s, 0, 0);
-    draw();
-  }
-
-  // Redraw whenever the mirrored status or glyph bitmaps change (every poll).
-  $: if (ctx) {
-    void status;
-    void glyphs;
-    draw();
+    drawFrame(top, bottom, bright, glyphs);
   }
 
   function dot(x: number, y: number, r: number): void {
@@ -75,21 +79,22 @@
     ctx!.fill();
   }
 
-  function draw(): void {
+  function drawFrame(
+    topLine: string,
+    bottomLine: string,
+    isBright: boolean,
+    glyphMap: GlyphMap,
+  ): void {
     if (!ctx) return;
-    const blank = !!status?.blank;
-    const top = blank ? '' : status?.top ?? '';
-    const bottom = blank ? '' : status?.bottom ?? '';
-    const bright = status?.brightness !== 'dim';
 
     // Glass backdrop (logical coords; the transform maps them to the buffer).
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#03090a';
     ctx.fillRect(0, 0, W, H);
 
-    const lines = [top, bottom].map((l) => lineToCells(l, glyphs));
-    const litFill = bright ? '#8ffbe4' : '#36d8b4';
-    const litBlur = bright ? 13 : 7;
+    const lines = [topLine, bottomLine].map((l) => lineToCells(l, glyphMap));
+    const litFill = isBright ? '#8ffbe4' : '#36d8b4';
+    const litBlur = isBright ? 13 : 7;
     let litDots = 0;
 
     for (let li = 0; li < 2; li++) {
@@ -111,7 +116,7 @@
               dot(x, y, DOT / 2);
               // a brighter core for bloom
               ctx.shadowBlur = 0;
-              ctx.fillStyle = bright ? '#d8fff4' : '#9af0dc';
+              ctx.fillStyle = isBright ? '#d8fff4' : '#9af0dc';
               dot(x, y, DOT / 2 - 1.6);
               ctx.restore();
             } else {
@@ -124,17 +129,21 @@
       }
     }
 
-    // Dev self-check: confirm the first non-empty frame actually lit dots.
-    if (import.meta.env.DEV && !selfChecked && (top + bottom).trim()) {
-      selfChecked = true;
+    // First-frame diagnostic — UN-GATED for v0.4.3 (runs in the prod build too,
+    // so it reports whatever uvicorn serves). Re-gate to DEV once confirmed.
+    if (!logged && (topLine + bottomLine).trim()) {
+      logged = true;
       // eslint-disable-next-line no-console
       console.info(
-        `[VfdPreview] first frame rendered: ${litDots} lit dots, ` +
-          `buffer ${canvas.width}x${canvas.height}`,
+        `[VfdPreview] first frame: top=${JSON.stringify(topLine)} ` +
+          `bottom=${JSON.stringify(bottomLine)} lit=${litDots} ` +
+          `buffer=${canvas.width}x${canvas.height}`,
       );
       if (litDots === 0) {
         // eslint-disable-next-line no-console
-        console.warn('[VfdPreview] non-empty status but 0 lit dots — check font/data');
+        console.warn(
+          '[VfdPreview] non-empty status but 0 lit dots — check font/data',
+        );
       }
     }
   }
