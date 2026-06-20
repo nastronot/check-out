@@ -133,19 +133,38 @@ def test_reset_reruns_initialize(driver, capsys):
     assert capture_bytes(capsys) == [0x1F, 0x00, 0x01, 0x11]
 
 
-def test_set_brightness_dim(driver, capsys):
+def test_set_brightness_four_levels(driver, capsys):
+    # index 0..3 -> 0x04 + {0x20, 0x40, 0x60, 0xFF}
+    expected = {0: 0x20, 1: 0x40, 2: 0x60, 3: 0xFF}
+    for index, level in expected.items():
+        driver.set_brightness(index)
+        assert capture_bytes(capsys) == [0x04, level]
+
+
+def test_set_brightness_legacy_strings_map_to_0_and_3(driver, capsys):
     driver.set_brightness("dim")
-    assert capture_bytes(capsys) == [0x04, 0x20]
-
-
-def test_set_brightness_bright(driver, capsys):
+    assert capture_bytes(capsys) == [0x04, 0x20]   # dim -> 0 (Minimum)
     driver.set_brightness("bright")
-    assert capture_bytes(capsys) == [0x04, 0xFF]
+    assert capture_bytes(capsys) == [0x04, 0xFF]   # bright -> 3 (Maximum)
 
 
-def test_set_brightness_invalid_raises(driver):
-    with pytest.raises(ValueError):
-        driver.set_brightness("medium")
+def test_set_brightness_out_of_range_raises(driver):
+    for bad in (-1, 4, "medium", None):
+        with pytest.raises(ValueError):
+            driver.set_brightness(bad)
+
+
+def test_normalize_brightness():
+    from checkout.driver import normalize_brightness
+
+    assert normalize_brightness(0) == 0
+    assert normalize_brightness(3) == 3
+    assert normalize_brightness("dim") == 0
+    assert normalize_brightness("bright") == 3
+    assert normalize_brightness("2") == 2
+    for bad in (-1, 4, True, "neon"):
+        with pytest.raises(ValueError):
+            normalize_brightness(bad)
 
 
 def test_blank_reinits_and_ends_in_cursor_hide(driver, capsys):

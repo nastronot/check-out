@@ -20,7 +20,7 @@ def test_defaults_on_missing_file(state_path):
     loaded = state.load_state()
     assert loaded["mode"] == "clock"
     assert loaded["message"] == ""
-    assert loaded["brightness"] == "dim"
+    assert loaded["brightness"] == 3  # int 0..3, default Maximum
     assert loaded["blank"] is False
     assert "updated_at" in loaded
     # Missing file is repaired on load.
@@ -51,13 +51,33 @@ def test_partial_write_backfills_alignment_and_keeps_set_value(state_path):
 
 def test_round_trip_save_load(state_path):
     state.save_state(
-        {"mode": "message", "message": "hello", "brightness": "bright", "blank": True}
+        {"mode": "message", "message": "hello", "brightness": 1, "blank": True}
     )
     loaded = state.load_state()
     assert loaded["mode"] == "message"
     assert loaded["message"] == "hello"
-    assert loaded["brightness"] == "bright"
+    assert loaded["brightness"] == 1
     assert loaded["blank"] is True
+
+
+def test_legacy_brightness_string_migrates_to_int_and_persists(state_path):
+    import json
+
+    # A pre-v0.6.2 file with "bright" -> migrates to 3 on load AND self-heals on disk.
+    state_path.write_text(json.dumps({"brightness": "bright"}))
+    loaded = state.load_state()
+    assert loaded["brightness"] == 3
+    assert json.loads(state_path.read_text())["brightness"] == 3  # written back
+    # "dim" -> 0.
+    state_path.write_text(json.dumps({"brightness": "dim"}))
+    assert state.load_state()["brightness"] == 0
+
+
+def test_invalid_brightness_falls_back_to_default(state_path):
+    import json
+
+    state_path.write_text(json.dumps({"brightness": "neon"}))
+    assert state.load_state()["brightness"] == 3  # default Maximum
 
 
 def test_partial_nested_command_is_merged_not_replaced(state_path):
@@ -121,5 +141,5 @@ def test_missing_keys_filled_from_defaults(state_path):
     state_path.write_text(json.dumps({"message": "partial"}))
     loaded = state.load_state()
     assert loaded["message"] == "partial"
-    assert loaded["brightness"] == "dim"  # filled from defaults
+    assert loaded["brightness"] == 3  # filled from defaults (Maximum)
     assert loaded["blank"] is False

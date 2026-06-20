@@ -112,6 +112,8 @@ def test_status_written_with_expected_fields(monkeypatch):
         assert key in status
     assert status["alive"] is True
     assert status["mode"] == "clock"
+    # Status carries the APPLIED brightness index (legacy "dim" -> 0).
+    assert status["brightness"] == 0
     assert len(status["top"]) == 20 and len(status["bottom"]) == 20
 
 
@@ -249,8 +251,8 @@ def test_invalid_brightness_coerced_once_no_spam(monkeypatch):
     for _ in range(3):
         daemon.tick_once(drv, state, ctx, now=NOW)
 
-    # Coerced to a valid level exactly once, then cached (no per-tick re-write).
-    assert levels == ["bright"]
+    # Coerced to the default index (3=Maximum) exactly once, then cached.
+    assert levels == [3]
     # And warned exactly once — not every tick.
     assert sum("invalid brightness" in w for w in warnings) == 1
 
@@ -292,9 +294,9 @@ def test_valid_brightness_after_invalid_rewarns(monkeypatch):
     drv.set_brightness = lambda level: levels.append(level)
     ctx = daemon._new_ctx()
 
-    daemon.tick_once(drv, {"brightness": "neon"}, ctx, now=NOW)   # bad -> bright
-    daemon.tick_once(drv, {"brightness": "dim"}, ctx, now=NOW)    # valid -> dim
-    daemon.tick_once(drv, {"brightness": "neon"}, ctx, now=NOW)   # bad again -> bright
-    assert levels == ["bright", "dim", "bright"]
+    daemon.tick_once(drv, {"brightness": "neon"}, ctx, now=NOW)  # bad -> 3 (default)
+    daemon.tick_once(drv, {"brightness": 0}, ctx, now=NOW)       # valid -> 0
+    daemon.tick_once(drv, {"brightness": "neon"}, ctx, now=NOW)  # bad again -> 3
+    assert levels == [3, 0, 3]
     # The intervening valid value clears the dedupe, so the second bad value warns.
     assert sum("invalid brightness" in w for w in warnings) == 2

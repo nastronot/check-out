@@ -49,10 +49,10 @@ def test_put_state_merges_and_persists(client, paths):
     assert on_disk["mode"] == "message"
     assert on_disk["message"] == "HELLO"
     # A second partial patch keeps prior fields (deep-merge, not replace).
-    client.put("/api/state", json={"brightness": "bright"})
+    client.put("/api/state", json={"brightness": 1})
     after = client.get("/api/state").json()
-    assert after["mode"] == "message"        # preserved
-    assert after["brightness"] == "bright"   # updated
+    assert after["mode"] == "message"   # preserved
+    assert after["brightness"] == 1     # updated (int 0..3)
 
 
 def test_put_state_nested_merge_keeps_siblings(client):
@@ -60,6 +60,14 @@ def test_put_state_nested_merge_keeps_siblings(client):
     data = client.get("/api/state").json()
     assert data["animation_params"]["on_ms"] == 100
     assert data["animation_params"]["off_ms"] == 500  # sibling default kept
+
+
+def test_put_brightness_int_merges_and_legacy_migrates(client):
+    client.put("/api/state", json={"brightness": 2})
+    assert client.get("/api/state").json()["brightness"] == 2
+    # A legacy string write is migrated to the int form on read.
+    client.put("/api/state", json={"brightness": "dim"})
+    assert client.get("/api/state").json()["brightness"] == 0
 
 
 def test_put_alignment_merges(client):
