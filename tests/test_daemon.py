@@ -22,8 +22,9 @@ def test_shutdown_blanks_with_cursor_hidden(monkeypatch, capsys):
     assert rc == 0
 
     last = _last_tx_bytes(capsys.readouterr().out)
-    # blank() = 0x1F then 0x14, with 0x14 as the final emitted byte.
-    assert last == ["1F", "14"]
+    # blank() re-inits (reset + extended mode + scroll off) then cursor-off LAST,
+    # so the exit screen is dark, no cursor block, and never in scroll mode.
+    assert last == ["1F", "00", "01", "11", "14"]
     assert last[-1] == "14"
     # Port closed cleanly (dry-run driver has no open handle).
     assert drv._serial is None

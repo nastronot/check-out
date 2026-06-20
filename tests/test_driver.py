@@ -3,7 +3,7 @@
 import pytest
 
 from checkout import config
-from checkout.driver import CMD_HIDE_CURSOR, VFDDriver
+from checkout.driver import CURSOR_OFF, VFDDriver
 
 
 def capture_bytes(capsys) -> list[int]:
@@ -23,65 +23,50 @@ def driver():
     return VFDDriver(dry_run=True)
 
 
-def test_show_visible_40th_cell_full_sequence(driver, capsys):
-    # Left-justified so the 40th char is a VISIBLE glyph (uses the 0x27 path).
-    driver.show("ABC", "Z" * 20)
+def test_initialize_emits_init_sequence(driver, capsys):
+    # Reset, extended-mode enable, disable vertical scroll — in order.
+    driver.initialize()
+    assert capture_bytes(capsys) == [0x1F, 0x00, 0x01, 0x11]
+
+
+def test_show_full_40_cell_sequence(driver, capsys):
+    driver.show("A" * 20, "B" * 20)
     data = capture_bytes(capsys)
 
-    # No leading clear.
-    assert data[0] != 0x1F
+    # No leading clear, no 0x27 special-case, no reposition.
+    assert 0x1F not in data
+    assert [0x10, 0x27] not in [data[i : i + 2] for i in range(len(data) - 1)]
+
     # 0x10 0x00 + 20-byte top
     assert data[0:2] == [0x10, 0x00]
-    assert len(data[2:22]) == 20
-    assert bytes(data[2:5]).decode() == "ABC"
-
-    # 0x10 0x14 + first 19 bytes of bottom
+    assert data[2:22] == [ord("A")] * 20
+    # 0x10 0x14 + full 20-byte bottom
     assert data[22:24] == [0x10, 0x14]
-    assert data[24:43] == [ord("Z")] * 19
-
-    # Visible 40th char: 0x10 0x27 <char> 0x10 0x00 (anchor), then 0x14 LAST.
-    assert data[43:45] == [0x10, 0x27]
-    assert data[45] == ord("Z")
-    assert data[46:48] == [0x10, 0x00]
-    assert data[48] == CMD_HIDE_CURSOR
-    assert data[-1] == CMD_HIDE_CURSOR
-    assert len(data) == 49
+    assert data[24:44] == [ord("B")] * 20
+    # Cursor-off LAST, nothing after it.
+    assert data[44] == CURSOR_OFF
+    assert data[-1] == CURSOR_OFF
+    assert len(data) == 2 + 20 + 2 + 20 + 1  # = 45
 
 
-def test_show_space_40th_cell_skips_0x27(driver, capsys):
-    # Centered clock-style content => the 40th char is a space.
-    driver.show("date", "time")
+def test_show_truncates_bottom_to_20(driver, capsys):
+    driver.show("T" * 20, "B" * 25)  # bottom too long
     data = capture_bytes(capsys)
-
-    # A space in the 40th cell would scroll, so 0x27 is NOT written at all.
-    assert [0x10, 0x27] not in [data[i : i + 2] for i in range(len(data) - 1)]
-    # Structure: 0x10 0x00 <20 top> 0x10 0x14 <19 bottom> 0x14, nothing more.
-    assert data[0:2] == [0x10, 0x00]
+    # Bottom chunk after 0x10 0x14 is exactly 20 'B' bytes, then cursor-off.
     assert data[22:24] == [0x10, 0x14]
-    assert data[-1] == CMD_HIDE_CURSOR
-    assert len(data) == 2 + 20 + 2 + 19 + 1  # = 44
+    assert data[24:44] == [ord("B")] * 20
+    assert data[44] == CURSOR_OFF
+    assert len(data) == 45
 
 
-def test_show_never_emits_leading_clear(driver, capsys):
-    for bottom in ("time", "Z" * 20):
-        driver.show("top", bottom)
-        data = capture_bytes(capsys)
-        assert 0x1F not in data  # overwrite-in-place, never clear-then-write
+def test_set_vertical_scroll_disable(driver, capsys):
+    driver.set_vertical_scroll(False)
+    assert capture_bytes(capsys) == [0x11]
 
 
-def test_show_full_bottom_line_places_20th_char_at_0x27(driver, capsys):
-    driver.show("T" * 20, "B" * 20)
-    data = capture_bytes(capsys)
-    # Locate the 0x10 0x27 marker; the next byte is the 20th bottom char.
-    idx = next(
-        i for i in range(len(data) - 1) if data[i] == 0x10 and data[i + 1] == 0x27
-    )
-    assert data[idx + 2] == ord("B")
-    # The chunk written at 0x14 must be exactly 19 'B' bytes.
-    start = next(
-        i for i in range(len(data) - 1) if data[i] == 0x10 and data[i + 1] == 0x14
-    )
-    assert data[start + 2 : start + 21] == [ord("B")] * 19
+def test_set_vertical_scroll_enable(driver, capsys):
+    driver.set_vertical_scroll(True)
+    assert capture_bytes(capsys) == [0x12]
 
 
 def test_set_brightness_dim(driver, capsys):
@@ -99,11 +84,13 @@ def test_set_brightness_invalid_raises(driver):
         driver.set_brightness("medium")
 
 
-def test_blank_ends_in_cursor_hide(driver, capsys):
+def test_blank_reinits_and_ends_in_cursor_hide(driver, capsys):
+    # blank() leaves the display dark but in the known-good state (extended mode
+    # + scroll off), so it re-emits the init sequence, then cursor-off LAST.
     driver.blank()
     data = capture_bytes(capsys)
-    assert data == [0x1F, 0x14]
-    assert data[-1] == CMD_HIDE_CURSOR
+    assert data == [0x1F, 0x00, 0x01, 0x11, 0x14]
+    assert data[-1] == CURSOR_OFF
 
 
 class _FakeSerial:
@@ -132,7 +119,7 @@ def test_debug_tx_logs_live_writes_and_still_writes_to_port(monkeypatch, capsys)
     out = capsys.readouterr().out
     assert out.strip().startswith("TX ")  # hexdump emitted on the live path
     # The same bytes actually reached the port, ending in the cursor-hide.
-    assert drv._serial.buf[-1] == CMD_HIDE_CURSOR
+    assert drv._serial.buf[-1] == CURSOR_OFF
     assert drv._serial.buf[0:2] == bytes([0x10, 0x00])
 
 
