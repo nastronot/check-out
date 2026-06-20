@@ -65,12 +65,26 @@ def test_resolve_emit_flash_toggles_to_blank():
     assert daemon.resolve_emit(600, "flash", p, "T", "B") == ("blank",)
 
 
-def test_resolve_emit_blink_swaps_to_blank_lines():
+def test_resolve_emit_blink_never_blanks_and_differs_from_flash():
     p = {"on_ms": 500, "off_ms": 500}
+    # blink shows the SAME frame both phases — it pulses via brightness, not blank.
     assert daemon.resolve_emit(0, "blink", p, "T", "B") == ("show", "T", "B")
-    off = daemon.resolve_emit(600, "blink", p, "T", "B")
-    # blink keeps the display ON: it shows blank LINES, not a real blank().
-    assert off == ("show", " " * 20, " " * 20)
+    assert daemon.resolve_emit(600, "blink", p, "T", "B") == ("show", "T", "B")
+    # The off-phase differs from flash: flash blanks, blink keeps the frame.
+    flash_off = daemon.resolve_emit(600, "flash", p, "T", "B")
+    blink_off = daemon.resolve_emit(600, "blink", p, "T", "B")
+    assert flash_off == ("blank",)
+    assert blink_off != flash_off
+
+
+def test_blink_pulses_brightness_min_on_off_phase():
+    p = {"on_ms": 500, "off_ms": 500}
+    # on-phase keeps the base level; off-phase pulses down to MIN (0).
+    assert daemon.animation_brightness(0, "blink", p, 3) == 3
+    assert daemon.animation_brightness(600, "blink", p, 3) == 0
+    # flash/none never touch brightness.
+    assert daemon.animation_brightness(600, "flash", p, 3) == 3
+    assert daemon.animation_brightness(600, "none", p, 2) == 2
 
 
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
@@ -94,6 +108,34 @@ def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
     off_bytes = _all_tx_bytes(capsys.readouterr().out)
     # OFF phase blanks: init-seq + cursor-off, and no show() this tick.
     assert off_bytes == [0x1F, 0x00, 0x01, 0x11, 0x14]
+
+
+def test_blink_off_phase_pulses_brightness_not_blank(monkeypatch, capsys):
+    """blink's off-phase dims (0x04 0x20) and keeps the frame — never blanks."""
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {
+        "mode": "clock",
+        "brightness": 3,
+        "animation": "blink",
+        "animation_params": {"on_ms": 500, "off_ms": 500},
+    }
+    on_now = datetime(2026, 6, 19, 12, 0, 0, 0)        # phase ON  -> level 3 (0xFF)
+    off_now = datetime(2026, 6, 19, 12, 0, 0, 600000)  # phase OFF -> level 0 (0x20)
+
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=on_now)
+    on_bytes = _all_tx_bytes(capsys.readouterr().out)
+    assert [0x04, 0xFF] == on_bytes[on_bytes.index(0x04):on_bytes.index(0x04) + 2]
+
+    daemon.tick_once(drv, state, ctx, now=off_now)
+    off_bytes = _all_tx_bytes(capsys.readouterr().out)
+    # Off-phase pulses brightness DOWN to MIN...
+    assert 0x04 in off_bytes
+    assert off_bytes[off_bytes.index(0x04):off_bytes.index(0x04) + 2] == [0x04, 0x20]
+    # ...and it does NOT blank (no reset/init-seq this tick).
+    assert 0x1F not in off_bytes
 
 
 # --- status mirror -----------------------------------------------------------
