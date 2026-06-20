@@ -40,7 +40,11 @@ def defaults() -> dict:
         "scroll_speed_ms": 300,          # ticker software-scroll step
         "animation": "none",             # "none" | "flash" | "blink"
         "animation_params": {"on_ms": 500, "off_ms": 500},
-        "glyphs": {},                    # {"0": [r0..r6], ...} optional 5x7 user glyphs
+        # {"0": [r0..r6], ... "8": [...]} optional 5x7 user glyphs. Each row is an
+        # int whose LOW 5 bits are columns 1..5 (bit0=col1 ... bit4=col5) — the
+        # editor-natural convention; the driver translates to the wire format
+        # (<<3). Place a glyph in a message with the {gN} placeholder.
+        "glyphs": {},
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }

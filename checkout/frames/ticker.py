@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from .. import config
+from ..driver import apply_glyph_placeholders
 from ..renderer import ticker_window
 from .base import Frame
 
@@ -22,7 +23,11 @@ class TickerFrame(Frame):
     name = "ticker"
 
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
-        message = (state.get("message") or "").replace("\n", " ")
+        # Substitute {gN} glyph placeholders before windowing so each glyph is one
+        # column wide in the scroll.
+        message = apply_glyph_placeholders(
+            (state.get("message") or "").replace("\n", " ")
+        )
         step_ms = state.get("scroll_speed_ms") or config.TICK_MS
         step_ms = max(1, int(step_ms))
         # Derive the scroll offset from wall-clock time so each tick advances.

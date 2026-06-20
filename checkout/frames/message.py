@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from .. import config
+from ..driver import apply_glyph_placeholders
 from .base import Frame
 
 WIDTH = config.COLS  # 20
@@ -46,7 +47,9 @@ class MessageFrame(Frame):
     name = "message"
 
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
-        message = (state.get("message") or "").strip("\n")
+        # Substitute {gN} glyph placeholders first, so widths are measured on the
+        # final single-char glyphs (not the 4-char placeholder text).
+        message = apply_glyph_placeholders((state.get("message") or "").strip("\n"))
         if "\n" in message:
             top, _, bottom = message.partition("\n")
             return top, bottom

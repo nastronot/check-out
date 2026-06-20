@@ -220,7 +220,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     code_page = state.get("code_page", 0)
     if code_page != ctx["last_code_page"]:
         try:
-            driver.select_code_page(int(code_page))
+            driver.select_code_page(code_page)  # name or int 0..11
         except (ValueError, TypeError) as exc:
             log(f"bad code_page {code_page!r}: {exc}")
         ctx["last_code_page"] = code_page
