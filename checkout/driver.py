@@ -45,10 +45,39 @@ EXTENDED_OFF = 0x00
 # when the 40th cell is written — that was the root cause of the old workarounds.
 INIT_SEQUENCE = bytes([RESET, EXTENDED_MODE, EXTENDED_ON, DISABLE_VERTICAL_SCROLL])
 
-# Brightness. Two confirmed discrete levels (dim/bright). The library claims 4
-# levels and extended mode may expose more; left at the two confirmed values for
-# now. TODO: retest the intermediate level bytes under extended mode.
-BRIGHTNESS = {"dim": b"\x04\x20", "bright": b"\x04\xff"}
+# Brightness. FOUR distinct levels (bench-confirmed under extended mode), named
+# after the SNMetamorph library's Dimming enum. The canonical state value is an
+# index 0..3; the wire byte is 0x04 + the level byte below.
+#   0 Minimum     0x20
+#   1 Medium      0x40
+#   2 AboveMedium 0x60
+#   3 Maximum     0xFF
+BRIGHTNESS_LEVELS = {0: 0x20, 1: 0x40, 2: 0x60, 3: 0xFF}
+MAX_BRIGHTNESS = 3
+
+# Legacy two-level strings (pre-v0.6.2) map onto the four-level index.
+_LEGACY_BRIGHTNESS = {"dim": 0, "bright": 3}
+
+
+def normalize_brightness(value) -> int:
+    """Coerce a brightness value to a canonical index 0..3.
+
+    Accepts the new int form (0..3), the legacy "dim"/"bright" strings, and
+    numeric strings ("2"). Out-of-range / unrecognized values raise ValueError.
+    """
+    if isinstance(value, bool):  # bool is an int subclass — reject it explicitly
+        raise ValueError(f"invalid brightness {value!r}")
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key in _LEGACY_BRIGHTNESS:
+            return _LEGACY_BRIGHTNESS[key]
+        if key.lstrip("-").isdigit():
+            value = int(key)
+        else:
+            raise ValueError(f"invalid brightness {value!r}")
+    if isinstance(value, int) and 0 <= value <= MAX_BRIGHTNESS:
+        return value
+    raise ValueError(f"brightness must be an int 0..{MAX_BRIGHTNESS}, got {value!r}")
 
 # User-defined characters (bench-confirmed). 9 glyph slots live at NON-CONTIGUOUS
 # character codes (0x1B is skipped). slot index 0..8 -> the code byte, used BOTH
@@ -327,18 +356,16 @@ class VFDDriver:
         buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
         self._write(bytes(buf))
 
-    def set_brightness(self, level: str) -> None:
-        """Set display brightness to "dim" or "bright" (two confirmed levels).
+    def set_brightness(self, level) -> None:
+        """Set display brightness to one of FOUR levels.
 
-        Raises ValueError for any other value. Applies live (no redraw needed)
-        and is independent of show().
+        ``level`` is the canonical index 0..3 (Minimum/Medium/AboveMedium/Maximum)
+        or a legacy "dim"/"bright" string; it is normalized first. Emits
+        ``0x04 <level byte>``. Raises ValueError on an out-of-range value. Applies
+        live (no redraw needed) and is independent of show().
         """
-        try:
-            self._write(BRIGHTNESS[level])
-        except KeyError:
-            raise ValueError(
-                f"brightness must be one of {sorted(BRIGHTNESS)}, got {level!r}"
-            ) from None
+        index = normalize_brightness(level)
+        self._write(bytes([DIMMING_MODE, BRIGHTNESS_LEVELS[index]]))
 
     def set_vertical_scroll(self, enabled: bool) -> None:
         """Enable (0x12) or disable (0x11) hardware vertical scroll.

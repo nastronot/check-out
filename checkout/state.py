@@ -22,6 +22,10 @@ import tempfile
 from datetime import datetime, timezone
 
 from . import config
+from .driver import normalize_brightness
+
+# Default brightness index (3 = Maximum) — bright out of the box.
+_DEFAULT_BRIGHTNESS = 3
 
 
 def _now_iso() -> str:
@@ -35,7 +39,7 @@ def defaults() -> dict:
         "message": "",                   # text for message / ticker modes
         "align_top": "center",           # "left" | "center" | "right" — line 1
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
-        "brightness": "dim",             # "dim" | "bright"
+        "brightness": _DEFAULT_BRIGHTNESS,  # int 0..3 (0 Min..3 Max)
         "blank": False,                  # blank the display entirely
         "scroll": False,                 # hardware vertical-scroll MODE (0x11/0x12)
         "code_page": 0,                  # 0..11
@@ -68,6 +72,12 @@ def _backfill(data: dict) -> dict:
             merged[key] = {**base[key], **data[key]}
         else:
             merged[key] = base[key]
+    # Brightness is the canonical int 0..3; migrate legacy "dim"/"bright" strings
+    # (and any junk) to it. Unrecognized values fall back to the default.
+    try:
+        merged["brightness"] = normalize_brightness(merged["brightness"])
+    except ValueError:
+        merged["brightness"] = _DEFAULT_BRIGHTNESS
     return merged
 
 
@@ -78,7 +88,7 @@ def status_defaults() -> dict:
         "mode": "clock",
         "top": "",
         "bottom": "",
-        "brightness": "dim",
+        "brightness": _DEFAULT_BRIGHTNESS,  # int 0..3
         "blank": False,
         "scroll": False,
         "last_command_id": None,
@@ -135,7 +145,12 @@ def load_state() -> dict:
         state = defaults()
         save_state(state)
         return state
-    return _backfill(data)
+    state = _backfill(data)
+    # Self-heal a legacy brightness string (e.g. "bright") into its int form by
+    # writing the migrated state back, so the file converges to the new schema.
+    if data.get("brightness") != state["brightness"]:
+        save_state(state)
+    return state
 
 
 def load_status() -> dict:

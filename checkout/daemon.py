@@ -35,11 +35,10 @@ import time
 from datetime import datetime
 
 from . import config
-from .driver import BRIGHTNESS as _BRIGHTNESS_LEVELS
-from .driver import VFDDriver, VFDError
+from .driver import VFDDriver, VFDError, normalize_brightness
 
-# Invalid/unknown brightness values are coerced to this once (with one warning).
-_DEFAULT_BRIGHTNESS = "bright"
+# Invalid/unknown brightness values are coerced to this index once (one warning).
+_DEFAULT_BRIGHTNESS = 3  # Maximum
 from .frames.clock import ClockFrame
 from .frames.message import MessageFrame
 from .frames.ticker import TickerFrame
@@ -206,7 +205,9 @@ def _write_status(state: dict, top: str, bottom: str, ctx: dict) -> None:
             "mode": state.get("mode"),
             "top": top,
             "bottom": bottom,
-            "brightness": state.get("brightness"),
+            # The APPLIED brightness index 0..3 (set in section 4 this tick), so
+            # the preview reflects the real level, not a raw/legacy state value.
+            "brightness": ctx["last_brightness"],
             "blank": bool(state.get("blank")),
             "scroll": bool(state.get("scroll")),
             "last_command_id": ctx["last_command_id"],
@@ -244,17 +245,18 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
             _invalidate_caches(ctx)
         ctx["last_glyphs"] = dict(glyphs)
 
-    # 4. display settings (avoid redundant writes). An invalid brightness is
-    # coerced to a safe default ONCE (single warning per distinct bad value),
+    # 4. display settings (avoid redundant writes). Brightness is normalized to
+    # the canonical index 0..3 (legacy "dim"/"bright" still accepted); an invalid
+    # value is coerced to a safe default ONCE (single warning per distinct value),
     # rather than erroring every tick and leaving the display brightness unset.
-    raw_brightness = state.get("brightness", "dim")
-    if raw_brightness in _BRIGHTNESS_LEVELS:
-        brightness = raw_brightness
+    raw_brightness = state.get("brightness", _DEFAULT_BRIGHTNESS)
+    try:
+        brightness = normalize_brightness(raw_brightness)
         ctx["bad_brightness"] = None
-    else:
+    except ValueError:
         brightness = _DEFAULT_BRIGHTNESS
         if ctx["bad_brightness"] != raw_brightness:
-            log(f"invalid brightness {raw_brightness!r}; using {brightness!r}")
+            log(f"invalid brightness {raw_brightness!r}; using {brightness}")
             ctx["bad_brightness"] = raw_brightness
     if brightness != ctx["last_brightness"]:
         driver.set_brightness(brightness)
