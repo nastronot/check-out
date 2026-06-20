@@ -80,8 +80,8 @@ def _new_ctx() -> dict:
         "last_brightness": None,   # last applied display settings (avoid re-writes)
         "last_scroll": None,
         "last_code_page": None,
-        "last_emit": None,         # last thing shown (avoid redundant frames)
-        "last_status": None,       # last status.json payload (avoid redundant writes)
+        "last_emit": None,         # last thing shown to the DISPLAY (gates serial writes)
+        "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
     }
 
@@ -183,20 +183,29 @@ def _apply_emit(driver: VFDDriver, emit: tuple) -> None:
 
 # --- the tick ----------------------------------------------------------------
 def _write_status(state: dict, top: str, bottom: str, ctx: dict) -> None:
-    """Mirror the current display state to status.json (only when it changes)."""
-    status = {
-        "alive": True,
-        "mode": state.get("mode"),
-        "top": top,
-        "bottom": bottom,
-        "brightness": state.get("brightness"),
-        "blank": bool(state.get("blank")),
-        "scroll": bool(state.get("scroll")),
-        "last_command_id": ctx["last_command_id"],
-    }
-    if status != ctx["last_status"]:
-        save_status(status)
-        ctx["last_status"] = status
+    """Mirror the current display state to status.json — a HEARTBEAT every tick.
+
+    Written unconditionally (with a fresh ``updated_at`` and a monotonic
+    ``heartbeat``) even when top/bottom are unchanged, so the UI's liveness check
+    (status freshness < 5s) reads ALIVE in static modes like a fixed message.
+    This is independent of the serial-port emit-diffing — the DISPLAY is only
+    re-written when the frame actually changes (see ``last_emit``); only this
+    small status file is refreshed each tick.
+    """
+    ctx["heartbeat"] += 1
+    save_status(
+        {
+            "alive": True,
+            "mode": state.get("mode"),
+            "top": top,
+            "bottom": bottom,
+            "brightness": state.get("brightness"),
+            "blank": bool(state.get("blank")),
+            "scroll": bool(state.get("scroll")),
+            "last_command_id": ctx["last_command_id"],
+            "heartbeat": ctx["heartbeat"],
+        }
+    )
 
 
 def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = None) -> None:
