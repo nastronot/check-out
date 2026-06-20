@@ -17,7 +17,7 @@
   // without changing the gap between characters.
   const DOT_SIZE = 5.4; // edge length of each (square) dot — real VFD dots are square
   const DOT_CORNER = 1.2; // corner radius; the panel's square dots are slightly rounded
-  const DOT_PITCH_X = 7; // center-to-center of adjacent dots WITHIN a glyph (X) — tight
+  const DOT_PITCH_X = 6.3; // center-to-center of adjacent dots WITHIN a glyph (X) — tight
   const DOT_PITCH_Y = 7; // center-to-center of adjacent dots WITHIN a glyph (Y) — tight
   const CELL_GAP_X = 16; // center gap from a glyph's last col to the next glyph's first
   //                        col — the CHARACTER spacing (kept as before, looks right)
