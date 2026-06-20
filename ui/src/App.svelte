@@ -31,13 +31,7 @@
 <div class="shell">
   <header class="masthead">
     <div class="masthead__brand">
-      <span
-        class="masthead__dot"
-        class:masthead__dot--dead={!$health.daemon_alive}
-        title={$health.daemon_alive ? 'daemon alive' : 'daemon offline'}
-      ></span>
       <img class="masthead__logo" src="/logo.png" alt="check-out" />
-      <span class="tag">control surface</span>
     </div>
     <span class="masthead__sub">phosphor status board · v{version}</span>
   </header>
@@ -75,7 +69,6 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    border-bottom: 1px solid var(--rule);
     padding-bottom: 14px;
     margin-bottom: 22px;
   }
@@ -84,21 +77,6 @@
     display: flex;
     align-items: center;
     gap: 12px;
-  }
-
-  .masthead__dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex: none;
-    background: var(--phosphor);
-    box-shadow: 0 0 10px var(--phosphor);
-    transition: background 0.2s, box-shadow 0.2s;
-  }
-
-  .masthead__dot--dead {
-    background: var(--red-dead);
-    box-shadow: 0 0 10px rgba(240, 85, 61, 0.6);
   }
 
   .masthead__logo {
