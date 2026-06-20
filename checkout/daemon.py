@@ -39,6 +39,7 @@ from .driver import VFDDriver, VFDError, normalize_brightness
 
 # Invalid/unknown brightness values are coerced to this index once (one warning).
 _DEFAULT_BRIGHTNESS = 3  # Maximum
+_MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame
 from .frames.message import MessageFrame
 from .frames.ticker import TickerFrame
@@ -164,20 +165,33 @@ def _phase_on(now_ms: int, params: dict) -> bool:
 def resolve_emit(
     now_ms: int, animation: str, params: dict, top: str, bottom: str
 ) -> tuple:
-    """Decide what to put on the glass given the animation phase.
+    """Decide what frame to put on the glass given the animation phase.
 
     Returns an emit tuple: ``("show", top, bottom)`` or ``("blank",)``.
       - none  -> always show the frame.
-      - flash -> alternate the frame with a real blank (display goes dark).
-      - blink -> alternate the frame with blank LINES (display stays on).
+      - flash -> alternate the frame with a real blank (display goes fully DARK).
+      - blink -> always shows the frame; it PULSES via brightness instead of
+                 blanking (see :func:`animation_brightness`), so the text stays
+                 readable and it reads clearly different from flash.
     """
     if animation == "flash":
         return ("show", top, bottom) if _phase_on(now_ms, params) else ("blank",)
-    if animation == "blink":
-        if _phase_on(now_ms, params):
-            return ("show", top, bottom)
-        return ("show", _BLANK_LINE, _BLANK_LINE)
     return ("show", top, bottom)
+
+
+def animation_brightness(
+    now_ms: int, animation: str, params: dict, base: int
+) -> int:
+    """Effective brightness index for this tick.
+
+    ``blink`` pulses the frame between the chosen level (on-phase) and MIN
+    (off-phase), so the display dims and brightens rather than disappearing —
+    visually distinct from ``flash``'s hard dark blank. Every other animation
+    just uses the base level.
+    """
+    if animation == "blink" and not _phase_on(now_ms, params):
+        return _MIN_BRIGHTNESS
+    return base
 
 
 def _apply_emit(driver: VFDDriver, emit: tuple) -> None:
@@ -245,19 +259,39 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
             _invalidate_caches(ctx)
         ctx["last_glyphs"] = dict(glyphs)
 
-    # 4. display settings (avoid redundant writes). Brightness is normalized to
+    animation = state.get("animation", "none")
+    params = state.get("animation_params") or {}
+
+    # 4. frame + animation. Compute the frame first, so the brightness step below
+    # can apply blink's brightness PULSE for this tick.
+    if state.get("blank"):
+        top, bottom = _BLANK_LINE, _BLANK_LINE
+        emit: tuple = ("blank",)
+    else:
+        frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
+        ltop, lbottom = frame.render(now, state)
+        top, bottom = render_lines(
+            ltop,
+            lbottom,
+            top_align=_align(state.get("align_top")),
+            bottom_align=_align(state.get("align_bottom")),
+        )
+        emit = resolve_emit(now_ms, animation, params, top, bottom)
+
+    # 5. display settings (avoid redundant writes). Brightness is normalized to
     # the canonical index 0..3 (legacy "dim"/"bright" still accepted); an invalid
-    # value is coerced to a safe default ONCE (single warning per distinct value),
-    # rather than erroring every tick and leaving the display brightness unset.
+    # value is coerced to a safe default ONCE (single warning per distinct value).
+    # blink folds in here as a per-tick brightness pulse (no frame re-draw needed).
     raw_brightness = state.get("brightness", _DEFAULT_BRIGHTNESS)
     try:
-        brightness = normalize_brightness(raw_brightness)
+        base_brightness = normalize_brightness(raw_brightness)
         ctx["bad_brightness"] = None
     except ValueError:
-        brightness = _DEFAULT_BRIGHTNESS
+        base_brightness = _DEFAULT_BRIGHTNESS
         if ctx["bad_brightness"] != raw_brightness:
-            log(f"invalid brightness {raw_brightness!r}; using {brightness}")
+            log(f"invalid brightness {raw_brightness!r}; using {base_brightness}")
             ctx["bad_brightness"] = raw_brightness
+    brightness = animation_brightness(now_ms, animation, params, base_brightness)
     if brightness != ctx["last_brightness"]:
         driver.set_brightness(brightness)
         ctx["last_brightness"] = brightness
@@ -275,33 +309,19 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
             log(f"bad code_page {code_page!r}: {exc}")
         ctx["last_code_page"] = code_page
 
-    # 5/6. frame + animation.
-    if state.get("blank"):
-        top, bottom = _BLANK_LINE, _BLANK_LINE
-        emit: tuple = ("blank",)
-    else:
-        frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
-        ltop, lbottom = frame.render(now, state)
-        top, bottom = render_lines(
-            ltop,
-            lbottom,
-            top_align=_align(state.get("align_top")),
-            bottom_align=_align(state.get("align_bottom")),
-        )
-        emit = resolve_emit(
-            now_ms,
-            state.get("animation", "none"),
-            state.get("animation_params") or {},
-            top,
-            bottom,
-        )
-
+    # 6. push the frame to the glass (only when it changes).
     if emit != ctx["last_emit"]:
         _apply_emit(driver, emit)
         ctx["last_emit"] = emit
 
-    # 7. mirror status.
-    _write_status(state, top, bottom, ctx)
+    # 7. mirror status — report what's ACTUALLY on the glass this tick (blank
+    # during flash's dark phase) so the preview animates; brightness already
+    # reflects blink's pulse via ctx["last_brightness"].
+    if emit[0] == "blank":
+        disp_top, disp_bottom = _BLANK_LINE, _BLANK_LINE
+    else:
+        disp_top, disp_bottom = emit[1], emit[2]
+    _write_status(state, disp_top, disp_bottom, ctx)
 
 
 def open_driver(dry_run: bool) -> VFDDriver | None:
