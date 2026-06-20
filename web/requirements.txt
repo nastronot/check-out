@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+# httpx is needed by fastapi.testclient (tests) — kept here so a single
+# `pip install -r web/requirements.txt` covers running the API and its tests.
+httpx>=0.27

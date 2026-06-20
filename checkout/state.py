@@ -134,3 +134,34 @@ def load_state() -> dict:
         save_state(state)
         return state
     return _backfill(data)
+
+
+def load_status() -> dict:
+    """Load status.json (daemon-written). Returns ``{}`` if missing or corrupt.
+
+    The daemon is the sole writer; readers (the web API) never repair it.
+    """
+    try:
+        with open(config.STATUS_PATH, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError, ValueError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def merge_patch(base: dict, patch: dict) -> dict:
+    """Deep-merge a partial ``patch`` into ``base`` (one level into nested dicts).
+
+    Top-level keys in ``patch`` override ``base``; for dict-valued keys both
+    sides are merged so PATCHing one nested field (e.g. a single ``command`` key
+    or one ``glyphs`` slot) keeps its siblings. Used by the web API's
+    ``PUT /api/state`` so the desired-state file stays consistent with the same
+    nested-merge convention :func:`_backfill` uses.
+    """
+    merged = dict(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged

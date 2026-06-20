@@ -1,6 +1,13 @@
 # Runtime state written by the daemon / web UI
 state.json
+status.json
 *.state.tmp*
+.state-*.tmp
+.status-*.tmp
+
+# Node / Vite (web UI)
+node_modules/
+ui/dist/
 
 # Python
 __pycache__/
