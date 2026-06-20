@@ -19,8 +19,13 @@ WIDTH = config.COLS  # 20
 
 
 def _wrap_two_lines(text: str, width: int = WIDTH) -> tuple[str, str]:
-    """Greedily pack ``text``'s words into two lines of at most ``width`` chars."""
-    words = text.split()
+    """Greedily pack ``text``'s words into two lines of at most ``width`` chars.
+
+    Words are split on the SPACE character only — NOT ``str.split()``, which
+    treats the user-glyph codes 0x1C–0x1E (slots 6–8) as whitespace and would
+    silently drop those glyphs from the line.
+    """
+    words = [w for w in text.split(" ") if w]
     if not words:
         return "", ""
     top = ""
