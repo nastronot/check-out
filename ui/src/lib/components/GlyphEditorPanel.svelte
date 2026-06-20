@@ -1,6 +1,11 @@
 <script lang="ts">
   import { FONT5x7, GLYPH_CODES } from '../font5x7';
-  import { appState, pushGlyphs, setGlyphLocal } from '../stores';
+  import {
+    appState,
+    commitGlyph,
+    glyphSync,
+    selectedGlyphSlot,
+  } from '../stores';
   import { EMPTY_GLYPH, copyFromChar, normGlyph, withBit } from '../glyphedit';
   import GlyphCanvas from './GlyphCanvas.svelte';
 
@@ -10,56 +15,32 @@
     token: `{g${i}}`,
   }));
 
-  let selected = 0;
+  // Selected slot is shared (the glyph library loads into it).
+  $: selected = $selectedGlyphSlot;
 
   // Live glyphs from the desired state. Derive reactively (NOT via a function
   // that hides $appState) so the strip + editor update when glyphs change.
   $: glyphMap = $appState?.glyphs ?? {};
   $: slotRows = SLOTS.map((s) => normGlyph(glyphMap[String(s.i)]));
   $: selectedRows = slotRows[selected];
+  $: sync = $glyphSync;
 
-  // --- debounced auto-push ------------------------------------------------
-  type SyncState = 'idle' | 'syncing' | 'synced' | 'error';
-  let sync: Record<number, SyncState> = {};
-  let pending = new Set<number>();
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  function commit(slot: number, rows: number[]): void {
-    setGlyphLocal(String(slot), rows); // optimistic: strip + main preview update now
-    pending.add(slot);
-    sync = { ...sync, [slot]: 'syncing' };
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(flush, 400);
-  }
-
-  async function flush(): Promise<void> {
-    timer = null;
-    const flushing = [...pending];
-    pending = new Set();
-    const slots: Record<string, number[]> = {};
-    for (const s of flushing) slots[String(s)] = normGlyph(glyphMap[String(s)]);
-    const ok = await pushGlyphs(slots);
-    const next = { ...sync };
-    for (const s of flushing) next[s] = ok ? 'synced' : 'error';
-    sync = next;
-  }
-
-  // --- editing ------------------------------------------------------------
+  // --- editing (shared optimistic + debounced push) -----------------------
   function onPaint(
     e: CustomEvent<{ row: number; col: number; on: boolean }>,
   ): void {
     const { row, col, on } = e.detail;
-    commit(selected, withBit(selectedRows, row, col, on));
+    commitGlyph(selected, withBit(selectedRows, row, col, on));
   }
 
   function clearSlot(): void {
-    commit(selected, EMPTY_GLYPH.slice());
+    commitGlyph(selected, EMPTY_GLYPH.slice());
   }
 
   let charInput = '';
   function loadChar(): void {
     const rows = copyFromChar(charInput.slice(0, 1));
-    if (rows) commit(selected, rows);
+    if (rows) commitGlyph(selected, rows);
   }
   $: charKnown =
     charInput.length > 0 && FONT5x7[charInput.charCodeAt(0)] !== undefined;
@@ -89,7 +70,7 @@
         role="tab"
         aria-selected={selected === s.i}
         title={`slot ${s.i} → code 0x${s.code.toString(16).toUpperCase()}`}
-        on:click={() => (selected = s.i)}
+        on:click={() => selectedGlyphSlot.set(s.i)}
       >
         <span class="slot__thumb"><GlyphCanvas rows={slotRows[s.i]} dotSize={5} pitch={6} /></span>
         <span class="slot__label">

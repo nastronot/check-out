@@ -48,3 +48,26 @@ export interface Health {
   ok: boolean;
   daemon_alive: boolean;
 }
+
+// --- saved library (web-owned) --------------------------------------------
+export interface LibraryMessage {
+  id: string;
+  name: string;
+  message: string;
+  mode: 'message' | 'ticker';
+  align_top: Align;
+  align_bottom: Align;
+  brightness: Brightness;
+  glyphs: GlyphMap;
+}
+
+export interface LibraryGlyph {
+  id: string;
+  name: string;
+  rows: number[];
+}
+
+export interface Library {
+  messages: LibraryMessage[];
+  glyphs: LibraryGlyph[];
+}

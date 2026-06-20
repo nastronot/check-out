@@ -1,7 +1,15 @@
 // Thin fetch wrappers over the FastAPI control surface. Same-origin /api/* in
 // production; proxied to :8000 by vite in dev.
 
-import type { AppState, CommandRef, Health, Status } from './types';
+import type {
+  AppState,
+  CommandRef,
+  Health,
+  Library,
+  LibraryGlyph,
+  LibraryMessage,
+  Status,
+} from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -32,3 +40,30 @@ export const postCommand = (action: string, args: Record<string, unknown> = {}) 
     headers: JSON_HEADERS,
     body: JSON.stringify({ action, args }),
   });
+
+// --- library (saved messages + glyphs) ------------------------------------
+export const getLibrary = () => req<Library>('/api/library');
+
+export const saveMessage = (item: Partial<LibraryMessage>) =>
+  req<LibraryMessage>('/api/library/messages', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(item),
+  });
+
+export const deleteMessage = (id: string) =>
+  req<{ ok: boolean }>(`/api/library/messages/${id}`, { method: 'DELETE' });
+
+/** Recall a saved message onto the live state; returns the new state. */
+export const recallMessage = (id: string) =>
+  req<AppState>(`/api/library/messages/${id}/recall`, { method: 'POST' });
+
+export const saveGlyph = (name: string, rows: number[]) =>
+  req<LibraryGlyph>('/api/library/glyphs', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ name, rows }),
+  });
+
+export const deleteGlyph = (id: string) =>
+  req<{ ok: boolean }>(`/api/library/glyphs/${id}`, { method: 'DELETE' });

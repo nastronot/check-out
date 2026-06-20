@@ -5,11 +5,14 @@
   import CommandBar from './lib/components/CommandBar.svelte';
   import StatusReadout from './lib/components/StatusReadout.svelte';
   import GlyphEditorPanel from './lib/components/GlyphEditorPanel.svelte';
+  import SavedMessages from './lib/components/SavedMessages.svelte';
+  import GlyphLibrary from './lib/components/GlyphLibrary.svelte';
   import {
     appState,
     health,
     loadState,
     patchState,
+    refreshLibrary,
     startPolling,
     status,
     stopPolling,
@@ -17,6 +20,7 @@
 
   onMount(() => {
     void loadState();
+    void refreshLibrary();
     startPolling(500);
   });
   onDestroy(stopPolling);
@@ -44,11 +48,13 @@
 
     <div class="layout__controls">
       <ControlPanel state={$appState} patch={patchState} />
+      <SavedMessages />
       <CommandBar />
     </div>
 
     <div class="layout__glyphs">
       <GlyphEditorPanel />
+      <GlyphLibrary />
     </div>
   </main>
 
@@ -124,6 +130,9 @@
 
   .layout__glyphs {
     grid-area: glyphs;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
   }
 
   .footnote {

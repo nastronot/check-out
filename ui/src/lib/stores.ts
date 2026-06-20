@@ -6,13 +6,22 @@
 //   response of every PUT/command (optimistic edits reconcile against the API's
 //   canonical, backfilled result).
 
-import { writable } from 'svelte/store';
-import { getHealth, getState, getStatus, putState } from './api';
-import type { AppState, Health, Status } from './types';
+import { get, writable } from 'svelte/store';
+import { getHealth, getLibrary, getState, getStatus, putState } from './api';
+import { normGlyph } from './glyphedit';
+import type { AppState, Health, Library, Status } from './types';
 
 export const status = writable<Status | null>(null);
 export const health = writable<Health>({ ok: false, daemon_alive: false });
 export const appState = writable<AppState | null>(null);
+export const library = writable<Library>({ messages: [], glyphs: [] });
+
+// The glyph editor's active slot (0..8), shared so the glyph library can load
+// a saved glyph into whichever slot is selected.
+export const selectedGlyphSlot = writable<number>(0);
+
+export type GlyphSync = 'idle' | 'syncing' | 'synced' | 'error';
+export const glyphSync = writable<Record<number, GlyphSync>>({});
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -82,4 +91,47 @@ export async function pushGlyphs(
   } catch {
     return false;
   }
+}
+
+// Debounced per-slot glyph push, shared by the editor AND the glyph library so
+// "load saved glyph into slot" goes through the same optimistic + auto-push path.
+let glyphPending = new Set<number>();
+let glyphTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Optimistically set a slot's glyph and debounce a single push to the daemon. */
+export function commitGlyph(slot: number, rows: number[]): void {
+  setGlyphLocal(String(slot), rows); // strip + main preview update now
+  glyphPending.add(slot);
+  glyphSync.update((s) => ({ ...s, [slot]: 'syncing' }));
+  if (glyphTimer) clearTimeout(glyphTimer);
+  glyphTimer = setTimeout(flushGlyphs, 400);
+}
+
+async function flushGlyphs(): Promise<void> {
+  glyphTimer = null;
+  const flushing = [...glyphPending];
+  glyphPending = new Set();
+  const live = get(appState)?.glyphs ?? {};
+  const slots: Record<string, number[]> = {};
+  for (const s of flushing) slots[String(s)] = normGlyph(live[String(s)]);
+  const ok = await pushGlyphs(slots);
+  glyphSync.update((sync) => {
+    const next = { ...sync };
+    for (const s of flushing) next[s] = ok ? 'synced' : 'error';
+    return next;
+  });
+}
+
+/** Refresh the saved library (messages + glyphs). */
+export async function refreshLibrary(): Promise<void> {
+  try {
+    library.set(await getLibrary());
+  } catch {
+    /* keep last good value */
+  }
+}
+
+/** Replace appState from a recall response (library -> live). */
+export function applyState(next: AppState): void {
+  appState.set(next);
 }
