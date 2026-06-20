@@ -6,6 +6,7 @@
     LINE_LEN,
     lineToCells,
   } from '../font5x7';
+  import { GLASS_BG, paintCell } from '../dotrender';
   import type { GlyphMap, Status } from '../types';
 
   export let status: Status | null = null;
@@ -16,7 +17,6 @@
   // are deliberately SEPARATE so the within-glyph dot pitch can be tightened
   // without changing the gap between characters.
   const DOT_SIZE = 5.4; // edge length of each (square) dot — real VFD dots are square
-  const DOT_CORNER = 1.2; // corner radius; the panel's square dots are slightly rounded
   const DOT_PITCH_X = 5.8; // center-to-center of adjacent dots WITHIN a glyph (X) — tight
   const DOT_PITCH_Y = 7; // center-to-center of adjacent dots WITHIN a glyph (Y) — tight
   const CELL_GAP_X = 16; // center gap from a glyph's last col to the next glyph's first
@@ -85,15 +85,6 @@
     drawFrame(top, bottom, bright, glyphs);
   }
 
-  /** A square dot (slightly rounded), centered at (x, y) — matches the panel. */
-  function dotSquare(x: number, y: number, size: number): void {
-    if (size <= 0 || !ctx) return;
-    const half = size / 2;
-    ctx.beginPath();
-    ctx.roundRect(x - half, y - half, size, size, Math.min(DOT_CORNER, half));
-    ctx.fill();
-  }
-
   function drawFrame(
     topLine: string,
     bottomLine: string,
@@ -104,11 +95,10 @@
 
     // Glass backdrop (logical coords; the transform maps them to the buffer).
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#03090a';
+    ctx.fillStyle = GLASS_BG;
     ctx.fillRect(0, 0, W, H);
 
     const lines = [topLine, bottomLine].map((l) => lineToCells(l, glyphMap));
-    const litFill = isBright ? '#8ffbe4' : '#36d8b4';
     // Bloom kept modest so tight square dots stay distinct, not merged.
     const litBlur = isBright ? 10 : 6;
     let litDots = 0;
@@ -123,23 +113,14 @@
           for (let c = 0; c < CELL_COLS; c++) {
             const x = cx0 + c * DOT_PITCH_X;
             const y = cy0 + r * DOT_PITCH_Y;
-            if (cell[r][c]) {
-              litDots++;
-              ctx.save();
-              ctx.shadowColor = '#3df0c8';
-              ctx.shadowBlur = litBlur;
-              ctx.fillStyle = litFill;
-              dotSquare(x, y, DOT_SIZE);
-              // a brighter inner core for bloom
-              ctx.shadowBlur = 0;
-              ctx.fillStyle = isBright ? '#d8fff4' : '#9af0dc';
-              dotSquare(x, y, DOT_SIZE - 2.4);
-              ctx.restore();
-            } else {
-              // Unlit phosphor — a faint resting dot.
-              ctx.fillStyle = 'rgba(61, 240, 200, 0.055)';
-              dotSquare(x, y, DOT_SIZE - 0.6);
-            }
+            const lit = cell[r][c];
+            if (lit) litDots++;
+            // Same shared square-dot render as the glyph editor.
+            paintCell(ctx, x, y, lit, {
+              dotSize: DOT_SIZE,
+              bright: isBright,
+              blur: litBlur,
+            });
           }
         }
       }
