@@ -15,7 +15,7 @@ framework) so the aesthetic is hand-tuned.
 
 - **VfdPreview** — the centerpiece. A canvas-rendered 2×20 grid of 5×7 phosphor
   dots that mirrors `/api/status` (so it shows real clock ticks, ticker motion,
-  brightness, and blank). Built-in 5×7 font for ASCII `0x20–0x7E`; the 9 user
+  brightness, and blank). Real M202MD10C 5×7 font for ASCII `0x20–0x7E`; the 9 user
   glyph codes render from `state.glyphs` using the shared low-5-bit convention.
 - **ControlPanel** — mode, message (+40-char budget, `{g0}`…`{g8}` hint),
   brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker
@@ -62,3 +62,10 @@ inside `{...}`; move them into typed handler functions in `<script lang="ts">`.)
 
 > Requires Node 18+ (this repo is on Node 22 via nvm). Docker packaging is
 > Phase 3; the build output (`dist/`) is static and served by FastAPI in prod.
+
+## Credits
+
+The 5×7 preview charset (`src/lib/font5x7.ts`) is the real Futaba M202MD10C font,
+decoded from the per-character display photos in
+[Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
+(public domain, Unlicense).

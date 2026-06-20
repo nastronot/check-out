@@ -303,6 +303,19 @@ sudo usermod -aG uucp "$USER"   # then re-login
   to litCount. Daemon: after self_test/reset/reconnect it invalidates the
   display-state cache AND skips the rest of that tick, so the NEXT tick re-asserts
   scroll/brightness/code-page/glyphs — fixes the clock scrolling after a self-test.
+- **v0.4.4:** replaced the placeholder preview font with the REAL M202MD10C
+  charset, decoded from photos of our exact panel (one per char code) in
+  Eigenbaukombinat/vfd_kassendisplay. The preview now matches the glass
+  dot-for-dot (e.g. 'A' lights 16 dots, not the placeholder's 18).
+
+## Credits / third-party
+- **Command set:** SNMetamorph `FutabaVfdM202MD10C` library + the abomin
+  "extended mode" discovery (see §3 in spec.md).
+- **Preview charset:** the 5×7 glyph bitmaps in `ui/src/lib/font5x7.ts` were
+  extracted from the character photos in
+  [Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
+  (`charsetweb/cropped_<ascii>.jpg`), released into the public domain
+  (**Unlicense**). Decoded by sampling each photo's 5×7 dot grid.
 
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):
