@@ -26,6 +26,19 @@ describe('VfdPreview font mapping', () => {
     expect(litCount(0x20)).toBe(0);
   });
 
+  it('canvas decode path lights the same dots as litCount (one shared font)', () => {
+    // draw() lights a dot exactly when lineToCells(line)[ci][r][c] is truthy.
+    // Assert THAT path lights 18 dots for 'A', matching litCount — so a blank
+    // preview is never a font/decode bug, only a data/redraw one.
+    const cells = lineToCells('A', {});
+    const litInFirstCell = cells[0].reduce(
+      (n, row) => n + row.filter(Boolean).length,
+      0,
+    );
+    expect(litInFirstCell).toBe(18);
+    expect(litInFirstCell).toBe(litCount('A'.charCodeAt(0)));
+  });
+
   it('renders user glyphs from state.glyphs (low-5-bit rows)', () => {
     // Slot 0 (code 0x15): a single full top row -> 5 lit dots.
     const glyphs = { '0': [0x1f, 0, 0, 0, 0, 0, 0] };

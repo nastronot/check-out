@@ -229,6 +229,34 @@ def test_invalid_brightness_coerced_once_no_spam(monkeypatch):
     assert sum("invalid brightness" in w for w in warnings) == 1
 
 
+def test_reset_command_reapplies_scroll_and_settings_next_tick(monkeypatch, capsys):
+    """After a display-resetting command, the NEXT tick re-emits scroll/brightness/
+    code-page (cache invalidated) so the display can't stay stuck in scroll mode."""
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+
+    # A normal tick establishes the caches (scroll disabled, brightness, etc.).
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=NOW)
+    capsys.readouterr()  # clear
+
+    # self_test tick: runs the command, then early-returns — no settings re-apply
+    # this tick (the panel is still re-initializing and would swallow them).
+    cmd_state = {"mode": "clock", "command": {"id": "c1", "action": "self_test"}}
+    daemon.tick_once(drv, cmd_state, ctx, now=NOW)
+    cmd_tx = _all_tx_bytes(capsys.readouterr().out)
+    assert 0x0F in cmd_tx  # self-test ran
+    # No frame drawn this tick (early return after the reset).
+    assert [0x10, 0x00] not in [cmd_tx[i : i + 2] for i in range(len(cmd_tx) - 1)]
+
+    # The next normal tick re-applies settings from the invalidated caches.
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    next_tx = _all_tx_bytes(capsys.readouterr().out)
+    assert 0x11 in next_tx  # vertical-scroll DISABLE re-sent (the desync fix)
+    assert 0x04 in next_tx  # brightness re-sent
+    assert 0x02 in next_tx  # code page re-sent
+
+
 def test_valid_brightness_after_invalid_rewarns(monkeypatch):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     warnings = []
