@@ -33,6 +33,8 @@ def defaults() -> dict:
     return {
         "mode": "clock",                 # "clock" | "message" | "ticker"
         "message": "",                   # text for message / ticker modes
+        "align_top": "center",           # "left" | "center" | "right" — line 1
+        "align_bottom": "center",        # "left" | "center" | "right" — line 2
         "brightness": "dim",             # "dim" | "bright"
         "blank": False,                  # blank the display entirely
         "scroll": False,                 # hardware vertical-scroll MODE (0x11/0x12)

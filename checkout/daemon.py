@@ -50,6 +50,13 @@ from .state import load_state, save_status
 FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), TickerFrame())}
 DEFAULT_FRAME = "clock"
 
+_ALIGNMENTS = ("left", "center", "right")
+
+
+def _align(value) -> str:
+    """Coerce a per-line alignment to a valid value (default 'center')."""
+    return value if value in _ALIGNMENTS else "center"
+
 # Boot banner shown briefly at startup.
 BANNER_TOP = "CHECK-OUT"
 BANNER_BOTTOM = "BOOTING"
@@ -272,7 +279,13 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         emit: tuple = ("blank",)
     else:
         frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
-        top, bottom = render_lines(*frame.render(now, state))
+        ltop, lbottom = frame.render(now, state)
+        top, bottom = render_lines(
+            ltop,
+            lbottom,
+            top_align=_align(state.get("align_top")),
+            bottom_align=_align(state.get("align_bottom")),
+        )
         emit = resolve_emit(
             now_ms,
             state.get("animation", "none"),
