@@ -48,6 +48,15 @@ INIT_SEQUENCE = bytes([RESET, EXTENDED_MODE, EXTENDED_ON, DISABLE_VERTICAL_SCROL
 # now. TODO: retest the intermediate level bytes under extended mode.
 BRIGHTNESS = {"dim": b"\x04\x20", "bright": b"\x04\xff"}
 
+# User-defined characters: 9 glyphs (index 0..8), each a 5x7 cell — 7 row bytes,
+# only the low 5 bits of each row are meaningful (5-pixel-wide cell).
+MAX_USER_GLYPHS = 9
+GLYPH_ROWS = 7
+GLYPH_ROW_MASK = 0x1F
+
+# Code pages: 12 selectable pages (0..11).
+CODE_PAGES = 12
+
 # Display geometry / addressing (position = col + row*20, row 0 = top).
 COLS = config.COLS
 ROWS = config.ROWS
@@ -209,12 +218,23 @@ class VFDDriver:
 
     # --- public command surface ----------------------------------------------
     def clear(self) -> None:
-        """Reset the whole display (0x1F).
+        """Emit a bare reset (0x1F) with no re-init — raw primitive.
 
         NOTE: a bare reset also drops extended mode and re-enables scroll. Use
-        :meth:`blank` for a safe dark screen, or call :meth:`initialize` after.
+        :meth:`blank` for a safe dark screen, :meth:`reset` for a reset that
+        restores the initialized state, or call :meth:`initialize` after.
         """
         self._write(bytes([RESET]))
+
+    def reset(self) -> None:
+        """Hard-reset the display and restore the initialized state.
+
+        A bare reset (0x1F) drops extended mode and re-enables vertical scroll,
+        so we immediately re-run the init sequence. Net effect: the display is
+        reset and ready for show() (extended mode on, scroll off). The init
+        sequence already begins with 0x1F, so this is exactly that sequence.
+        """
+        self.initialize()
 
     def write_at(self, pos: int, text: str) -> None:
         """Set the cursor to ``pos`` then write sanitized ASCII text.
@@ -278,9 +298,50 @@ class VFDDriver:
             bytes([ENABLE_VERTICAL_SCROLL if enabled else DISABLE_VERTICAL_SCROLL])
         )
 
+    def define_character(self, index: int, rows7) -> None:
+        """Define user glyph ``index`` (0..8) from 7 row bytes (DefineCharacter).
+
+        Emits ``0x03 <index> <7 row bytes> 0x00``. Each row is a 5-pixel-wide
+        cell, so only the low 5 bits are used (masked to be safe — this also
+        guarantees a row byte can never look like a control code mid-frame).
+
+        CONFIRM (bench): which character code(s) render a defined glyph after
+        this call. Probe by defining glyph 0, then writing bytes 0x00..0x08 and
+        observing which shows it; document the code->glyph mapping. The caller
+        should re-run initialize() afterward — defining a character may reset the
+        display's extended-mode/scroll state.
+        """
+        if not (0 <= index < MAX_USER_GLYPHS):
+            raise ValueError(
+                f"glyph index {index} out of range 0..{MAX_USER_GLYPHS - 1}"
+            )
+        rows = list(rows7)
+        if len(rows) != GLYPH_ROWS:
+            raise ValueError(f"glyph needs exactly {GLYPH_ROWS} rows, got {len(rows)}")
+        try:
+            masked = bytes((int(r) & GLYPH_ROW_MASK) for r in rows)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"glyph rows must be ints: {exc}") from None
+        self._write(bytes([DEFINE_CHARACTER, index]) + masked + bytes([0x00]))
+
+    def select_code_page(self, page: int) -> None:
+        """Select character code page ``page`` (0..11) — ``0x02 <page>``.
+
+        CONFIRM (bench): whether the pages visibly change glyph sets on our unit.
+        """
+        if not (0 <= page < CODE_PAGES):
+            raise ValueError(f"code page {page} out of range 0..{CODE_PAGES - 1}")
+        self._write(bytes([SELECT_CODE_PAGE, page]))
+
     def self_test(self) -> None:
-        """Trigger the display's built-in self-test (0x0F)."""
+        """Trigger the display's built-in self-test (0x0F), then re-initialize.
+
+        The self-test leaves the display in an unknown state (extended mode /
+        scroll may be reset), so the init sequence is re-run afterward to restore
+        the known-good state before the next show().
+        """
         self._write(bytes([SELF_TEST]))
+        self.initialize()
 
     def blank(self) -> None:
         """Clear the display to a dark screen, left in the known-good state.
