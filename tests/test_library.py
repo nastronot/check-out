@@ -96,6 +96,38 @@ def test_save_list_delete_glyph(client):
     assert client.delete(f"/api/library/glyphs/{gid}").status_code == 404
 
 
+def test_reorder_glyphs_persists(client, paths):
+    ids = []
+    for name in ("a", "b", "c"):
+        ids.append(
+            client.post(
+                "/api/library/glyphs", json={"name": name, "rows": [0] * 7}
+            ).json()["id"]
+        )
+    # Move the last glyph to the front.
+    new_order = [ids[2], ids[0], ids[1]]
+    r = client.post("/api/library/glyphs/order", json={"ids": new_order})
+    assert r.status_code == 200
+    assert [g["id"] for g in r.json()["glyphs"]] == new_order
+    # Persisted to disk in the new order.
+    on_disk = json.loads((paths / "library.json").read_text())
+    assert [g["id"] for g in on_disk["glyphs"]] == new_order
+    # GET reflects it.
+    assert [g["id"] for g in client.get("/api/library").json()["glyphs"]] == new_order
+
+
+def test_reorder_tolerates_partial_and_unknown_ids(client):
+    a = client.post("/api/library/glyphs", json={"name": "a", "rows": [0] * 7}).json()["id"]
+    b = client.post("/api/library/glyphs", json={"name": "b", "rows": [0] * 7}).json()["id"]
+    # Only mention b (+ an unknown id); a must survive (appended), unknown ignored.
+    r = client.post("/api/library/glyphs/order", json={"ids": [b, "ghost"]})
+    assert [g["id"] for g in r.json()["glyphs"]] == [b, a]
+
+
+def test_reorder_bad_input_rejected(client):
+    assert client.post("/api/library/glyphs/order", json={"ids": "nope"}).status_code == 400
+
+
 def test_bad_input_rejected(client):
     assert client.post("/api/library/messages", json={"name": ""}).status_code == 400
     assert client.post("/api/library/glyphs", json={"name": "x", "rows": [1, 2]}).status_code == 400

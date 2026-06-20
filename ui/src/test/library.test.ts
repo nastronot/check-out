@@ -3,6 +3,7 @@ import {
   deleteGlyph,
   getLibrary,
   recallMessage,
+  reorderGlyphs,
   saveGlyph,
   saveMessage,
 } from '../lib/api';
@@ -63,6 +64,14 @@ describe('library api', () => {
     await deleteGlyph('g1');
     expect(calls.at(-1)?.url).toBe('/api/library/glyphs/g1');
     expect(calls.at(-1)?.init?.method).toBe('DELETE');
+  });
+
+  it('reorderGlyphs POSTs the id order to the order endpoint', async () => {
+    mockFetch(200, { glyphs: [] });
+    await reorderGlyphs(['c', 'a', 'b']);
+    expect(calls[0].url).toBe('/api/library/glyphs/order');
+    expect(calls[0].init?.method).toBe('POST');
+    expect(JSON.parse(String(calls[0].init?.body)).ids).toEqual(['c', 'a', 'b']);
   });
 
   it('a library glyph loads into a slot as a normalized 7-row glyph', () => {
