@@ -34,8 +34,7 @@ unit. The `abomin` "extended mode" enable was the missing piece (see init below)
 | Cursor on               | `0x13`                         |
 | Cursor off              | `0x14` (must be sent LAST — see rule 1) |
 | Reset                   | `0x1F`                         |
-| Brightness DIM          | `0x04 0x20`                    |
-| Brightness BRIGHT       | `0x04 0xFF`                    |
+| Brightness (4 levels)   | `0x04` + `0x20`/`0x40`/`0x60`/`0xFF` (Min/Med/Med+/Max) |
 | Write text              | printable ASCII at cursor (auto-advances + wraps) |
 
 ### Required INIT sequence (mandatory on every open/reconnect)
@@ -67,9 +66,12 @@ the MISSING INITIALIZATION — no extended mode, scroll left on. Resolved.)
    this; `blank()` re-asserts it so the display is never left in scroll mode.
 3. **Vertical scroll is a controllable mode.** `0x12` enables it, `0x11` disables
    it — exposed via `set_vertical_scroll(bool)` for later ticker effects.
-4. **Brightness = two confirmed levels.** DIM (`0x04 0x20`) / BRIGHT (`0x04 0xFF`).
-   Live, no redraw needed. The library claims 4 levels; extended mode may expose
-   more — TODO to retest the intermediate bytes (left at the two confirmed for now).
+4. **Brightness = FOUR confirmed levels** (bench-confirmed under extended mode):
+   `0x04` + `0x20` Min / `0x40` Med / `0x60` Med+ / `0xFF` Max — the SNMetamorph
+   Dimming enum. Live, no redraw needed. The canonical `state.brightness` is an
+   int 0..3 (index into those bytes); `set_brightness(0..3)` emits the level. The
+   old "two levels (dim/bright)" was an artifact of testing before extended-mode
+   init; legacy `"dim"`/`"bright"` still map to 0/3.
 
 ### `show()` byte sequence (keep intact)
 ```
@@ -119,7 +121,7 @@ port owner). The web UI is just a writer of this file.
   "message": "text for message/ticker mode",
   "align_top": "left" | "center" | "right",     // line 1 justification (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justification (default center)
-  "brightness": "dim" | "bright",
+  "brightness": 0 | 1 | 2 | 3,            // level index (0 Min .. 3 Max); legacy "dim"/"bright" migrate to 0/3
   "blank": false,
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
   "code_page": 0,                  // 0..11
@@ -315,10 +317,11 @@ sudo usermod -aG uucp "$USER"   # then re-login
   paint, slot strip (shared dot-render), debounced auto-push to `state.glyphs`,
   clear + copy-from-character (seed from the real font). (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
-- Brightness byte confirmed in v0.1.1 (two levels: dim/bright).
+- Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
+  dim/bright; superseded by the four-level finding in v0.6.2).
 - **v0.2.0:** adopted the authoritative Futaba M202MD10C command set + extended-mode
   init sequence — all 40 cells now writable, the old 39-cell/scroll workarounds removed.
-  Vertical scroll exposed as a controllable feature. TODO: retest 4-level brightness.
+  Vertical scroll exposed as a controllable feature.
 - **v0.3.1:** bench-confirmed the user-glyph pipeline — 9 non-contiguous codes,
   bitmap columns in bits 3-7 (fixed the v0.3.0 low-5-bit encoding), `{gN}` message
   placeholders, code-page name map. Glyph + code-page bench TODOs resolved.
@@ -356,6 +359,10 @@ sudo usermod -aG uucp "$USER"   # then re-login
   CENTER/RIGHT controls in the UI.
 - **v0.6.1:** clock format `DD MON YYYY` / `HH:MM:SS AM/PM` (12-hour,
   locale-independent month abbreviations).
+- **v0.6.2:** FOUR brightness levels (`0x04` + `0x20`/`0x40`/`0x60`/`0xFF`),
+  bench-confirmed under extended mode. `state.brightness` is now an int 0..3
+  (legacy `"dim"`/`"bright"` migrate to 0/3 and self-heal on load); UI 4-stop
+  slider; preview renders 4 phosphor intensities.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
@@ -381,4 +388,5 @@ other code here is original Python.
   columns are bits 3-7. See "User glyphs" above.
 - [x] ~~Whether code pages (`0x02` + page) change the glyph set~~ — RESOLVED
   (v0.3.1): yes; 12 pages, confirmed names 0–5. See "Code pages" above.
-- Whether extended mode exposes the library's claimed 4 brightness levels.
+- [x] ~~Whether extended mode exposes the library's claimed 4 brightness levels~~
+  — RESOLVED (v0.6.2): yes, four levels `0x20`/`0x40`/`0x60`/`0xFF` confirmed on glass.

@@ -101,7 +101,7 @@ extended mode (`0x00 0x01`) was the missing initialization that the v0.1.x findi
 | **Extended mode** | `0x00` + `0x01` enable / `0x00` disable | required for full 40-cell, no-scroll operation |
 | **Select code page** | `0x02` + page byte | 12 code pages (see §4.5 glyph contract) |
 | **Define character** | `0x03` + code + 7 row bytes + `0x00` | 9 user glyphs at non-contiguous codes (see §4.5) |
-| **Dimming / brightness** | `0x04` + level byte | DIM `0x04 0x20`, BRIGHT `0x04 0xFF` |
+| **Dimming / brightness** | `0x04` + level byte | 4 levels: `0x20`/`0x40`/`0x60`/`0xFF` (Min/Med/Med+/Max) |
 | **Print ticker text** | `0x05` | hardware ticker, 45-char buffer (wire later) |
 | **Backspace** | `0x08` | |
 | **Self test** | `0x0F` | built-in self test |
@@ -149,10 +149,12 @@ sends exactly these bytes from `open()` (and on every reconnect).
    frames run with it disabled; enabling it is reserved for later ticker/marquee effects.
    Exposed as `set_vertical_scroll(bool)`.
 
-4. **Brightness is two confirmed levels** — DIM (`0x04 0x20`) and BRIGHT (`0x04 0xFF`),
-   applied live (no redraw needed). The library claims 4 levels and extended mode may expose
-   more; left at the two confirmed values for now (TODO: retest the intermediate level bytes
-   under extended mode).
+4. **Brightness is FOUR confirmed levels** (bench-confirmed under extended mode) —
+   `0x04` + `0x20` Min / `0x40` Med / `0x60` Med+ / `0xFF` Max, the SNMetamorph Dimming
+   enum. Applied live (no redraw). The canonical `state.brightness` is an int 0..3 (index
+   into those bytes); `set_brightness(0..3)` emits the level. The earlier "two levels
+   (dim/bright)" reading was an artifact of testing before extended-mode init; legacy
+   `"dim"`/`"bright"` still map to 0/3.
 
 **`show()` byte sequence (do not regress):**
 ```
@@ -169,7 +171,7 @@ anchor/reposition trick — all removed now that the init sequence is correct.
 - `clear()` → `0x1F` (note: drops the init state; prefer `blank()`)
 - `write_at(pos, text)` → `0x10`, `chr(pos)`, then ASCII text
 - `show(top, bottom)` → the buffered sequence above (overwrite-in-place, cursor-off last)
-- `set_brightness("dim"|"bright")` → `0x04 0x20` / `0x04 0xFF`
+- `set_brightness(0..3)` → `0x04` + `0x20`/`0x40`/`0x60`/`0xFF` (legacy `"dim"`/`"bright"` -> 0/3)
 - `set_vertical_scroll(bool)` → `0x12` (enable) / `0x11` (disable)
 - `self_test()` → `0x0F`
 - `blank()` → `0x1F 0x00 0x01 0x11 0x14` (dark screen, re-initialized, no lingering cursor)
@@ -224,7 +226,7 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   "message": "text for message/ticker mode",
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
-  "brightness": "dim" | "bright",
+  "brightness": 0 | 1 | 2 | 3,  // level index (0 Min .. 3 Max); legacy "dim"/"bright" -> 0/3
   "blank": false,
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
   "code_page": 0,                  // 0..11
@@ -371,7 +373,8 @@ contract and `{gN}` references — **no new endpoints or schema changes**.
 - [x] ~~Confirm bring-up matrix~~ — RS-232 / inversion OFF / 9600 8N1. Done.
 - [x] ~~Confirm command bytes~~ — adopted the authoritative Futaba M202MD10C set (§3) with
   the extended-mode init sequence; all 40 cells writable. Done (v0.2.0).
-- [x] ~~Confirm brightness command~~ — two levels: DIM `0x04 0x20`, BRIGHT `0x04 0xFF`. Done.
+- [x] ~~Confirm brightness command~~ — FOUR levels `0x04` + `0x20`/`0x40`/`0x60`/`0xFF`,
+  bench-confirmed under extended mode (v0.6.2). Done.
 - [x] ~~Confirm user-glyph codes + bitmap encoding~~ — 9 non-contiguous codes,
   columns in bits 3-7 (§4.5). Done (v0.3.1).
 - [x] ~~Confirm code pages~~ — 12 pages, names 0–5 confirmed (§4.5). Done (v0.3.1).
