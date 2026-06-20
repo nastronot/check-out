@@ -286,9 +286,16 @@ path, which the daemon already consumes. `web/library.py` does atomic writes
   *load into* a slot. Loading a saved glyph routes through the same optimistic +
   debounced push as drawing (`commitGlyph`).
 - **UI:** `SavedMessages` (save current / recall / delete) and `GlyphLibrary`
-  (save selected slot / load-into-selected-slot / delete, mini phosphor
-  thumbnails via the shared dot-render). The selected editor slot is a shared
-  store (`selectedGlyphSlot`) so the library targets it.
+  (save selected slot / load / reorder / delete, mini phosphor thumbnails via the
+  shared dot-render). The selected editor slot is a shared store
+  (`selectedGlyphSlot`) so the library targets it.
+- **Drag-and-drop (v0.7.1):** drag a library glyph **onto a slot** (g0–g8) to
+  load it there (the slot highlights on drag-over and becomes selected on drop);
+  drag a glyph **within the library** to reorder (persisted via
+  `POST /api/library/glyphs/order`, optimistic with revert). HTML5 DnD doesn't
+  fire on touch, so the **click/tap fallback** loads a glyph into the selected
+  slot (cards are keyboard-activatable `role="button"`). Pure DnD logic lives in
+  `dnd.ts` (`reorderIds` / `rowsForGlyphId`), test-covered.
 
 ### UI toolchain + verify loop (MANDATORY)
 The UI is Svelte 4 + Vite 5 + TypeScript, built/tested with Node (Node 22 via nvm
@@ -403,6 +410,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
   `GlyphLibrary` UI panels; `blink` is now a brightness pulse (dims to MIN on the
   off-phase) — clearly distinct from `flash`'s hard blank, and the preview
   animates both via status.
+- **v0.7.1:** drag-and-drop glyph library — drag a glyph onto a slot to load it,
+  drag within the library to reorder (`/api/library/glyphs/order`); removed the
+  `→gN` buttons; click/tap fallback keeps it touch/keyboard-reachable.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

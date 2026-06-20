@@ -381,13 +381,18 @@ ownership. `web/library.py` validates input and writes atomically (reusing
 - **Endpoints:** `GET /api/library`; `POST /api/library/messages` (saves the current
   composable state) / `DELETE …/{id}` / `POST …/{id}/recall` (the one bridge from library
   to live: merge-patches the message's fields + glyphs into `state.json`);
-  `POST /api/library/glyphs` `{name, rows}` / `DELETE …/{id}`.
+  `POST /api/library/glyphs` `{name, rows}` / `DELETE …/{id}`;
+  `POST /api/library/glyphs/order` `{ids}` (drag-to-reorder, v0.7.1).
 - **9 slots vs the library:** the 9 glyph **slots** are the live hardware registers the
   daemon defines; the **library** is unlimited saved bitmaps you load *into* a slot.
   Loading routes through the same optimistic + debounced push as drawing.
 - **UI:** `SavedMessages` (save current / recall / delete) and `GlyphLibrary` (save the
-  selected slot / load-into-selected-slot / delete; mini phosphor thumbnails via the shared
+  selected slot / load / reorder / delete; mini phosphor thumbnails via the shared
   dot-render). The selected editor slot is a shared store so the library targets it.
+- **Drag-and-drop (v0.7.1):** drag a library glyph onto a slot (g0–g8) to load it there
+  (drop target highlights; the slot becomes selected); drag within the library to reorder
+  (persisted to `library.json`, optimistic + revert). HTML5 DnD doesn't fire on touch, so a
+  **click/tap fallback** loads into the selected slot (cards are keyboard-activatable).
 
 ---
 

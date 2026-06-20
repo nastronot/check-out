@@ -25,6 +25,7 @@ the two processes never race over the filesystem.
 | DELETE | `/api/library/messages/{id}` | Delete a saved message |
 | POST   | `/api/library/messages/{id}/recall` | Apply a saved message to `state.json` (fields + its glyphs) — the library→live bridge |
 | POST   | `/api/library/glyphs` | Save a glyph `{name, rows}` (7 low-5-bit ints) |
+| POST   | `/api/library/glyphs/order` | Persist a new glyph order `{ids}` (drag-to-reorder) |
 | DELETE | `/api/library/glyphs/{id}` | Delete a saved glyph |
 | GET    | `/`            | The built UI (`ui/dist`), or a 503 hint if it isn't built yet |
 
