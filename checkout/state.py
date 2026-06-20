@@ -1,8 +1,17 @@
-"""Atomic JSON state shared between the daemon and (later) the web UI.
+"""Atomic JSON state shared between the daemon and the web UI.
 
-The daemon reads this file every tick; the Phase 2 web UI will be the writer.
+Two files, one-directional ownership (no races):
+
+- ``state.json`` (:data:`config.STATE_PATH`) — the **web UI writes**, the daemon
+  reads each tick. The desired display state (mode, message, animation, …).
+- ``status.json`` (:data:`config.STATUS_PATH`) — the **daemon writes** (sole
+  writer), the web UI reads. A mirror of what is actually on the glass plus
+  daemon health.
+
 Writes are atomic (temp file in the same dir + ``os.replace``) so a reader never
-sees a half-written file. Missing or corrupt files fall back to defaults.
+sees a half-written file. Missing or corrupt state falls back to defaults, and
+partial writes are backfilled key-by-key so the daemon never breaks on a state
+file that only sets some fields.
 """
 
 from __future__ import annotations
@@ -20,37 +29,66 @@ def _now_iso() -> str:
 
 
 def defaults() -> dict:
-    """A fresh state dict with default values."""
+    """A fresh state dict with every key at its default value."""
     return {
-        "mode": "clock",
-        "message": "",
-        "brightness": 3,
-        "blank": False,
+        "mode": "clock",                 # "clock" | "message" | "ticker"
+        "message": "",                   # text for message / ticker modes
+        "brightness": "dim",             # "dim" | "bright"
+        "blank": False,                  # blank the display entirely
+        "scroll": False,                 # hardware vertical-scroll MODE (0x11/0x12)
+        "code_page": 0,                  # 0..11
+        "scroll_speed_ms": 300,          # ticker software-scroll step
+        "animation": "none",             # "none" | "flash" | "blink"
+        "animation_params": {"on_ms": 500, "off_ms": 500},
+        "glyphs": {},                    # {"0": [r0..r6], ...} optional 5x7 user glyphs
+        "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
 
 
-def _path() -> str:
-    # Read from config at call time so env overrides / tests take effect.
-    return config.STATE_PATH
+# Keys whose defaults are dicts: a partial write of these should be MERGED with
+# the default (so e.g. {"command": {"id": "x"}} keeps a default action/args)
+# rather than wholesale-replaced. ``glyphs`` is intentionally NOT here — it is a
+# user-owned map and a write replaces it entirely.
+_NESTED_DEFAULTS = ("animation_params", "command")
 
 
-def save_state(state: dict) -> None:
-    """Atomically write ``state`` to the state file.
+def _backfill(data: dict) -> dict:
+    """Return ``data`` with every default key present (recursively for nested)."""
+    base = defaults()
+    merged = {**base, **data}
+    for key in _NESTED_DEFAULTS:
+        if isinstance(data.get(key), dict):
+            merged[key] = {**base[key], **data[key]}
+        else:
+            merged[key] = base[key]
+    return merged
 
-    Stamps ``updated_at`` at write time, serializes to a temp file in the same
-    directory, then ``os.replace``s it over the target so the swap is atomic and
-    no partial file is ever observable.
-    """
-    path = _path()
-    state = {**state, "updated_at": _now_iso()}
+
+def status_defaults() -> dict:
+    """A fresh status dict (what the daemon mirrors out)."""
+    return {
+        "alive": True,
+        "mode": "clock",
+        "top": "",
+        "bottom": "",
+        "brightness": "dim",
+        "blank": False,
+        "scroll": False,
+        "last_command_id": None,
+        "updated_at": _now_iso(),
+    }
+
+
+def _atomic_write_json(path: str, data: dict, prefix: str) -> None:
+    """Serialize ``data`` to ``path`` atomically (temp file + ``os.replace``)."""
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)
 
-    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state-", suffix=".tmp")
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(state, fh, indent=2)
+            json.dump(data, fh, indent=2)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, path)
@@ -63,13 +101,25 @@ def save_state(state: dict) -> None:
         raise
 
 
+def save_state(state: dict) -> None:
+    """Atomically write ``state`` to the state file, stamping ``updated_at``."""
+    state = {**state, "updated_at": _now_iso()}
+    _atomic_write_json(config.STATE_PATH, state, prefix=".state-")
+
+
+def save_status(status: dict) -> None:
+    """Atomically write ``status`` to the status file, stamping ``updated_at``."""
+    status = {**status, "updated_at": _now_iso()}
+    _atomic_write_json(config.STATUS_PATH, status, prefix=".status-")
+
+
 def load_state() -> dict:
     """Load state from disk, repairing to defaults if missing or corrupt.
 
-    Returned dict always contains every default key (missing keys are filled),
-    so callers can index without guarding.
+    The returned dict always contains every default key (missing keys are
+    backfilled, nested dicts merged), so callers can index without guarding.
     """
-    path = _path()
+    path = config.STATE_PATH
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
@@ -79,5 +129,4 @@ def load_state() -> dict:
         state = defaults()
         save_state(state)
         return state
-    # Fill any missing keys from defaults without clobbering present values.
-    return {**defaults(), **data}
+    return _backfill(data)

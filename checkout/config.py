@@ -32,7 +32,12 @@ RECONNECT_BACKOFF_START: float = 1.0
 RECONNECT_BACKOFF_MAX: float = 5.0
 
 # --- State -------------------------------------------------------------------
+# STATE_PATH: web UI (Phase 2) WRITES this; daemon reads it each tick.
+# STATUS_PATH: daemon WRITES this each tick (sole writer); web UI reads it to
+# mirror the real display + daemon health. The two files keep the write
+# ownership one-directional, so there are no races between daemon and web.
 STATE_PATH: str = os.environ.get("CHECKOUT_STATE_PATH", "./state.json")
+STATUS_PATH: str = os.environ.get("CHECKOUT_STATUS_PATH", "./status.json")
 
 # --- Frame rotation ----------------------------------------------------------
 # Single frame this phase; rotation lands in Phase 3.
