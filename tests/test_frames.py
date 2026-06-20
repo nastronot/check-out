@@ -42,6 +42,15 @@ def test_ticker_short_message_does_not_scroll():
     assert bottom == ""
 
 
+def test_ticker_newline_is_treated_as_space():
+    # A two-line message in ticker mode shouldn't crash or carry a literal '\n';
+    # the newline becomes a space so it scrolls as one line.
+    top, bottom = TickerFrame().render(NOW, {"message": "AB\nCD", "scroll_speed_ms": 300})
+    assert "\n" not in top
+    assert top == "AB CD".ljust(20)
+    assert bottom == ""
+
+
 def test_ticker_advances_with_time():
     msg = "this is a long scrolling message that exceeds twenty chars"
     state = {"message": msg, "scroll_speed_ms": 100}

@@ -62,6 +62,12 @@ def test_put_state_nested_merge_keeps_siblings(client):
     assert data["animation_params"]["off_ms"] == 500  # sibling default kept
 
 
+def test_put_message_preserves_newline(client):
+    # A two-line message round-trips with its '\n' intact (MessageFrame splits on it).
+    client.put("/api/state", json={"message": "HELLO\nWORLD"})
+    assert client.get("/api/state").json()["message"] == "HELLO\nWORLD"
+
+
 def test_put_partial_glyphs_merges_one_slot(client):
     # The glyph editor pushes one slot at a time — other slots must survive.
     client.put(
