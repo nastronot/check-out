@@ -44,8 +44,9 @@ def defaults() -> dict:
         "scroll": False,                 # hardware vertical-scroll MODE (0x11/0x12)
         "code_page": 0,                  # 0..11
         "scroll_speed_ms": 300,          # ticker software-scroll step
-        "animation": "none",             # "none" | "flash" | "blink"
-        "animation_params": {"on_ms": 500, "off_ms": 500},
+        "animation": "none",             # "none" | "flash" | "blink" | "pulse"
+        # on_ms/off_ms time flash + blink; step_ms is the pulse triangle step.
+        "animation_params": {"on_ms": 500, "off_ms": 500, "step_ms": 200},
         # {"0": [r0..r6], ... "8": [...]} optional 5x7 user glyphs. Each row is an
         # int whose LOW 5 bits are columns 1..5 (bit0=col1 ... bit4=col5) — the
         # editor-natural convention; the driver translates to the wire format

@@ -168,15 +168,20 @@ def resolve_emit(
     """Decide what frame to put on the glass given the animation phase.
 
     Returns an emit tuple: ``("show", top, bottom)`` or ``("blank",)``.
-      - none  -> always show the frame.
-      - flash -> alternate the frame with a real blank (display goes fully DARK).
-      - blink -> always shows the frame; it PULSES via brightness instead of
-                 blanking (see :func:`animation_brightness`), so the text stays
-                 readable and it reads clearly different from flash.
+      - none         -> always show the frame.
+      - flash        -> alternate the frame with a real blank (display goes DARK).
+      - blink, pulse -> always show the frame; brightness does the animation
+                        (see :func:`animation_brightness`), so the text stays up.
     """
     if animation == "flash":
         return ("show", top, bottom) if _phase_on(now_ms, params) else ("blank",)
     return ("show", top, bottom)
+
+
+# pulse sweeps brightness as a triangle wave through the four levels: each step
+# advances one index, so the full up-and-down is 6 steps (0→3→back).
+_PULSE_TRIANGLE = (0, 1, 2, 3, 2, 1)
+_PULSE_STEP_MS = 200  # default per-step interval -> ~1.2s full triangle
 
 
 def animation_brightness(
@@ -184,13 +189,18 @@ def animation_brightness(
 ) -> int:
     """Effective brightness index for this tick.
 
-    ``blink`` pulses the frame between the chosen level (on-phase) and MIN
-    (off-phase), so the display dims and brightens rather than disappearing —
-    visually distinct from ``flash``'s hard dark blank. Every other animation
-    just uses the base level.
+    - ``blink`` pulses the frame between the chosen level (on-phase) and MIN
+      (off-phase) — a 2-state snap, visually distinct from ``flash``'s dark blank.
+    - ``pulse`` sweeps the full 0..3 range as a stepped triangle wave (a breathing
+      effect); it OVERRIDES the static brightness while active.
+    Every other animation just uses the base level.
     """
     if animation == "blink" and not _phase_on(now_ms, params):
         return _MIN_BRIGHTNESS
+    if animation == "pulse":
+        step_ms = max(1, int(params.get("step_ms", _PULSE_STEP_MS)))
+        idx = (now_ms // step_ms) % len(_PULSE_TRIANGLE)
+        return _PULSE_TRIANGLE[idx]
     return base
 
 
