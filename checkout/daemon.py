@@ -35,7 +35,11 @@ import time
 from datetime import datetime
 
 from . import config
+from .driver import BRIGHTNESS as _BRIGHTNESS_LEVELS
 from .driver import VFDDriver, VFDError
+
+# Invalid/unknown brightness values are coerced to this once (with one warning).
+_DEFAULT_BRIGHTNESS = "bright"
 from .frames.clock import ClockFrame
 from .frames.message import MessageFrame
 from .frames.ticker import TickerFrame
@@ -78,6 +82,7 @@ def _new_ctx() -> dict:
         "last_code_page": None,
         "last_emit": None,         # last thing shown (avoid redundant frames)
         "last_status": None,       # last status.json payload (avoid redundant writes)
+        "bad_brightness": None,    # last invalid brightness warned about (dedupe)
     }
 
 
@@ -203,13 +208,20 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
             _invalidate_caches(ctx)
         ctx["last_glyphs"] = dict(glyphs)
 
-    # 4. display settings (avoid redundant writes).
-    brightness = state.get("brightness", "dim")
+    # 4. display settings (avoid redundant writes). An invalid brightness is
+    # coerced to a safe default ONCE (single warning per distinct bad value),
+    # rather than erroring every tick and leaving the display brightness unset.
+    raw_brightness = state.get("brightness", "dim")
+    if raw_brightness in _BRIGHTNESS_LEVELS:
+        brightness = raw_brightness
+        ctx["bad_brightness"] = None
+    else:
+        brightness = _DEFAULT_BRIGHTNESS
+        if ctx["bad_brightness"] != raw_brightness:
+            log(f"invalid brightness {raw_brightness!r}; using {brightness!r}")
+            ctx["bad_brightness"] = raw_brightness
     if brightness != ctx["last_brightness"]:
-        try:
-            driver.set_brightness(brightness)
-        except ValueError as exc:
-            log(f"bad brightness {brightness!r}: {exc}")
+        driver.set_brightness(brightness)
         ctx["last_brightness"] = brightness
 
     scroll = bool(state.get("scroll", False))

@@ -208,3 +208,39 @@ def test_blank_state_blanks_once_then_latches(monkeypatch):
     daemon.tick_once(drv, state, ctx, now=NOW)
     assert drv.blanks == 1  # latched: blanked once, not every tick
     assert drv.shows == 0
+
+
+def test_invalid_brightness_coerced_once_no_spam(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    warnings = []
+    monkeypatch.setattr(daemon, "log", lambda m: warnings.append(m))
+    levels = []
+    drv = _CountingDriver()
+    drv.set_brightness = lambda level: levels.append(level)
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock", "brightness": "neon"}  # invalid
+
+    for _ in range(3):
+        daemon.tick_once(drv, state, ctx, now=NOW)
+
+    # Coerced to a valid level exactly once, then cached (no per-tick re-write).
+    assert levels == ["bright"]
+    # And warned exactly once — not every tick.
+    assert sum("invalid brightness" in w for w in warnings) == 1
+
+
+def test_valid_brightness_after_invalid_rewarns(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    warnings = []
+    monkeypatch.setattr(daemon, "log", lambda m: warnings.append(m))
+    levels = []
+    drv = _CountingDriver()
+    drv.set_brightness = lambda level: levels.append(level)
+    ctx = daemon._new_ctx()
+
+    daemon.tick_once(drv, {"brightness": "neon"}, ctx, now=NOW)   # bad -> bright
+    daemon.tick_once(drv, {"brightness": "dim"}, ctx, now=NOW)    # valid -> dim
+    daemon.tick_once(drv, {"brightness": "neon"}, ctx, now=NOW)   # bad again -> bright
+    assert levels == ["bright", "dim", "bright"]
+    # The intervening valid value clears the dedupe, so the second bad value warns.
+    assert sum("invalid brightness" in w for w in warnings) == 2
