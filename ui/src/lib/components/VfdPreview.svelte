@@ -11,16 +11,29 @@
   export let status: Status | null = null;
   export let glyphs: GlyphMap = {};
 
-  // Logical geometry (px) — a true 2x20 of 5x7 cells.
-  const DOT = 6;
-  const DGAP = 3;
-  const CGAP_X = 10;
-  const CGAP_Y = 18;
-  const MARGIN = 22;
-  const cellW = CELL_COLS * DOT + (CELL_COLS - 1) * DGAP;
-  const cellH = CELL_ROWS * DOT + (CELL_ROWS - 1) * DGAP;
-  const W = MARGIN * 2 + LINE_LEN * cellW + (LINE_LEN - 1) * CGAP_X;
-  const H = MARGIN * 2 + 2 * cellH + CGAP_Y;
+  // --- Preview dot geometry (logical px; the canvas is dpr-scaled to fit) -----
+  // All tunable in one place — nudge to match the real glass. The two spacings
+  // are deliberately SEPARATE so the within-glyph dot pitch can be tightened
+  // without changing the gap between characters.
+  const DOT_SIZE = 5.4; // edge length of each (square) dot — real VFD dots are square
+  const DOT_CORNER = 1.2; // corner radius; the panel's square dots are slightly rounded
+  const DOT_PITCH_X = 7; // center-to-center of adjacent dots WITHIN a glyph (X) — tight
+  const DOT_PITCH_Y = 7; // center-to-center of adjacent dots WITHIN a glyph (Y) — tight
+  const CELL_GAP_X = 16; // center gap from a glyph's last col to the next glyph's first
+  //                        col — the CHARACTER spacing (kept as before, looks right)
+  const ROW_GAP_Y = 22; // center gap from the top line's bottom row to the bottom
+  //                       line's top row — keeps the two text rows readable
+  const MARGIN = 16; // dark border around the whole dot matrix
+
+  // Cell-to-cell / line-to-line advances (col0->col0 of the next cell/row).
+  const ADVANCE_X = (CELL_COLS - 1) * DOT_PITCH_X + CELL_GAP_X;
+  const ADVANCE_Y = (CELL_ROWS - 1) * DOT_PITCH_Y + ROW_GAP_Y;
+  const ORIGIN = MARGIN + DOT_SIZE / 2; // center of the top-left dot
+  const W =
+    2 * MARGIN + DOT_SIZE +
+    (LINE_LEN - 1) * ADVANCE_X + (CELL_COLS - 1) * DOT_PITCH_X;
+  const H =
+    2 * MARGIN + DOT_SIZE + (2 - 1) * ADVANCE_Y + (CELL_ROWS - 1) * DOT_PITCH_Y;
 
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
@@ -72,11 +85,13 @@
     drawFrame(top, bottom, bright, glyphs);
   }
 
-  function dot(x: number, y: number, r: number): void {
-    if (r <= 0) return;
-    ctx!.beginPath();
-    ctx!.arc(x, y, r, 0, Math.PI * 2);
-    ctx!.fill();
+  /** A square dot (slightly rounded), centered at (x, y) — matches the panel. */
+  function dotSquare(x: number, y: number, size: number): void {
+    if (size <= 0 || !ctx) return;
+    const half = size / 2;
+    ctx.beginPath();
+    ctx.roundRect(x - half, y - half, size, size, Math.min(DOT_CORNER, half));
+    ctx.fill();
   }
 
   function drawFrame(
@@ -94,35 +109,36 @@
 
     const lines = [topLine, bottomLine].map((l) => lineToCells(l, glyphMap));
     const litFill = isBright ? '#8ffbe4' : '#36d8b4';
-    const litBlur = isBright ? 13 : 7;
+    // Bloom kept modest so tight square dots stay distinct, not merged.
+    const litBlur = isBright ? 10 : 6;
     let litDots = 0;
 
     for (let li = 0; li < 2; li++) {
       const cells = lines[li];
       for (let ci = 0; ci < LINE_LEN; ci++) {
         const cell = cells[ci];
-        const cx0 = MARGIN + ci * (cellW + CGAP_X);
-        const cy0 = MARGIN + li * (cellH + CGAP_Y);
+        const cx0 = ORIGIN + ci * ADVANCE_X;
+        const cy0 = ORIGIN + li * ADVANCE_Y;
         for (let r = 0; r < CELL_ROWS; r++) {
           for (let c = 0; c < CELL_COLS; c++) {
-            const x = cx0 + c * (DOT + DGAP) + DOT / 2;
-            const y = cy0 + r * (DOT + DGAP) + DOT / 2;
+            const x = cx0 + c * DOT_PITCH_X;
+            const y = cy0 + r * DOT_PITCH_Y;
             if (cell[r][c]) {
               litDots++;
               ctx.save();
               ctx.shadowColor = '#3df0c8';
               ctx.shadowBlur = litBlur;
               ctx.fillStyle = litFill;
-              dot(x, y, DOT / 2);
-              // a brighter core for bloom
+              dotSquare(x, y, DOT_SIZE);
+              // a brighter inner core for bloom
               ctx.shadowBlur = 0;
               ctx.fillStyle = isBright ? '#d8fff4' : '#9af0dc';
-              dot(x, y, DOT / 2 - 1.6);
+              dotSquare(x, y, DOT_SIZE - 2.4);
               ctx.restore();
             } else {
               // Unlit phosphor — a faint resting dot.
               ctx.fillStyle = 'rgba(61, 240, 200, 0.055)';
-              dot(x, y, DOT / 2 - 0.4);
+              dotSquare(x, y, DOT_SIZE - 0.6);
             }
           }
         }
