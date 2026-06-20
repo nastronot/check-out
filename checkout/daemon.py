@@ -87,15 +87,20 @@ def _new_ctx() -> dict:
 
 
 def _invalidate_caches(ctx: dict) -> None:
-    """Force display settings + the frame to be re-applied on this tick.
+    """Force display settings + glyphs + the frame to be re-applied.
 
-    Used after any operation that may reset the display (self_test, reset,
-    define_character, reconnect): the cached "already applied" values are
-    cleared so brightness/scroll/code-page and the frame are written again.
+    Used after any operation that may reset the display's internal state
+    (self_test, reset, define_character, reconnect, initialize): the cached
+    "already applied" values are cleared so brightness, vertical-scroll mode,
+    code-page, user glyphs and the frame are all re-sent from state.json on the
+    next tick. Without this the daemon's cache desyncs from the hardware — e.g.
+    a self-test silently turns vertical scroll back ON, but the cache still says
+    "scroll disabled", so 0x11 is never re-sent and the display keeps scrolling.
     """
     ctx["last_brightness"] = None
     ctx["last_scroll"] = None
     ctx["last_code_page"] = None
+    ctx["last_glyphs"] = None
     ctx["last_emit"] = None
 
 
@@ -109,26 +114,34 @@ def _apply_glyphs(driver: VFDDriver, glyphs: dict) -> None:
             log(f"skipping bad glyph {key!r}: {exc}")
 
 
-def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict) -> None:
-    """Execute a one-shot command. All actions are idempotent."""
+def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict) -> bool:
+    """Execute a one-shot command. All actions are idempotent.
+
+    Returns True if the command reset the display's internal state (so the
+    caller skips the rest of this tick and re-applies settings next tick).
+    """
     action = command.get("action")
     if action == "self_test":
         log("command: self_test")
         driver.self_test()       # re-initializes the display itself
         _invalidate_caches(ctx)
+        return True
     elif action == "reset":
         log("command: reset")
         driver.reset()           # re-initializes the display itself
         _invalidate_caches(ctx)
+        return True
     elif action == "redefine_glyphs":
         log("command: redefine_glyphs")
         glyphs = state.get("glyphs") or {}
         _apply_glyphs(driver, glyphs)
-        ctx["last_glyphs"] = dict(glyphs)
         driver.initialize()      # defining glyphs may reset the display
         _invalidate_caches(ctx)
+        ctx["last_glyphs"] = dict(glyphs)  # just defined them; don't re-define
+        return True
     else:
         log(f"command: unknown action {action!r}, ignoring")
+        return False
 
 
 # --- animation ---------------------------------------------------------------
@@ -195,8 +208,15 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     command = state.get("command") or {}
     command_id = command.get("id")
     if command_id is not None and command_id != ctx["last_command_id"]:
-        _run_command(driver, command, state, ctx)
+        did_reset = _run_command(driver, command, state, ctx)
         ctx["last_command_id"] = command_id
+        if did_reset:
+            # A self-test/reset can swallow writes sent immediately after it
+            # (the panel is still re-initializing). Skip the rest of this tick;
+            # caches were invalidated, so the NEXT tick re-applies scroll mode,
+            # brightness, code-page and glyphs from state.json — the display
+            # can't stay stuck in vertical-scroll (or any stale mode) afterward.
+            return
 
     # 3. user glyphs (re-define on change; defining may reset the display, so
     # re-init + re-apply afterward — but only when there are glyphs to define).
@@ -324,8 +344,8 @@ def run(dry_run: bool = False, once: bool = False) -> int:
                 if reconnected is None:
                     break
                 driver = reconnected
-                # Fresh display: re-apply everything (glyphs included) next tick.
-                ctx["last_glyphs"] = None
+                # Fresh display (open() re-initialized it): re-apply everything —
+                # settings AND glyphs — on the next tick.
                 _invalidate_caches(ctx)
                 continue
             time.sleep(tick)
