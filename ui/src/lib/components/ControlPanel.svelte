@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { lineBudget } from '../message';
   import type { AppState, Animation, Brightness, Mode } from '../types';
 
   export let state: AppState | null = null;
@@ -30,8 +31,8 @@
     msgTimer = setTimeout(() => patch({ message: messageDraft }), 250);
   }
 
-  $: budget = messageDraft.length;
-  $: overBudget = budget > 40;
+  // Per-line budget (20 chars/line; a '\n' splits top/bottom). Never strips '\n'.
+  $: budget = lineBudget(messageDraft);
 
   // Typed handlers. Svelte parses markup expressions with acorn (not TS), so no
   // casts/annotations can live in the template — keep all TS in here.
@@ -89,18 +90,27 @@
     <div class="field">
       <span class="field__label">
         Message
-        <span class:over={overBudget}>{budget}/40</span>
+        {#if budget.hasNewline}
+          <span class="budget">
+            <span class:over={budget.topOver}>top {budget.top}/20</span>
+            <span class="sep">·</span>
+            <span class:over={budget.bottomOver}>bottom {budget.bottom}/20</span>
+          </span>
+        {:else}
+          <span class:over={budget.topOver}>{budget.top}/20</span>
+        {/if}
       </span>
-      <input
-        type="text"
+      <textarea
+        rows="2"
         bind:value={messageDraft}
         on:input={onMessageInput}
-        placeholder="drives message / ticker"
+        placeholder="message (Enter = line break)"
         spellcheck="false"
-      />
+      ></textarea>
       <span class="field__hint">
-        Use <code>{'{g0}'}</code>…<code>{'{g8}'}</code> to drop in custom glyphs
-        (light up once defined). Newline splits the two lines in message mode.
+        Press <kbd>Enter</kbd> for a line break (splits top/bottom). Use
+        <code>{'{g0}'}</code>…<code>{'{g8}'}</code> for custom glyphs (light up
+        once defined).
       </span>
     </div>
 
@@ -228,5 +238,30 @@
 
   .field__label .over {
     font-weight: 600;
+  }
+
+  .budget {
+    display: inline-flex;
+    gap: 5px;
+  }
+
+  .budget .sep {
+    color: var(--text-faint);
+  }
+
+  textarea {
+    /* keep both display lines visible; no horizontal wrap surprises */
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--phosphor);
+    background: #04090a;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0 4px;
   }
 </style>
