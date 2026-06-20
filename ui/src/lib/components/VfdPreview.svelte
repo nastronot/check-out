@@ -24,17 +24,44 @@
 
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
+  let ro: ResizeObserver | undefined;
+  let lastCssW = -1;
+  let selfChecked = false;
 
   onMount(() => {
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(W * dpr);
-    canvas.height = Math.round(H * dpr);
+    // Init order: get the 2D context, size the buffer, THEN draw. Drawing into
+    // an unsized (0x0) canvas paints nothing — size first.
     ctx = canvas.getContext('2d');
-    ctx?.scale(dpr, dpr);
-    draw();
+    resize();
+    // Re-size + redraw when the element's box changes (responsive + crisp).
+    ro = new ResizeObserver(() => resize());
+    ro.observe(canvas);
+    return () => ro?.disconnect();
   });
 
-  // Redraw whenever the mirrored status or glyph bitmaps change.
+  /** Size the drawing buffer to the rendered width (×dpr) and redraw. */
+  function resize(): void {
+    if (!canvas || !ctx) return;
+    const cssW = canvas.clientWidth || W; // rendered CSS px (fallback pre-layout)
+    if (cssW === lastCssW) {
+      draw();
+      return;
+    }
+    lastCssW = cssW;
+    const dpr = window.devicePixelRatio || 1;
+    const cssH = (cssW * H) / W; // preserve the 2x20 aspect
+    // Explicit CSS height so the element never collapses to 0; buffer is dpr-scaled.
+    canvas.style.height = `${cssH}px`;
+    canvas.width = Math.max(1, Math.round(cssW * dpr));
+    canvas.height = Math.max(1, Math.round(cssH * dpr));
+    // Map logical (W x H) coords -> device pixels (setting width above reset the
+    // transform, so set it fresh — never accumulate).
+    const s = (cssW / W) * dpr;
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+    draw();
+  }
+
+  // Redraw whenever the mirrored status or glyph bitmaps change (every poll).
   $: if (ctx) {
     void status;
     void glyphs;
@@ -42,6 +69,7 @@
   }
 
   function dot(x: number, y: number, r: number): void {
+    if (r <= 0) return;
     ctx!.beginPath();
     ctx!.arc(x, y, r, 0, Math.PI * 2);
     ctx!.fill();
@@ -54,7 +82,7 @@
     const bottom = blank ? '' : status?.bottom ?? '';
     const bright = status?.brightness !== 'dim';
 
-    // Glass backdrop.
+    // Glass backdrop (logical coords; the transform maps them to the buffer).
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#03090a';
     ctx.fillRect(0, 0, W, H);
@@ -62,6 +90,7 @@
     const lines = [top, bottom].map((l) => lineToCells(l, glyphs));
     const litFill = bright ? '#8ffbe4' : '#36d8b4';
     const litBlur = bright ? 13 : 7;
+    let litDots = 0;
 
     for (let li = 0; li < 2; li++) {
       const cells = lines[li];
@@ -74,6 +103,7 @@
             const x = cx0 + c * (DOT + DGAP) + DOT / 2;
             const y = cy0 + r * (DOT + DGAP) + DOT / 2;
             if (cell[r][c]) {
+              litDots++;
               ctx.save();
               ctx.shadowColor = '#3df0c8';
               ctx.shadowBlur = litBlur;
@@ -85,7 +115,7 @@
               dot(x, y, DOT / 2 - 1.6);
               ctx.restore();
             } else {
-              // Unlit phosphor — a faint resting dot, dimmer when bright is high.
+              // Unlit phosphor — a faint resting dot.
               ctx.fillStyle = 'rgba(61, 240, 200, 0.055)';
               dot(x, y, DOT / 2 - 0.4);
             }
@@ -93,12 +123,29 @@
         }
       }
     }
+
+    // Dev self-check: confirm the first non-empty frame actually lit dots.
+    if (import.meta.env.DEV && !selfChecked && (top + bottom).trim()) {
+      selfChecked = true;
+      // eslint-disable-next-line no-console
+      console.info(
+        `[VfdPreview] first frame rendered: ${litDots} lit dots, ` +
+          `buffer ${canvas.width}x${canvas.height}`,
+      );
+      if (litDots === 0) {
+        // eslint-disable-next-line no-console
+        console.warn('[VfdPreview] non-empty status but 0 lit dots — check font/data');
+      }
+    }
   }
 </script>
 
 <div class="vfd" class:vfd--blank={status?.blank}>
   <div class="vfd__glass">
-    <canvas bind:this={canvas} style="aspect-ratio: {W} / {H};" aria-hidden="true"
+    <canvas
+      bind:this={canvas}
+      style="aspect-ratio: {W} / {H};"
+      aria-hidden="true"
     ></canvas>
     <div class="vfd__scan" aria-hidden="true"></div>
     <div class="vfd__bloom" aria-hidden="true"></div>
@@ -135,7 +182,8 @@
   canvas {
     display: block;
     width: 100%;
-    height: auto;
+    /* JS sets an explicit pixel height (and the dpr-scaled buffer) on mount /
+       resize; the inline aspect-ratio is only a fallback for the first paint. */
   }
 
   /* faint scanlines — preview only */

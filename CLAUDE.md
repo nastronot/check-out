@@ -293,6 +293,10 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v0.4.1:** fixed the UI build (it shipped uncompiled) — `lang="ts"` + typed
   handlers (no inline TS casts in markup), a11y clean; added `npm run verify`
   (svelte-check + vitest + vite build) as the mandatory pre-commit gate.
+- **v0.4.2:** VfdPreview now renders live status — canvas buffer sized via
+  ResizeObserver (ctx → size → draw, dpr-scaled, never 0×0) with reactive redraw
+  each poll. Daemon coerces an invalid brightness to "bright" once (no per-tick
+  log spam). Added a favicon.
 
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):
