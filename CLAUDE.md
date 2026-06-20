@@ -126,8 +126,8 @@ port owner). The web UI is just a writer of this file.
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
   "code_page": 0,                  // 0..11
   "scroll_speed_ms": 300,          // ticker software-scroll step
-  "animation": "none" | "flash" | "blink",
-  "animation_params": { "on_ms": 500, "off_ms": 500 },
+  "animation": "none" | "flash" | "blink" | "pulse",
+  "animation_params": { "on_ms": 500, "off_ms": 500, "step_ms": 200 },  // step_ms times pulse
   "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 glyphs; 7 ints, low 5 bits = cols 1..5
   // place a glyph in `message` with {g0}..{g8}
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
@@ -163,13 +163,19 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
   `render_lines` fit step on RENDERED cells (a `{gN}` glyph counts as one cell);
   the daemon coerces an invalid value to `center`. Ticker's scrolling top line is
   20 cells wide so alignment is a no-op there.
-- **Animations:** `none` (show when changed), `flash` (alternate frame / real
-  `blank()` — display goes fully DARK), `blink` (PULSES brightness: the frame
-  stays up but dims to MIN on the off-phase — distinct from flash), timed by
-  `animation_params.on_ms`/`off_ms`. The daemon writes the on-glass result to
-  status.json each tick (blank top/bottom for flash-off, pulsed `brightness` for
-  blink), so the preview animates both. blink folds into the brightness step, so
-  it needs no frame redraw.
+- **Animations** (4): `none` (show when changed); `flash` (alternate frame /
+  real `blank()` — display goes fully DARK); `blink` (2-state brightness snap —
+  the frame stays up but dims to MIN on the off-phase); `pulse` (a stepped
+  **triangle-wave brightness sweep** `0→1→2→3→2→1→…` — a breathing effect that
+  OVERRIDES the static brightness while active). `flash`/`blink` are timed by
+  `animation_params.on_ms`/`off_ms`; `pulse` by `animation_params.step_ms`
+  (default 200 → ~1.2 s full sweep). blink/pulse fold into the brightness step
+  (no frame redraw). The daemon writes the on-glass result to status.json each
+  tick (blank top/bottom for flash-off, the applied `brightness` for blink/pulse),
+  so the preview animates all of them with no preview-side change.
+  > **invert** was intentionally NOT added: a character VFD with 9 glyph slots
+  > can't do a true per-pixel invert for arbitrary text, and a flooded
+  > approximation would just look like a worse flash.
 
 > **Re-init rule:** after `self_test()`, `reset()`, or `define_character()` the
 > display may drop extended-mode/scroll-off, so `initialize()` is re-run before
@@ -413,6 +419,10 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v0.7.1:** drag-and-drop glyph library — drag a glyph onto a slot to load it,
   drag within the library to reorder (`/api/library/glyphs/order`); removed the
   `→gN` buttons; click/tap fallback keeps it touch/keyboard-reachable.
+- **v0.7.2:** `pulse` animation — a stepped triangle-wave brightness sweep
+  (`0→3→0`, `animation_params.step_ms`) that breathes through the 4 levels;
+  PULSE added to the animation control. invert intentionally omitted (hardware
+  can't per-pixel invert arbitrary text).
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

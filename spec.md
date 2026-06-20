@@ -231,8 +231,8 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
   "code_page": 0,                  // 0..11
   "scroll_speed_ms": 300,          // ticker software-scroll step
-  "animation": "none" | "flash" | "blink",
-  "animation_params": { "on_ms": 500, "off_ms": 500 },
+  "animation": "none" | "flash" | "blink" | "pulse",
+  "animation_params": { "on_ms": 500, "off_ms": 500, "step_ms": 200 },
   "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 glyphs; 7 ints, low 5 bits = cols 1..5
   // place a glyph in `message` with {g0}..{g8}
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
@@ -269,12 +269,16 @@ cells (a `{gN}` glyph is one cell). The daemon coerces an invalid value to `cent
 ticker's scrolling top line is already 20 cells wide, so alignment is a no-op there;
 a static bottom line honors `align_bottom`.
 
-**Animations** (timed by `animation_params.on_ms`/`off_ms`): `none` (show on change);
-`flash` (alternate the frame with a real `blank()` — display goes fully DARK); `blink`
-(PULSE — the frame stays up but brightness dims to MIN on the off-phase, then back,
-v0.7.0). blink folds into the brightness step (no frame redraw). The daemon writes the
-on-glass result to status.json each tick — blank top/bottom for flash-off, the pulsed
-`brightness` for blink — so the preview animates both.
+**Animations (4):** `none` (show on change); `flash` (alternate the frame with a real
+`blank()` — display goes fully DARK, timed by `on_ms`/`off_ms`); `blink` (2-state
+brightness snap — the frame stays up but dims to MIN on the off-phase, `on_ms`/`off_ms`,
+v0.7.0); `pulse` (a 4-level stepped **triangle-wave brightness sweep** `0→1→2→3→2→1→…`,
+one level per `animation_params.step_ms` ≈ 1.2 s full sweep — a breathing effect that
+OVERRIDES the static brightness, v0.7.2). blink/pulse fold into the brightness step (no
+frame redraw). The daemon writes the on-glass result to status.json each tick — blank
+top/bottom for flash-off, the applied `brightness` for blink/pulse — so the preview
+animates all of them. **invert** was intentionally skipped: a character VFD (9 glyph
+slots) can't do a true per-pixel invert for arbitrary text.
 
 **Re-init rule.** After `self_test()`, `reset()`, or `define_character()` the display may
 drop extended-mode/scroll-off; `initialize()` is re-run before the next `show()`. The
