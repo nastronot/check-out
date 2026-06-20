@@ -3,6 +3,7 @@
 export type Mode = 'clock' | 'message' | 'ticker';
 export type Brightness = 'dim' | 'bright';
 export type Animation = 'none' | 'flash' | 'blink';
+export type Align = 'left' | 'center' | 'right';
 
 /** {"0".."8"} -> 7 row ints (low 5 bits = columns 1..5). Shared with state.glyphs. */
 export type GlyphMap = Record<string, number[]>;
@@ -16,6 +17,8 @@ export interface CommandRef {
 export interface AppState {
   mode: Mode;
   message: string;
+  align_top: Align;
+  align_bottom: Align;
   brightness: Brightness;
   blank: boolean;
   scroll: boolean;

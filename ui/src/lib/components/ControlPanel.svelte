@@ -1,6 +1,6 @@
 <script lang="ts">
   import { lineBudget } from '../message';
-  import type { AppState, Animation, Brightness, Mode } from '../types';
+  import type { Align, AppState, Animation, Brightness, Mode } from '../types';
 
   export let state: AppState | null = null;
   export let patch: (p: Partial<AppState>) => void;
@@ -8,6 +8,7 @@
   const MODES: Mode[] = ['clock', 'message', 'ticker'];
   const BRIGHTNESSES: Brightness[] = ['dim', 'bright'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink'];
+  const ALIGNS: Align[] = ['left', 'center', 'right'];
   const CODE_PAGES: { value: number; label: string }[] = [
     { value: 0, label: 'Default' },
     { value: 1, label: 'Japanese' },
@@ -44,6 +45,8 @@
   }
 
   const setMode = (m: Mode) => patch({ mode: m });
+  const setAlignTop = (a: Align) => patch({ align_top: a });
+  const setAlignBottom = (a: Align) => patch({ align_bottom: a });
   const setBrightness = (b: Brightness) => patch({ brightness: b });
   const setAnimation = (a: Animation) => patch({ animation: a });
   const setBlank = (e: Event) => patch({ blank: checked(e) });
@@ -112,6 +115,37 @@
         <code>{'{g0}'}</code>…<code>{'{g8}'}</code> for custom glyphs (light up
         once defined).
       </span>
+    </div>
+
+    <!-- Per-line alignment -->
+    <div class="field">
+      <span class="field__label">Justify</span>
+      <div class="align-rows">
+        <div class="align-row">
+          <span class="align-row__label">Line 1</span>
+          <div class="seg seg--sm">
+            {#each ALIGNS as a}
+              <button
+                type="button"
+                aria-pressed={state.align_top === a}
+                on:click={() => setAlignTop(a)}>{a}</button
+              >
+            {/each}
+          </div>
+        </div>
+        <div class="align-row">
+          <span class="align-row__label">Line 2</span>
+          <div class="seg seg--sm">
+            {#each ALIGNS as a}
+              <button
+                type="button"
+                aria-pressed={state.align_bottom === a}
+                on:click={() => setAlignBottom(a)}>{a}</button
+              >
+            {/each}
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Brightness + scroll -->
@@ -243,6 +277,30 @@
   .budget {
     display: inline-flex;
     gap: 5px;
+  }
+
+  .align-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .align-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .align-row__label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--text-mute);
+    min-width: 44px;
+  }
+
+  .seg--sm button {
+    padding: 6px 12px;
+    font-size: 11px;
   }
 
   .budget .sep {
