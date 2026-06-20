@@ -1,0 +1,331 @@
+/* check-out control surface — blue-green VFD phosphor on black.
+   Aesthetic: the faceplate of POS / rack gear. Thin rules, monospaced labels,
+   subtle panel bevels, restrained glow. Not skeuomorphic-kitsch — lab gear. */
+
+:root {
+  --bg: #05080a;
+  --bg-panel: #0a1012;
+  --bg-panel-hi: #0e1619;
+  --bezel: #1d2a2c;
+  --bezel-hi: #2c3f41;
+  --rule: #15201f;
+
+  --phosphor: #3df0c8;        /* the VFD blue-green */
+  --phosphor-dim: #1c5a4e;
+  --phosphor-deep: #0c3128;
+  --phosphor-ink: #8ffbe4;    /* bright text */
+  --amber-warn: #f0b23d;
+  --red-dead: #f0553d;
+
+  --text: #b8d8d2;
+  --text-mute: #5f8079;
+  --text-faint: #3a544f;
+
+  --mono: 'DejaVu Sans Mono', 'SFMono-Regular', 'Menlo', 'Consolas',
+    ui-monospace, monospace;
+
+  --shadow-inset: inset 0 1px 0 rgba(140, 220, 200, 0.05),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, #0a1417 0%, var(--bg) 60%) fixed;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100%;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  margin: 0;
+}
+
+a {
+  color: var(--phosphor);
+}
+
+/* --- panels ------------------------------------------------------------- */
+.panel {
+  background: linear-gradient(180deg, var(--bg-panel-hi), var(--bg-panel));
+  border: 1px solid var(--bezel);
+  border-radius: 6px;
+  box-shadow: var(--shadow-inset), 0 2px 8px rgba(0, 0, 0, 0.5);
+  padding: 14px 16px 16px;
+}
+
+.panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-mute);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.panel__title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor);
+}
+
+.panel--disabled {
+  opacity: 0.55;
+  filter: saturate(0.5);
+}
+
+.panel--disabled .panel__title::before {
+  background: var(--text-faint);
+  box-shadow: none;
+}
+
+/* --- form fields -------------------------------------------------------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field__label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.field__hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+input[type='text'],
+input[type='number'],
+select {
+  background: #04090a;
+  color: var(--phosphor-ink);
+  border: 1px solid var(--bezel);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 14px;
+  box-shadow: var(--shadow-inset);
+  outline: none;
+}
+
+input[type='text']:focus,
+input[type='number']:focus,
+select:focus {
+  border-color: var(--phosphor-dim);
+  box-shadow: var(--shadow-inset), 0 0 0 2px rgba(61, 240, 200, 0.12);
+}
+
+input[type='number'] {
+  width: 88px;
+}
+
+/* --- segmented control -------------------------------------------------- */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--bezel);
+  border-radius: 5px;
+  overflow: hidden;
+  background: #04090a;
+  box-shadow: var(--shadow-inset);
+}
+
+.seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-right: 1px solid var(--bezel);
+  transition: color 0.12s, background 0.12s;
+}
+
+.seg button:last-child {
+  border-right: 0;
+}
+
+.seg button:hover {
+  color: var(--text);
+}
+
+.seg button[aria-pressed='true'] {
+  color: var(--bg);
+  background: var(--phosphor);
+  text-shadow: none;
+  box-shadow: 0 0 12px rgba(61, 240, 200, 0.4);
+}
+
+/* --- toggle switch ------------------------------------------------------ */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch__track {
+  width: 42px;
+  height: 22px;
+  border-radius: 12px;
+  background: #04090a;
+  border: 1px solid var(--bezel);
+  box-shadow: var(--shadow-inset);
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-mute);
+  transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.switch input:checked + .switch__track {
+  border-color: var(--phosphor-dim);
+  background: var(--phosphor-deep);
+}
+
+.switch input:checked + .switch__track::after {
+  transform: translateX(20px);
+  background: var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor);
+}
+
+.switch__label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+/* --- buttons ------------------------------------------------------------ */
+.btn {
+  appearance: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--phosphor-ink);
+  background: linear-gradient(180deg, var(--bg-panel-hi), #060d0e);
+  border: 1px solid var(--bezel-hi);
+  border-radius: 5px;
+  padding: 10px 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow-inset);
+  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+
+.btn:hover {
+  border-color: var(--phosphor-dim);
+  box-shadow: var(--shadow-inset), 0 0 10px rgba(61, 240, 200, 0.15);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--danger {
+  color: var(--red-dead);
+  border-color: #4a221c;
+}
+
+.btn--danger:hover {
+  border-color: var(--red-dead);
+  box-shadow: var(--shadow-inset), 0 0 10px rgba(240, 85, 61, 0.2);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- misc --------------------------------------------------------------- */
+.led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-faint);
+}
+
+.led--on {
+  background: var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor);
+}
+
+.led--dead {
+  background: var(--red-dead);
+  box-shadow: 0 0 8px rgba(240, 85, 61, 0.6);
+}
+
+.tag {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
