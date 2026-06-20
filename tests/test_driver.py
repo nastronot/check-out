@@ -3,7 +3,7 @@
 import pytest
 
 from checkout import config
-from checkout.driver import CURSOR_OFF, VFDDriver
+from checkout.driver import CURSOR_OFF, GLYPH_CODES, VFDDriver, glyph_code
 
 
 def capture_bytes(capsys) -> list[int]:
@@ -69,34 +69,56 @@ def test_set_vertical_scroll_enable(driver, capsys):
     assert capture_bytes(capsys) == [0x12]
 
 
-def test_define_character_sequence(driver, capsys):
+def test_define_character_sequence_translates_rows(driver, capsys):
     rows = [0x1F, 0x11, 0x11, 0x1F, 0x04, 0x04, 0x04]
     driver.define_character(3, rows)
-    # 0x03 <index> <7 row bytes> 0x00
-    assert capture_bytes(capsys) == [0x03, 0x03, *rows, 0x00]
+    # 0x03 <code> <7 translated rows (row & 0x1F) << 3> 0x00.
+    expected = [(r & 0x1F) << 3 for r in rows]
+    assert capture_bytes(capsys) == [0x03, GLYPH_CODES[3], *expected, 0x00]
+    assert GLYPH_CODES[3] == 0x18
 
 
-def test_define_character_masks_rows_to_low_5_bits(driver, capsys):
-    # 0xFF must be masked to 0x1F so a row byte never looks like a control code.
-    driver.define_character(0, [0xFF] * 7)
-    assert capture_bytes(capsys) == [0x03, 0x00, *([0x1F] * 7), 0x00]
+def test_define_character_column_bit_mapping(driver, capsys):
+    # Full row -> 0xF8; col1 (bit0) -> 0x08; col5 (bit4) -> 0x80.
+    driver.define_character(0, [0x1F, 0x01, 0x10, 0, 0, 0, 0])
+    data = capture_bytes(capsys)
+    assert data[0:2] == [0x03, 0x15]          # define glyph slot 0 -> code 0x15
+    assert data[2] == 0xF8                     # 0x1F << 3
+    assert data[3] == 0x08                     # col 1
+    assert data[4] == 0x80                     # col 5
+    assert data[-1] == 0x00
 
 
 def test_define_character_validates(driver):
     with pytest.raises(ValueError):
-        driver.define_character(9, [0] * 7)       # index out of range
+        driver.define_character(9, [0] * 7)       # slot out of range
     with pytest.raises(ValueError):
         driver.define_character(0, [0] * 6)       # wrong row count
 
 
-def test_select_code_page_sequence(driver, capsys):
+def test_glyph_code_maps_slots_to_noncontiguous_codes():
+    assert glyph_code(0) == 0x15
+    assert glyph_code(6) == 0x1C   # 0x1B is skipped
+    assert glyph_code(8) == 0x1E
+    with pytest.raises(ValueError):
+        glyph_code(9)
+
+
+def test_select_code_page_int_sequence(driver, capsys):
     driver.select_code_page(5)
     assert capture_bytes(capsys) == [0x02, 0x05]
+
+
+def test_select_code_page_by_name(driver, capsys):
+    driver.select_code_page("cp850")
+    assert capture_bytes(capsys) == [0x02, 0x02]
 
 
 def test_select_code_page_validates(driver):
     with pytest.raises(ValueError):
         driver.select_code_page(12)
+    with pytest.raises(ValueError):
+        driver.select_code_page("nonsense")
 
 
 def test_self_test_reruns_initialize(driver, capsys):

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from checkout.driver import GLYPH_CODES
 from checkout.frames.message import MessageFrame, _wrap_two_lines
 from checkout.frames.ticker import TickerFrame
 from checkout.renderer import ticker_window
@@ -57,3 +58,25 @@ def test_ticker_window_cycle_is_consistent():
     gap = 4
     n = len(text) + gap
     assert ticker_window(text, n) == ticker_window(text, 0)
+
+
+def test_message_glyph_placeholder_substitution():
+    top, bottom = MessageFrame().render(NOW, {"message": "HI {g0}"})
+    # {g0} becomes the single glyph code char for slot 0 (0x15).
+    assert chr(GLYPH_CODES[0]) in top
+    assert "{g0}" not in top
+    # The placeholder collapses to ONE column (4 source chars -> 1 glyph).
+    assert top == "HI " + chr(GLYPH_CODES[0])
+
+
+def test_message_glyph_placeholder_newline_split():
+    top, bottom = MessageFrame().render(NOW, {"message": "{g8}\n{g6}"})
+    assert top == chr(GLYPH_CODES[8])   # slot 8 -> 0x1E
+    assert bottom == chr(GLYPH_CODES[6])  # slot 6 -> 0x1C (0x1B skipped)
+
+
+def test_ticker_glyph_placeholder_substitution():
+    msg = "scrolling status with a glyph {g3} mixed into the long text here"
+    top, _ = TickerFrame().render(NOW, {"message": msg, "scroll_speed_ms": 100})
+    assert "{g3}" not in top
+    assert len(top) == 20
