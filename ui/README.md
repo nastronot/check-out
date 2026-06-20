@@ -65,7 +65,14 @@ inside `{...}`; move them into typed handler functions in `<script lang="ts">`.)
 
 ## Credits
 
-The 5×7 preview charset (`src/lib/font5x7.ts`) is the real Futaba M202MD10C font,
-decoded from the per-character display photos in
-[Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
-(public domain, Unlicense).
+- The 5×7 preview charset (`src/lib/font5x7.ts`) is the real Futaba M202MD10C
+  font, decoded from the per-character display photos in
+  [Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
+  (public domain, Unlicense).
+- The display command protocol (used by the daemon this UI drives) comes from
+  [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
+  (MIT) — command set, extended-mode init, glyph codes, brightness/code-page
+  commands; extended-mode discovery credited to `abomin`.
+
+These are published facts (command bytes, glyph bitmaps), independently
+bench-confirmed on our unit; the code here is original.

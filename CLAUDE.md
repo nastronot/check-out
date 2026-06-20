@@ -309,13 +309,22 @@ sudo usermod -aG uucp "$USER"   # then re-login
   dot-for-dot (e.g. 'A' lights 16 dots, not the placeholder's 18).
 
 ## Credits / third-party
-- **Command set:** SNMetamorph `FutabaVfdM202MD10C` library + the abomin
-  "extended mode" discovery (see §3 in spec.md).
+- **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
+  (**MIT**) — the authoritative Futaba M202MD10C command protocol. The
+  extended-mode initialization (`0x00 0x01`) that resolved the vertical-scroll
+  behavior, the 9 user-glyph codes (`0x15`–`0x1E`), and the brightness /
+  code-page / cursor / reset commands were all derived from this library's
+  published source. The extended-mode discovery is credited to `abomin` in that
+  library. (See §3 in spec.md.)
 - **Preview charset:** the 5×7 glyph bitmaps in `ui/src/lib/font5x7.ts` were
   extracted from the character photos in
   [Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
   (`charsetweb/cropped_<ascii>.jpg`), released into the public domain
   (**Unlicense**). Decoded by sampling each photo's 5×7 dot grid.
+
+This project uses these projects' **published facts** — command bytes and glyph
+bitmaps — each **independently bench-confirmed on our unit**. The driver and all
+other code here is original Python.
 
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):

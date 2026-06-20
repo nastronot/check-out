@@ -54,3 +54,17 @@ python -m pytest
 
 See [CLAUDE.md](CLAUDE.md) for the full hardware reference (command bytes,
 addressing table, pin map), the architecture, and the roadmap.
+
+## Credits
+
+- **Command set** — [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
+  (MIT): the authoritative Futaba M202MD10C protocol — command bytes, the
+  extended-mode init (`0x00 0x01`) that fixed the vertical-scroll behavior, the 9
+  user-glyph codes (`0x15`–`0x1E`), and the brightness/code-page/cursor/reset
+  commands. Extended-mode discovery credited to `abomin`.
+- **Preview charset** — [Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
+  (Unlicense): the real 5×7 glyph bitmaps, decoded from its per-character display
+  photos.
+
+These are published facts (command bytes, glyph bitmaps), independently
+bench-confirmed on our unit; the driver and all other code here is original.
