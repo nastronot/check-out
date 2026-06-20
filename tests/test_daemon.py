@@ -210,6 +210,32 @@ def test_blank_state_blanks_once_then_latches(monkeypatch):
     assert drv.shows == 0
 
 
+def test_status_heartbeat_advances_without_re_pushing_display(monkeypatch):
+    """Liveness (status heartbeat) is separate from content change (serial writes).
+
+    With identical content across ticks, status.json is still rewritten each tick
+    (heartbeat advances, so the UI stays ALIVE), but the display is drawn only
+    once — emit-diffing to the serial port is preserved.
+    """
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock"}
+    t = datetime(2026, 6, 19, 12, 0, 0)  # same instant -> identical top/bottom
+
+    daemon.tick_once(drv, state, ctx, now=t)
+    daemon.tick_once(drv, state, ctx, now=t)
+    daemon.tick_once(drv, state, ctx, now=t)
+
+    # Status written EVERY tick with a monotonically increasing heartbeat...
+    assert [s["heartbeat"] for s in written] == [1, 2, 3]
+    assert all(s["alive"] is True for s in written)
+    # ...while the display was pushed only ONCE (unchanged frame not re-sent).
+    assert drv.shows == 1
+    assert drv.blanks == 0
+
+
 def test_invalid_brightness_coerced_once_no_spam(monkeypatch):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     warnings = []
