@@ -46,5 +46,19 @@ npm run test
 npm run check
 ```
 
-> Requires Node 18+. Docker packaging is Phase 3; the build output (`dist/`) is
-> static and served by the FastAPI process in production.
+## Verify before committing (required)
+
+**Run `npm run verify` before committing any UI change.** It runs the full gate
+and must pass with zero errors (and no A11y warnings):
+
+```bash
+npm run verify   # svelte-check  &&  vitest run  &&  vite build
+```
+
+This is mandatory — UI code was once committed without compiling. Treat a red
+`verify` like a failing test: fix it before you commit. (Common gotcha: Svelte
+parses markup expressions with acorn, not TypeScript — no `as`/type annotations
+inside `{...}`; move them into typed handler functions in `<script lang="ts">`.)
+
+> Requires Node 18+ (this repo is on Node 22 via nvm). Docker packaging is
+> Phase 3; the build output (`dist/`) is static and served by FastAPI in prod.

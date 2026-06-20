@@ -227,6 +227,24 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
 
 See `web/README.md` and `ui/README.md` for run instructions.
 
+### UI toolchain + verify loop (MANDATORY)
+The UI is Svelte 4 + Vite 5 + TypeScript, built/tested with Node (Node 22 via nvm
+in this repo). Scripts in `ui/package.json`:
+- `npm run build` — `vite build` → `ui/dist`
+- `npm run check` — `svelte-check` (type + a11y)
+- `npm run test`  — `vitest run` (pure font/render helpers, DOM-free)
+- `npm run verify` — `svelte-check && vitest run && vite build` (the gate)
+
+**RULE: every UI change must pass `npm run verify` (zero errors, no A11y
+warnings) before commit.** v0.4.0 shipped UI that never compiled; v0.4.1 fixed it
+and added this gate. Do not commit `.svelte`/`ui` changes you haven't built.
+
+Gotcha that caused v0.4.0: Svelte parses markup expressions with acorn, **not**
+TypeScript — no `as`/type annotations inside `{...}`. Keep all TS (casts, typed
+params) in `<script lang="ts">` handler functions and call them from markup. Use
+real `<button type="button">`/`<label>` controls (not `aria-disabled` on a
+`<section>`) to keep svelte-check's a11y pass clean.
+
 ## Versioning
 Semver `major.minor.patch` read as **"big.small.bug"**.
 
@@ -272,6 +290,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v0.4.0:** web control surface — FastAPI (`web/`) over the JSON files +
   Svelte phosphor UI (`ui/`) with the live preview and core controls. Daemon
   untouched. `checkout.state` gained `load_status` + `merge_patch` for reuse.
+- **v0.4.1:** fixed the UI build (it shipped uncompiled) — `lang="ts"` + typed
+  handlers (no inline TS casts in markup), a11y clean; added `npm run verify`
+  (svelte-check + vitest + vite build) as the mandatory pre-commit gate.
 
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):
