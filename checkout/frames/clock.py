@@ -17,17 +17,22 @@ _MONTHS = (
 )
 
 
+def clock_date(now: datetime) -> str:
+    """``DD MON YYYY`` (locale-independent), e.g. ``05 JUN 2026``."""
+    return f"{now.day:02d} {_MONTHS[now.month - 1]} {now.year}"
+
+
+def clock_time(now: datetime) -> str:
+    """12-hour ``HH:MM:SS AM/PM`` (12 at midnight/noon), e.g. ``08:47:03 PM``."""
+    hour12 = now.hour % 12 or 12
+    meridiem = "AM" if now.hour < 12 else "PM"
+    return f"{hour12:02d}:{now.minute:02d}:{now.second:02d} {meridiem}"
+
+
 class ClockFrame(Frame):
     name = "clock"
 
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
-        top = f"{now.day:02d} {_MONTHS[now.month - 1]} {now.year}"
-
-        # 12-hour clock: 12 at midnight/noon (not 00), AM/PM uppercase.
-        hour12 = now.hour % 12 or 12
-        meridiem = "AM" if now.hour < 12 else "PM"
-        bottom = f"{hour12:02d}:{now.minute:02d}:{now.second:02d} {meridiem}"
-
         # Logical strings; the renderer fits them to 20 cells with the active
         # per-line alignment (align_top / align_bottom).
-        return top, bottom
+        return clock_date(now), clock_time(now)

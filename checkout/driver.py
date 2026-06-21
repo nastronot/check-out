@@ -26,7 +26,9 @@ EXTENDED_MODE = 0x00            # + 0x01 enable / 0x00 disable
 SELECT_CODE_PAGE = 0x02         # + page byte (12 pages)        — wire later
 DEFINE_CHARACTER = 0x03         # + index + 7 bytes + 0x00 (9 user glyphs) — later
 DIMMING_MODE = 0x04            # + level byte (brightness)
-PRINT_TICKER_TEXT = 0x05        # hardware ticker, 45-char buffer — wire later
+PRINT_TICKER_TEXT = 0x05        # hardware ticker (top row); + text + 0x0D to start
+TICKER_END = 0x0D               # terminates/starts the ticker buffer
+TICKER_MAX = 45                 # hardware ticker buffer is 45 chars
 BACKSPACE = 0x08
 SELF_TEST = 0x0F
 DISPLAY_POSITION = 0x10         # + position byte = col + row*20
@@ -355,6 +357,31 @@ class VFDDriver:
         buf += bottom_b
         buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
         self._write(bytes(buf))
+
+    def show_bottom(self, bottom: str) -> None:
+        """Update ONLY the bottom row, leaving the top untouched.
+
+        Emits ``0x10 0x14 <20 ASCII bytes> 0x14``. Bench-confirmed that writing
+        the bottom row does NOT disturb a running hardware ticker on the top row,
+        so this is how marquee mode refreshes its clock/static bottom line without
+        re-kicking the ticker.
+        """
+        bottom_b = _sanitize(_pad(bottom))   # exactly 20 bytes
+        buf = bytes([DISPLAY_POSITION, POS_BOTTOM]) + bottom_b + bytes([CURSOR_OFF])
+        self._write(buf)
+
+    def start_ticker(self, text: str) -> None:
+        """Start the autonomous HARDWARE ticker on the TOP row (0x05 ... 0x0D).
+
+        Emits ``0x05 <text, truncated to 45 chars> 0x0D``. The display then
+        scrolls that text on the top row by itself at its FIXED medium speed —
+        there is no hardware speed control (bench-confirmed; the SNMetamorph
+        library's ticker API takes no speed arg). The caller must have the
+        display initialized first (extended mode); re-init + re-start after any
+        reset/self-test/reconnect.
+        """
+        payload = _sanitize(text)[:TICKER_MAX]
+        self._write(bytes([PRINT_TICKER_TEXT]) + payload + bytes([TICKER_END]))
 
     def set_brightness(self, level) -> None:
         """Set display brightness to one of FOUR levels.
