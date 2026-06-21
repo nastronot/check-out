@@ -16,7 +16,7 @@
       await saveMessage({
         name,
         message: s.message,
-        mode: s.mode === 'ticker' ? 'ticker' : 'message',
+        mode: s.mode === 'scroll' ? 'scroll' : 'message',
         align_top: s.align_top,
         align_bottom: s.align_bottom,
         brightness: s.brightness,

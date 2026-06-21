@@ -1,10 +1,12 @@
 // Mirrors checkout/state.py — keep in sync with the daemon's schema.
 
-export type Mode = 'clock' | 'message' | 'ticker';
+export type Mode = 'clock' | 'message' | 'scroll' | 'marquee';
 /** Brightness is a discrete level index 0..3 (0 Min, 1 Med, 2 Med+, 3 Max). */
 export type Brightness = 0 | 1 | 2 | 3;
 export type Animation = 'none' | 'flash' | 'blink' | 'pulse';
 export type Align = 'left' | 'center' | 'right';
+export type ScrollDir = 'left' | 'right';
+export type MarqueeBottom = 'static' | 'clock';
 
 /** {"0".."8"} -> 7 row ints (low 5 bits = columns 1..5). Shared with state.glyphs. */
 export type GlyphMap = Record<string, number[]>;
@@ -20,6 +22,15 @@ export interface AppState {
   message: string;
   align_top: Align;
   align_bottom: Align;
+  // marquee (hardware ticker — top autonomous, FIXED speed)
+  marquee_text: string;
+  marquee_bottom: MarqueeBottom;
+  marquee_bottom_text: string;
+  // software scroll (mode "scroll") — per-row scroll + direction
+  scroll_top: boolean;
+  scroll_bottom: boolean;
+  scroll_dir_top: ScrollDir;
+  scroll_dir_bottom: ScrollDir;
   brightness: Brightness;
   blank: boolean;
   scroll: boolean;
@@ -54,7 +65,7 @@ export interface LibraryMessage {
   id: string;
   name: string;
   message: string;
-  mode: 'message' | 'ticker';
+  mode: 'message' | 'scroll';
   align_top: Align;
   align_bottom: Align;
   brightness: Brightness;

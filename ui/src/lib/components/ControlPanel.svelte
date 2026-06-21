@@ -1,11 +1,19 @@
 <script lang="ts">
   import { lineBudget } from '../message';
-  import type { Align, AppState, Animation, Brightness, Mode } from '../types';
+  import type {
+    Align,
+    AppState,
+    Animation,
+    Brightness,
+    MarqueeBottom,
+    Mode,
+    ScrollDir,
+  } from '../types';
 
   export let state: AppState | null = null;
   export let patch: (p: Partial<AppState>) => void;
 
-  const MODES: Mode[] = ['clock', 'message', 'ticker'];
+  const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee'];
   // Brightness has FOUR discrete levels (index 0..3); a stepped slider, NOT a %.
   const BRIGHTNESS_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
@@ -57,7 +65,31 @@
   const setBlank = (e: Event) => patch({ blank: checked(e) });
   const setScroll = (e: Event) => patch({ scroll: checked(e) });
   const setCodePage = (e: Event) => patch({ code_page: num(e) });
-  const setTickerSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
+  const setScrollSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
+
+  // software scroll (mode "scroll")
+  const setScrollTop = (e: Event) => patch({ scroll_top: checked(e) });
+  const setScrollBottom = (e: Event) => patch({ scroll_bottom: checked(e) });
+  const setDirTop = (d: ScrollDir) => patch({ scroll_dir_top: d });
+  const setDirBottom = (d: ScrollDir) => patch({ scroll_dir_bottom: d });
+  // marquee (hardware ticker)
+  let marqueeDraft = '';
+  let marqueeSeen = '';
+  $: if (state && state.marquee_text !== marqueeSeen) {
+    marqueeSeen = state.marquee_text;
+    marqueeDraft = state.marquee_text;
+  }
+  let marqueeTimer: ReturnType<typeof setTimeout> | null = null;
+  function onMarqueeInput(): void {
+    if (marqueeTimer) clearTimeout(marqueeTimer);
+    marqueeTimer = setTimeout(() => patch({ marquee_text: marqueeDraft }), 250);
+  }
+  const MARQUEE_BOTTOMS: MarqueeBottom[] = ['static', 'clock'];
+  const setMarqueeBottom = (b: MarqueeBottom) => patch({ marquee_bottom: b });
+  const setMarqueeBottomText = (e: Event) =>
+    patch({ marquee_bottom_text: (e.target as HTMLInputElement).value });
+
+  const DIRS: ScrollDir[] = ['left', 'right'];
   // Merge one animation_params field, keeping the siblings (full object so the
   // Partial<AppState> type is satisfied; the backend deep-merges anyway).
   function patchParams(field: 'on_ms' | 'off_ms' | 'step_ms', e: Event): void {
@@ -89,33 +121,78 @@
       </div>
     </div>
 
-    <!-- Message -->
-    <div class="field">
-      <span class="field__label">
-        Message
-        {#if budget.hasNewline}
-          <span class="budget">
-            <span class:over={budget.topOver}>top {budget.top}/20</span>
-            <span class="sep">·</span>
-            <span class:over={budget.bottomOver}>bottom {budget.bottom}/20</span>
-          </span>
-        {:else}
-          <span class:over={budget.topOver}>{budget.top}/20</span>
+    <!-- Message (drives message + scroll modes) -->
+    {#if state.mode === 'message' || state.mode === 'scroll'}
+      <div class="field">
+        <span class="field__label">
+          Message
+          {#if budget.hasNewline}
+            <span class="budget">
+              <span class:over={budget.topOver}>top {budget.top}/20</span>
+              <span class="sep">·</span>
+              <span class:over={budget.bottomOver}>bottom {budget.bottom}/20</span>
+            </span>
+          {:else}
+            <span class:over={budget.topOver}>{budget.top}/20</span>
+          {/if}
+        </span>
+        <textarea
+          rows="2"
+          bind:value={messageDraft}
+          on:input={onMessageInput}
+          placeholder="message (Enter = line break)"
+          spellcheck="false"
+        ></textarea>
+        <span class="field__hint">
+          Press <kbd>Enter</kbd> for a line break (splits top/bottom). Use
+          <code>{'{g0}'}</code>…<code>{'{g8}'}</code> for custom glyphs (light up
+          once defined).{#if state.mode === 'scroll'} In SCROLL mode each line can
+          scroll independently (below); long lines scroll, short ones sit aligned.{/if}
+        </span>
+      </div>
+    {/if}
+
+    <!-- MARQUEE (hardware ticker: top autonomous, FIXED speed) -->
+    {#if state.mode === 'marquee'}
+      <div class="field">
+        <span class="field__label">
+          Marquee text
+          <span class:over={marqueeDraft.length > 45}>{marqueeDraft.length}/45</span>
+        </span>
+        <input
+          type="text"
+          bind:value={marqueeDraft}
+          on:input={onMarqueeInput}
+          placeholder="scrolls on the top row (hardware ticker)"
+          spellcheck="false"
+        />
+        <span class="field__hint">
+          Top row scrolls autonomously at the hardware's FIXED speed (no speed
+          control). 45-char buffer.
+        </span>
+      </div>
+      <div class="field">
+        <span class="field__label">Bottom row</span>
+        <div class="seg">
+          {#each MARQUEE_BOTTOMS as b}
+            <button
+              type="button"
+              aria-pressed={state.marquee_bottom === b}
+              on:click={() => setMarqueeBottom(b)}>{b}</button
+            >
+          {/each}
+        </div>
+        {#if state.marquee_bottom === 'static'}
+          <input
+            type="text"
+            value={state.marquee_bottom_text}
+            on:change={setMarqueeBottomText}
+            placeholder="static bottom text (≤20)"
+            spellcheck="false"
+          />
         {/if}
-      </span>
-      <textarea
-        rows="2"
-        bind:value={messageDraft}
-        on:input={onMessageInput}
-        placeholder="message (Enter = line break)"
-        spellcheck="false"
-      ></textarea>
-      <span class="field__hint">
-        Press <kbd>Enter</kbd> for a line break (splits top/bottom). Use
-        <code>{'{g0}'}</code>…<code>{'{g8}'}</code> for custom glyphs (light up
-        once defined).
-      </span>
-    </div>
+      </div>
+    {/if}
 
     <!-- Per-line alignment -->
     <div class="field">
@@ -248,18 +325,57 @@
       {/if}
     </div>
 
-    <!-- Ticker speed -->
-    {#if state.mode === 'ticker'}
+    <!-- SCROLL: per-row scroll + direction + speed -->
+    {#if state.mode === 'scroll'}
       <div class="field">
-        <span class="field__label">Ticker speed</span>
+        <span class="field__label">Scroll rows</span>
+        <div class="align-rows">
+          <div class="align-row">
+            <label class="switch">
+              <input type="checkbox" checked={state.scroll_top} on:change={setScrollTop} />
+              <span class="switch__track"></span>
+              <span class="switch__label">Line 1</span>
+            </label>
+            <div class="seg seg--sm" class:disabled={!state.scroll_top}>
+              {#each DIRS as d}
+                <button
+                  type="button"
+                  disabled={!state.scroll_top}
+                  aria-pressed={state.scroll_dir_top === d}
+                  on:click={() => setDirTop(d)}>{d}</button
+                >
+              {/each}
+            </div>
+          </div>
+          <div class="align-row">
+            <label class="switch">
+              <input type="checkbox" checked={state.scroll_bottom} on:change={setScrollBottom} />
+              <span class="switch__track"></span>
+              <span class="switch__label">Line 2</span>
+            </label>
+            <div class="seg seg--sm" class:disabled={!state.scroll_bottom}>
+              {#each DIRS as d}
+                <button
+                  type="button"
+                  disabled={!state.scroll_bottom}
+                  aria-pressed={state.scroll_dir_bottom === d}
+                  on:click={() => setDirBottom(d)}>{d}</button
+                >
+              {/each}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field__label">Scroll speed</span>
         <label class="field__hint">
           <input
             type="number"
-            min="50"
-            step="50"
+            min="60"
+            step="20"
             value={state.scroll_speed_ms}
-            on:change={setTickerSpeed}
-          /> ms / step
+            on:change={setScrollSpeed}
+          /> ms / step (floor ~60 — 9600 baud can't go faster)
         </label>
       </div>
     {/if}
@@ -399,6 +515,14 @@
   .seg--sm button {
     padding: 6px 12px;
     font-size: 11px;
+  }
+
+  .seg.disabled {
+    opacity: 0.4;
+  }
+
+  .seg button:disabled {
+    cursor: not-allowed;
   }
 
   .budget .sep {

@@ -28,7 +28,7 @@ from checkout.state import atomic_write_json
 # Reasonable caps so the file can't grow unbounded.
 MAX_ITEMS = 200
 GLYPH_ROWS = 7
-_MODES = ("message", "ticker")
+_MODES = ("message", "scroll")
 _ALIGNS = ("left", "center", "right")
 
 
