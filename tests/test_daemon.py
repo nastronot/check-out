@@ -108,6 +108,120 @@ def test_pulse_distinct_from_blink_and_flash():
     assert blink_levels == {0, 3}  # blink only snaps between MIN and the base
 
 
+# --- software scroll (mode "scroll") -----------------------------------------
+def test_render_scroll_top_only_left():
+    state = {
+        "message": "A LONG MESSAGE THAT SCROLLS ACROSS THE TOP ROW",
+        "scroll_top": True,
+        "scroll_bottom": False,
+        "scroll_dir_top": "left",
+        "scroll_speed_ms": 100,
+    }
+    top0, bottom0 = daemon.render_scroll(state, 0)
+    top1, _ = daemon.render_scroll(state, 300)  # +3 steps
+    assert len(top0) == 20 and top0 != top1   # top scrolls
+    assert bottom0 == " " * 20                  # bottom static + empty
+
+
+def test_render_scroll_direction_reverses_offset():
+    state = {
+        "message": "0123456789ABCDEFGHIJKLMNOPQRST",
+        "scroll_top": True,
+        "scroll_dir_top": "left",
+        "scroll_speed_ms": 100,
+    }
+    left = daemon.render_scroll({**state, "scroll_dir_top": "left"}, 300)[0]
+    right = daemon.render_scroll({**state, "scroll_dir_top": "right"}, 300)[0]
+    base = daemon.render_scroll(state, 0)[0]
+    assert left != right          # opposite directions diverge
+    assert left != base and right != base
+
+
+def test_render_scroll_both_rows_independent():
+    state = {
+        "message": "TOP LINE IS LONG ENOUGH TO SCROLL\nBOTTOM LINE ALSO LONG ENOUGH",
+        "scroll_top": True,
+        "scroll_bottom": True,
+        "scroll_dir_top": "left",
+        "scroll_dir_bottom": "right",
+        "scroll_speed_ms": 100,
+    }
+    top, bottom = daemon.render_scroll(state, 500)
+    assert len(top) == 20 and len(bottom) == 20
+    assert top.strip() and bottom.strip()
+
+
+def test_scroll_speed_clamped_to_floor():
+    # A 1ms request can't outrun the floor: it advances at SCROLL_FLOOR_MS.
+    state = {"message": "X" * 40, "scroll_top": True, "scroll_dir_top": "left",
+             "scroll_speed_ms": 1}
+    # Within one floor window the offset is identical (no per-1ms stepping).
+    a = daemon.render_scroll(state, daemon.SCROLL_FLOOR_MS - 1)[0]
+    b = daemon.render_scroll(state, 0)[0]
+    assert a == b
+
+
+def test_legacy_ticker_mode_renders_as_scroll(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    # mode "ticker" (legacy) must drive the scroll path, not crash / blank.
+    state = {"mode": "ticker", "message": "X" * 40, "scroll_top": True}
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    assert drv.shows == 1
+
+
+# --- marquee (hardware ticker) -----------------------------------------------
+def test_marquee_starts_ticker_once_and_updates_bottom_each_tick(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "marquee", "marquee_text": "HELLO NEWS", "marquee_bottom": "clock"}
+
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0))
+    t1 = _all_tx_bytes(capsys.readouterr().out)
+    assert 0x05 in t1                       # ticker started
+    assert t1[t1.index(0x05) + 1:].count(0x0D) >= 1
+    assert [0x10, 0x14] in [t1[i:i + 2] for i in range(len(t1) - 1)]  # bottom written
+
+    # Next tick (+1s): same marquee text -> NO ticker re-send, only bottom update.
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    t2 = _all_tx_bytes(capsys.readouterr().out)
+    assert 0x05 not in t2                   # ticker NOT re-sent
+    assert [0x10, 0x14] in [t2[i:i + 2] for i in range(len(t2) - 1)]  # bottom did update
+    assert [0x10, 0x00] not in [t2[i:i + 2] for i in range(len(t2) - 1)]  # top untouched
+
+
+def test_marquee_re_kicks_ticker_after_reset(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "marquee", "marquee_text": "NEWS", "marquee_bottom": "clock"}
+    daemon.tick_once(drv, state, ctx, now=NOW)  # starts ticker
+    capsys.readouterr()
+
+    # A reset command early-returns; the NEXT marquee tick must re-start the ticker.
+    cmd = {**state, "command": {"id": "r1", "action": "reset"}}
+    daemon.tick_once(drv, cmd, ctx, now=NOW)
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 2))
+    after = _all_tx_bytes(capsys.readouterr().out)
+    assert 0x05 in after  # ticker re-kicked after the reset
+
+
+def test_marquee_static_bottom_only_updates_on_change(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "marquee", "marquee_text": "HI", "marquee_bottom": "static",
+             "marquee_bottom_text": "STATIC"}
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    capsys.readouterr()
+    # Same static bottom + same marquee text -> nothing re-sent next tick.
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 5))
+    assert _all_tx_bytes(capsys.readouterr().out) == []
+
+
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)

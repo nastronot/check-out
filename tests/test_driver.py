@@ -59,6 +59,37 @@ def test_show_truncates_bottom_to_20(driver, capsys):
     assert len(data) == 45
 
 
+def test_show_bottom_updates_only_bottom_no_ticker(driver, capsys):
+    # Bottom-only update: 0x10 0x14 + 20 bytes + 0x14, and NOTHING for the top
+    # (no 0x10 0x00) and no ticker (0x05) — so a running top scroll is undisturbed.
+    driver.show_bottom("HELLO")
+    data = capture_bytes(capsys)
+    assert data[0:2] == [0x10, 0x14]
+    assert bytes(data[2:7]).decode() == "HELLO"
+    assert data[2:22] == [ord("H"), ord("E"), ord("L"), ord("L"), ord("O")] + [0x20] * 15
+    assert data[22] == CURSOR_OFF
+    assert len(data) == 2 + 20 + 1  # = 23
+    assert 0x05 not in data
+    assert [0x10, 0x00] not in [data[i : i + 2] for i in range(len(data) - 1)]
+
+
+def test_start_ticker_emits_05_text_0d(driver, capsys):
+    driver.start_ticker("NEWS")
+    data = capture_bytes(capsys)
+    assert data[0] == 0x05
+    assert bytes(data[1:5]).decode() == "NEWS"
+    assert data[-1] == 0x0D
+    assert len(data) == 1 + 4 + 1
+
+
+def test_start_ticker_truncates_to_45(driver, capsys):
+    driver.start_ticker("X" * 60)
+    data = capture_bytes(capsys)
+    assert data[0] == 0x05
+    assert data[-1] == 0x0D
+    assert data[1:-1] == [ord("X")] * 45  # truncated to the 45-char buffer
+
+
 def test_set_vertical_scroll_disable(driver, capsys):
     driver.set_vertical_scroll(False)
     assert capture_bytes(capsys) == [0x11]

@@ -40,6 +40,40 @@ def test_defaults_include_full_phase2_schema(state_path):
     assert loaded["align_bottom"] == "center"
 
 
+def test_marquee_and_scroll_fields_default(state_path):
+    loaded = state.load_state()
+    assert loaded["marquee_text"] == ""
+    assert loaded["marquee_bottom"] == "clock"
+    assert loaded["marquee_bottom_text"] == ""
+    assert loaded["scroll_top"] is True
+    assert loaded["scroll_bottom"] is False
+    assert loaded["scroll_dir_top"] == "left"
+    assert loaded["scroll_dir_bottom"] == "left"
+
+
+def test_legacy_ticker_mode_migrates_to_scroll(state_path):
+    import json
+
+    state_path.write_text(json.dumps({"mode": "ticker", "message": "X"}))
+    loaded = state.load_state()
+    assert loaded["mode"] == "scroll"  # legacy "ticker" -> "scroll"
+    assert loaded["message"] == "X"
+    # And it self-heals on disk (written back as "scroll").
+    assert json.loads(state_path.read_text())["mode"] == "scroll"
+
+
+def test_marquee_mode_round_trips(state_path):
+    state.save_state(
+        {"mode": "marquee", "marquee_text": "NEWS", "marquee_bottom": "static",
+         "marquee_bottom_text": "12:00"}
+    )
+    loaded = state.load_state()
+    assert loaded["mode"] == "marquee"
+    assert loaded["marquee_text"] == "NEWS"
+    assert loaded["marquee_bottom"] == "static"
+    assert loaded["marquee_bottom_text"] == "12:00"
+
+
 def test_pulse_animation_and_step_ms_accepted(state_path):
     import json
 
