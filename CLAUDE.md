@@ -25,7 +25,7 @@ unit. The `abomin` "extended mode" enable was the missing piece (see init below)
 | Select code page        | `0x02` + page byte (12 pages)  |
 | Define character        | `0x03` + index + 7 bytes + `0x00` (9 user glyphs) |
 | Dimming / brightness    | `0x04` + level byte            |
-| Print ticker text       | `0x05` (hardware ticker, 45-char buffer) |
+| Print ticker text       | `0x05` + text + `0x0D` (hardware ticker, top row, FIXED speed, 45-char buffer) |
 | Backspace               | `0x08`                         |
 | Self test               | `0x0F`                         |
 | Set cursor position     | `0x10` + position byte (= col + row*20) |
@@ -117,10 +117,17 @@ port owner). The web UI is just a writer of this file.
 ### `state.json` (web writes, daemon reads each tick)
 ```jsonc
 {
-  "mode": "clock" | "message" | "ticker",   // active frame
-  "message": "text for message/ticker mode",
+  "mode": "clock" | "message" | "scroll" | "marquee",  // active frame (legacy "ticker" -> "scroll")
+  "message": "text for message/scroll mode",
   "align_top": "left" | "center" | "right",     // line 1 justification (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justification (default center)
+  // marquee (hardware ticker): top autonomous + FIXED speed; bottom independent
+  "marquee_text": "scrolls on the top row (hardware, 45-char buffer)",
+  "marquee_bottom": "static" | "clock",         // bottom row source
+  "marquee_bottom_text": "shown when marquee_bottom == static",
+  // software scroll (mode "scroll"): per-row scroll + direction
+  "scroll_top": true, "scroll_bottom": false,
+  "scroll_dir_top": "left" | "right", "scroll_dir_bottom": "left" | "right",
   "brightness": 0 | 1 | 2 | 3,            // level index (0 Min .. 3 Max); legacy "dim"/"bright" migrate to 0/3
   "blank": false,
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
@@ -155,14 +162,33 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
 
 ### Modes & animations
 - **Modes:** `clock` (`DD MON YYYY` top / `HH:MM:SS AM/PM` 12-hour bottom, e.g.
-  `05 JUN 2026` / `08:47:03 PM`; locale-independent), `message` (static; newline splits the two
-  lines, else word-wrapped, ≤40 chars), `ticker` (software horizontal
-  scroll of a long message on the top line, `scroll_speed_ms` per step).
+  `05 JUN 2026` / `08:47:03 PM`; locale-independent), `message` (static; newline
+  splits the two lines, else word-wrapped, ≤40 chars), `scroll` (software
+  horizontal scroll — see below), `marquee` (hardware ticker — see below).
+- **`scroll` (software, flexible).** The `message`'s two lines (newline-split);
+  each row INDEPENDENTLY scrolls or sits static: `scroll_top`/`scroll_bottom`
+  (which rows scroll), `scroll_dir_top`/`scroll_dir_bottom` (`left`/`right`).
+  Advances per `scroll_speed_ms`, **clamped to a ~60ms floor** (each step redraws
+  ~40 bytes at 9600 baud ≈ 40ms on the wire, so faster can't keep up). A
+  non-scrolling row uses normal fit/align; glyph cells count as one (v0.5.3).
+  Legacy mode `"ticker"` migrates to `"scroll"`.
+- **`marquee` (hardware ticker, `0x05`).** Bench: the hardware ticker scrolls the
+  TOP row autonomously at a FIXED medium speed (NO speed control — the SNMetamorph
+  ticker API takes no speed arg, and bench probes found none); the BOTTOM row is
+  fully independent (writing it does NOT disturb a running top scroll). So:
+  - Top = `start_ticker(marquee_text)` (`0x05` + text≤45 + `0x0D`), (re)kicked
+    only when the text changes / after a reset/reconnect (re-init, then re-start).
+  - Bottom = `marquee_bottom` (`static` → `marquee_bottom_text`, or `clock` →
+    `HH:MM:SS AM/PM` updated each second), written via `show_bottom` (`0x10 0x14`
+    + 20 + `0x14`) WITHOUT re-sending the ticker.
+  - status.json's `top` is a SOFTWARE `ticker_window` of the marquee text (a
+    preview approximation of the unreadable hardware speed); `bottom` is the
+    rendered bottom. The preview animates with no preview-side change.
 - **Per-line justify:** `align_top` / `align_bottom` (`left`/`center`/`right`,
   default `center`) independently justify line 1 / line 2. Applied at the
   `render_lines` fit step on RENDERED cells (a `{gN}` glyph counts as one cell);
-  the daemon coerces an invalid value to `center`. Ticker's scrolling top line is
-  20 cells wide so alignment is a no-op there.
+  the daemon coerces an invalid value to `center`. A scrolling row ignores its
+  align (the window is already 20 cells wide).
 - **Animations** (4): `none` (show when changed); `flash` (alternate frame /
   real `blank()` — display goes fully DARK); `blink` (2-state brightness snap —
   the frame stays up but dims to MIN on the off-phase); `pulse` (a stepped
@@ -423,6 +449,11 @@ sudo usermod -aG uucp "$USER"   # then re-login
   (`0→3→0`, `animation_params.step_ms`) that breathes through the 4 levels;
   PULSE added to the animation control. invert intentionally omitted (hardware
   can't per-pixel invert arbitrary text).
+- **v0.7.3:** two scrolling systems — `marquee` (hardware ticker `0x05`, top-only
+  autonomous + FIXED speed, free static/clock bottom via `show_bottom`) and
+  `scroll` (software, 2-line per-row direction + speed with a ~60ms floor;
+  renamed from `ticker`, legacy migrates). Driver `start_ticker`/`show_bottom`;
+  bench-confirmed fixed ticker speed + independent bottom row.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

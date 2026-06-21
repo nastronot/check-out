@@ -222,10 +222,13 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
 **`state.json`** (web writes, daemon reads each tick):
 ```jsonc
 {
-  "mode": "clock" | "message" | "ticker",
-  "message": "text for message/ticker mode",
+  "mode": "clock" | "message" | "scroll" | "marquee",  // legacy "ticker" -> "scroll"
+  "message": "text for message/scroll mode",
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
+  "marquee_text": "...", "marquee_bottom": "static" | "clock", "marquee_bottom_text": "...",
+  "scroll_top": true, "scroll_bottom": false,
+  "scroll_dir_top": "left" | "right", "scroll_dir_bottom": "left" | "right",
   "brightness": 0 | 1 | 2 | 3,  // level index (0 Min .. 3 Max); legacy "dim"/"bright" -> 0/3
   "blank": false,
   "scroll": false,                 // hardware vertical-scroll MODE (0x11/0x12); normally false
@@ -259,9 +262,25 @@ ignored. All actions are idempotent — safe to re-run once on restart: `self_te
 
 **Modes.** `clock` (top `DD MON YYYY` e.g. `05 JUN 2026`; bottom 12-hour
 `HH:MM:SS AM/PM` e.g. `08:47:03 PM` — hand-formatted, locale-independent);
-`message` (static — a newline splits the two
-lines, else greedy word-wrap, ≤40 chars); `ticker` (software horizontal scroll of
-a long message on the top line at `scroll_speed_ms`/step, via `renderer.ticker_window`).
+`message` (static — a newline splits the two lines, else greedy word-wrap, ≤40
+chars); `scroll` and `marquee` (the two scrolling systems, below).
+
+**Two scrolling systems (v0.7.3, bench-validated).**
+- **`scroll` — software, flexible.** The `message`'s two lines (newline-split); each
+  row independently scrolls (`scroll_top`/`scroll_bottom`) in either direction
+  (`scroll_dir_top`/`scroll_dir_bottom` = `left`/`right`) via `renderer.ticker_window`,
+  advancing per `scroll_speed_ms` **clamped to a ~60ms floor** (a step redraws ~40 bytes
+  at 9600 baud ≈ 40ms on the wire, so faster can't keep up). Non-scrolling rows fit/align
+  normally; glyph cells count as one. Legacy mode `"ticker"` migrates to `"scroll"`.
+- **`marquee` — hardware ticker (`0x05`).** Bench ground truth: the hardware ticker scrolls
+  the TOP row autonomously at a FIXED medium speed (**no speed control** — the SNMetamorph
+  ticker API takes no speed arg and bench probes found none); the BOTTOM row is fully
+  independent (writing it does NOT disturb a running top scroll). The daemon
+  `start_ticker(marquee_text)` (`0x05` + text≤45 + `0x0D`) only when the text changes /
+  after a reset; the bottom (`marquee_bottom` = `static`→`marquee_bottom_text` or
+  `clock`→`HH:MM:SS AM/PM` each second) is refreshed via `show_bottom` (`0x10 0x14` + 20 +
+  `0x14`) without re-kicking the ticker. status.json's `top` is a SOFTWARE `ticker_window`
+  approximation so the preview looks right (the real hardware speed is fixed/unreadable).
 
 **Per-line justify.** `align_top` / `align_bottom` (`left`/`center`/`right`, default
 `center`) independently justify line 1 / line 2 at the `render_lines` fit step, on RENDERED
