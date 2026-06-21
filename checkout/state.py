@@ -35,10 +35,19 @@ def _now_iso() -> str:
 def defaults() -> dict:
     """A fresh state dict with every key at its default value."""
     return {
-        "mode": "clock",                 # "clock" | "message" | "ticker"
-        "message": "",                   # text for message / ticker modes
+        "mode": "clock",                 # "clock"|"message"|"scroll"|"marquee"
+        "message": "",                   # text for message / scroll modes
         "align_top": "center",           # "left" | "center" | "right" — line 1
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
+        # --- marquee (hardware ticker, top row autonomous + FIXED speed) ---
+        "marquee_text": "",              # scrolls on the top row (hardware ticker)
+        "marquee_bottom": "clock",       # "static" | "clock" — bottom row source
+        "marquee_bottom_text": "",       # bottom text when marquee_bottom == "static"
+        # --- software scroll (mode "scroll"): per-row scroll + direction ---
+        "scroll_top": True,              # scroll the top row
+        "scroll_bottom": False,          # scroll the bottom row
+        "scroll_dir_top": "left",        # "left" | "right"
+        "scroll_dir_bottom": "left",     # "left" | "right"
         "brightness": _DEFAULT_BRIGHTNESS,  # int 0..3 (0 Min..3 Max)
         "blank": False,                  # blank the display entirely
         "scroll": False,                 # hardware vertical-scroll MODE (0x11/0x12)
@@ -79,6 +88,9 @@ def _backfill(data: dict) -> dict:
         merged["brightness"] = normalize_brightness(merged["brightness"])
     except ValueError:
         merged["brightness"] = _DEFAULT_BRIGHTNESS
+    # Legacy mode "ticker" is the old single-line top scroll — now "scroll".
+    if merged.get("mode") == "ticker":
+        merged["mode"] = "scroll"
     return merged
 
 
@@ -153,9 +165,10 @@ def load_state() -> dict:
         save_state(state)
         return state
     state = _backfill(data)
-    # Self-heal a legacy brightness string (e.g. "bright") into its int form by
-    # writing the migrated state back, so the file converges to the new schema.
-    if data.get("brightness") != state["brightness"]:
+    # Self-heal a migrated legacy value (brightness "dim"/"bright" -> int, or
+    # mode "ticker" -> "scroll") by writing it back so the file converges.
+    if (data.get("brightness") != state["brightness"]
+            or data.get("mode") != state["mode"]):
         save_state(state)
     return state
 
