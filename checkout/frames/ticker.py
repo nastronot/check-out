@@ -1,10 +1,13 @@
 """TickerFrame — horizontally scroll a long message across the top line.
 
-This is a SOFTWARE scroll (a moving window over the text), independent of the
-display's hardware vertical-scroll mode (0x11/0x12). The window advances one
-column every ``scroll_speed_ms`` of wall-clock time, looping with a gap so the
-end and start of the message don't run together. The frame is stateless: the
-offset is derived from ``now`` and the speed, so it advances on its own each tick.
+This is a SOFTWARE scroll (a moving window over the text). NOTE: as of v0.7.3 the
+daemon drives software scrolling via ``daemon.render_scroll`` (mode "scroll" —
+2-line, per-row direction, speed floor), not this single-line frame. TickerFrame
+is retained as a small pure component (and its tests document the window
+behaviour the scroll mode reuses through ``renderer.ticker_window``).
+
+The window advances one column every ``scroll_speed_ms`` of wall-clock time,
+looping with a gap. Stateless: the offset is derived from ``now`` and the speed.
 """
 
 from __future__ import annotations

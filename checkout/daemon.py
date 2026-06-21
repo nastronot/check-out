@@ -35,20 +35,37 @@ import time
 from datetime import datetime
 
 from . import config
-from .driver import VFDDriver, VFDError, normalize_brightness
+from .driver import (
+    VFDDriver,
+    VFDError,
+    apply_glyph_placeholders,
+    normalize_brightness,
+)
 
 # Invalid/unknown brightness values are coerced to this index once (one warning).
 _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
-from .frames.clock import ClockFrame
+from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
-from .frames.ticker import TickerFrame
-from .renderer import WIDTH, render_lines
+from .renderer import WIDTH, fit_line, render_lines, ticker_window
 from .state import load_state, save_status
 
-# Registry of available frames, keyed by name. New frames drop in here.
-FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), TickerFrame())}
+# Software scroll: each step redraws ~40 bytes at 9600 baud (~40ms on the wire),
+# so a step faster than this floor can't keep up — clamp scroll_speed_ms to it.
+SCROLL_FLOOR_MS = 60
+# The hardware ticker runs at a fixed medium speed we can't read; the preview
+# approximates it by software-scrolling the marquee text at this fixed step.
+_MARQUEE_PREVIEW_STEP_MS = 200
+
+# Static frames, keyed by name. "scroll" + "marquee" are handled specially in
+# the tick (they need per-row offsets / the hardware ticker), not via a Frame.
+FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame())}
 DEFAULT_FRAME = "clock"
+
+
+def _norm_mode(mode) -> str:
+    """Legacy mode "ticker" is the old single-line top scroll — now "scroll"."""
+    return "scroll" if mode == "ticker" else mode
 
 _ALIGNMENTS = ("left", "center", "right")
 
@@ -88,6 +105,8 @@ def _new_ctx() -> dict:
         "last_scroll": None,
         "last_code_page": None,
         "last_emit": None,         # last thing shown to the DISPLAY (gates serial writes)
+        "last_marquee_text": None,  # last text kicked into the hardware ticker
+        "last_marquee_bottom": None,  # last bottom row written in marquee mode
         "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
     }
@@ -109,6 +128,9 @@ def _invalidate_caches(ctx: dict) -> None:
     ctx["last_code_page"] = None
     ctx["last_glyphs"] = None
     ctx["last_emit"] = None
+    # Force marquee mode to re-init the hardware ticker + re-write the bottom.
+    ctx["last_marquee_text"] = None
+    ctx["last_marquee_bottom"] = None
 
 
 # --- command processing ------------------------------------------------------
@@ -240,58 +262,19 @@ def _write_status(state: dict, top: str, bottom: str, ctx: dict) -> None:
     )
 
 
-def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = None) -> None:
-    """Drive the display one step toward ``state`` and mirror status.json."""
-    now = now or datetime.now()
-    now_ms = int(now.timestamp() * 1000)
+def _apply_settings(
+    driver: VFDDriver,
+    state: dict,
+    ctx: dict,
+    now_ms: int,
+    animation: str,
+    params: dict,
+) -> None:
+    """Apply brightness (incl. blink/pulse), hardware-scroll mode, code page.
 
-    # 1/2. one-shot command (nonce processed exactly once).
-    command = state.get("command") or {}
-    command_id = command.get("id")
-    if command_id is not None and command_id != ctx["last_command_id"]:
-        did_reset = _run_command(driver, command, state, ctx)
-        ctx["last_command_id"] = command_id
-        if did_reset:
-            # A self-test/reset can swallow writes sent immediately after it
-            # (the panel is still re-initializing). Skip the rest of this tick;
-            # caches were invalidated, so the NEXT tick re-applies scroll mode,
-            # brightness, code-page and glyphs from state.json — the display
-            # can't stay stuck in vertical-scroll (or any stale mode) afterward.
-            return
-
-    # 3. user glyphs (re-define on change; defining may reset the display, so
-    # re-init + re-apply afterward — but only when there are glyphs to define).
-    glyphs = state.get("glyphs") or {}
-    if glyphs != ctx["last_glyphs"]:
-        if glyphs:
-            _apply_glyphs(driver, glyphs)
-            driver.initialize()
-            _invalidate_caches(ctx)
-        ctx["last_glyphs"] = dict(glyphs)
-
-    animation = state.get("animation", "none")
-    params = state.get("animation_params") or {}
-
-    # 4. frame + animation. Compute the frame first, so the brightness step below
-    # can apply blink's brightness PULSE for this tick.
-    if state.get("blank"):
-        top, bottom = _BLANK_LINE, _BLANK_LINE
-        emit: tuple = ("blank",)
-    else:
-        frame = FRAMES.get(state.get("mode"), FRAMES[DEFAULT_FRAME])
-        ltop, lbottom = frame.render(now, state)
-        top, bottom = render_lines(
-            ltop,
-            lbottom,
-            top_align=_align(state.get("align_top")),
-            bottom_align=_align(state.get("align_bottom")),
-        )
-        emit = resolve_emit(now_ms, animation, params, top, bottom)
-
-    # 5. display settings (avoid redundant writes). Brightness is normalized to
-    # the canonical index 0..3 (legacy "dim"/"bright" still accepted); an invalid
-    # value is coerced to a safe default ONCE (single warning per distinct value).
-    # blink folds in here as a per-tick brightness pulse (no frame re-draw needed).
+    Each is change-gated (no redundant writes). An invalid brightness is coerced
+    to the default ONCE with a single warning per distinct bad value.
+    """
     raw_brightness = state.get("brightness", _DEFAULT_BRIGHTNESS)
     try:
         base_brightness = normalize_brightness(raw_brightness)
@@ -318,6 +301,138 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         except (ValueError, TypeError) as exc:
             log(f"bad code_page {code_page!r}: {exc}")
         ctx["last_code_page"] = code_page
+
+
+def _scroll_offset(now_ms: int, speed_ms, scroll: bool, direction) -> int | None:
+    """Per-row software-scroll offset, or None for a static (non-scrolling) row.
+
+    Direction reverses the stepping: "left" advances the offset (text moves left,
+    new chars enter from the right); "right" decrements it (text moves right).
+    """
+    if not scroll:
+        return None
+    step = max(SCROLL_FLOOR_MS, int(speed_ms or 300))
+    raw = now_ms // step
+    return -raw if direction == "right" else raw
+
+
+def render_scroll(state: dict, now_ms: int) -> tuple[str, str]:
+    """Render mode "scroll": the message's two lines, each row independently
+    scrollable left/right (or statically aligned). Glyph cells count as one."""
+    msg = apply_glyph_placeholders(state.get("message") or "")
+    if "\n" in msg:
+        ltop, _, lbottom = msg.partition("\n")
+    else:
+        ltop, lbottom = msg, ""
+    speed = state.get("scroll_speed_ms", 300)
+    top_off = _scroll_offset(
+        now_ms, speed, bool(state.get("scroll_top")), state.get("scroll_dir_top")
+    )
+    bot_off = _scroll_offset(
+        now_ms, speed, bool(state.get("scroll_bottom")), state.get("scroll_dir_bottom")
+    )
+    return render_lines(
+        ltop,
+        lbottom,
+        top_align=_align(state.get("align_top")),
+        bottom_align=_align(state.get("align_bottom")),
+        top_offset=top_off,
+        bottom_offset=bot_off,
+    )
+
+
+def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -> None:
+    """Drive marquee mode: hardware ticker on the top, independent bottom row.
+
+    The top is the autonomous hardware ticker (re-kicked only when the text
+    changes / after a reset). The bottom is a static line or the live clock,
+    written with ``show_bottom`` which does NOT disturb the running top scroll.
+    status.json's top is a SOFTWARE-scrolled approximation so the preview looks
+    right (the real hardware speed is fixed and unreadable).
+    """
+    marquee_text = state.get("marquee_text") or ""
+    if marquee_text != ctx["last_marquee_text"]:
+        driver.start_ticker(marquee_text)
+        ctx["last_marquee_text"] = marquee_text
+
+    if state.get("marquee_bottom") == "static":
+        lbottom = apply_glyph_placeholders(state.get("marquee_bottom_text") or "")
+    else:
+        lbottom = clock_time(now)
+    bottom = fit_line(lbottom, align=_align(state.get("align_bottom")))
+    if bottom != ctx["last_marquee_bottom"]:
+        driver.show_bottom(bottom)
+        ctx["last_marquee_bottom"] = bottom
+
+    # Preview approximation: software-scroll the marquee text on the top row.
+    offset = now_ms // _MARQUEE_PREVIEW_STEP_MS
+    disp_top = ticker_window(marquee_text, offset) if marquee_text else _BLANK_LINE
+    _write_status(state, disp_top, bottom, ctx)
+
+
+def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = None) -> None:
+    """Drive the display one step toward ``state`` and mirror status.json."""
+    now = now or datetime.now()
+    now_ms = int(now.timestamp() * 1000)
+
+    # 1/2. one-shot command (nonce processed exactly once).
+    command = state.get("command") or {}
+    command_id = command.get("id")
+    if command_id is not None and command_id != ctx["last_command_id"]:
+        did_reset = _run_command(driver, command, state, ctx)
+        ctx["last_command_id"] = command_id
+        if did_reset:
+            # A self-test/reset can swallow writes sent immediately after it
+            # (the panel is still re-initializing). Skip the rest of this tick;
+            # caches were invalidated, so the NEXT tick re-applies scroll mode,
+            # brightness, code-page, glyphs and the marquee ticker from state.json.
+            return
+
+    # 3. user glyphs (re-define on change; defining may reset the display, so
+    # re-init + re-apply afterward — but only when there are glyphs to define).
+    glyphs = state.get("glyphs") or {}
+    if glyphs != ctx["last_glyphs"]:
+        if glyphs:
+            _apply_glyphs(driver, glyphs)
+            driver.initialize()
+            _invalidate_caches(ctx)
+        ctx["last_glyphs"] = dict(glyphs)
+
+    mode = _norm_mode(state.get("mode"))
+    animation = state.get("animation", "none")
+    params = state.get("animation_params") or {}
+
+    # MARQUEE: hardware ticker on the top + independent bottom — its own path.
+    # (When blank, fall through to the normal blank handling below.)
+    if mode == "marquee" and not state.get("blank"):
+        _apply_settings(driver, state, ctx, now_ms, "none", params)  # no anim here
+        _tick_marquee(driver, state, ctx, now, now_ms)
+        return
+
+    # Not in marquee this tick: clear the marquee caches so re-entering it
+    # re-kicks the hardware ticker and re-writes the bottom.
+    ctx["last_marquee_text"] = None
+    ctx["last_marquee_bottom"] = None
+
+    # 4. frame + animation. Compute the frame first, so the brightness step below
+    # can apply blink's brightness PULSE for this tick.
+    if state.get("blank"):
+        top, bottom = _BLANK_LINE, _BLANK_LINE
+        emit: tuple = ("blank",)
+    else:
+        if mode == "scroll":
+            top, bottom = render_scroll(state, now_ms)
+        else:
+            frame = FRAMES.get(mode, FRAMES[DEFAULT_FRAME])
+            top, bottom = render_lines(
+                *frame.render(now, state),
+                top_align=_align(state.get("align_top")),
+                bottom_align=_align(state.get("align_bottom")),
+            )
+        emit = resolve_emit(now_ms, animation, params, top, bottom)
+
+    # 5. display settings (brightness incl. blink/pulse, scroll mode, code page).
+    _apply_settings(driver, state, ctx, now_ms, animation, params)
 
     # 6. push the frame to the glass (only when it changes).
     if emit != ctx["last_emit"]:
