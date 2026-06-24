@@ -444,33 +444,43 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
 ```
 
 - **`checkout.audioviz`** (separate process, never opens the port). Hann-windows
-  → numpy rFFT → 20 LOG-spaced bands → dB-scaled heights 0..14, with
+  → numpy rFFT → 20 LOG-spaced bands → **auto-gained** heights 0..14, with
   **attack-fast/release-slow** smoothing (`out = max(new, prev*decay)`). SETTINGS
   via `state.json`: `audio_source` (`mic` | `system`), `audio_device`,
-  `audio_gain`, `audio_decay` (re-read live; a source/device change restarts the
-  capture). Capture only runs while mode is `spectrum`.
+  `audio_gain` (now **sensitivity**), `audio_decay` (re-read live; a source/device
+  change restarts the capture). Capture only runs while mode is `spectrum`.
+  - **Auto-gain (v0.9.2) — volume-independent.** The monitor is captured
+    POST-volume, so the display must not track absolute level. `update_ref` keeps
+    a decaying-maximum reference of recent band loudness (snap up, release over
+    ~1-2s via `AUTOGAIN_RELEASE`); `normalize_levels` maps each band relative to
+    that reference (recent loudest → top, dB over `AUTOGAIN_RANGE_DB`), biased by
+    `sensitivity`. So lowering system volume does NOT shrink the bars. A SILENCE
+    FLOOR (`signal_rms` < `SILENCE_FLOOR_RMS`) outputs 0 and RELEASES the
+    reference (never ratchets up on hiss); `REF_FLOOR` bounds the re-entry jump.
+    The four constants live in `spectrum.py` (tunable).
   - **Two capture backends (v0.9.1).** PortAudio's ALSA backend does NOT expose
-    PipeWire/Pulse `.monitor` sources, so **system audio** is captured NATIVELY
-    via a `pw-record` (preferred) / `parec` subprocess reading raw s16le PCM
+    PipeWire/Pulse `.monitor` sources, so audio is captured NATIVELY via a
+    `pw-record` (preferred) / `parec` subprocess reading raw s16le PCM
     (`ParecCapture` + reader thread; `_read_exact` accumulates partial pipe
-    reads). **mic** uses `sounddevice` (`SoundDeviceCapture`). Monitors are
-    enumerated with `pactl` (`pactl list sources short` + descriptions); the
-    default is `pactl get-default-sink` + `.monitor`. `select_capture`: system →
-    that monitor (device override → default-sink monitor → first monitor), else
-    None = emit zeros (NEVER silently fall back to the mic); mic → PortAudio.
+    reads). Both `system` (a monitor) and `mic` (an input source) go through this;
+    `sounddevice`/PortAudio (`SoundDeviceCapture`) is the FALLBACK when Pulse is
+    absent. `select_capture`: system → the monitor (device override →
+    default-sink monitor → first), else None = emit zeros (NEVER the mic); mic →
+    the Pulse input (default-source) or the PortAudio fallback.
   - **Hardened restart (v0.9.1).** Switching devices used to segfault PortAudio.
     Now `SoundDeviceCapture.stop()` nulls the handle then `stop()` THEN `close()`
     (guarded); a `ChangeDebouncer` coalesces rapid switches (~400ms → one
     restart); `_restart_capture` tears down the old capture and wraps `start()` in
     try/except (a failed open → zeros, never a crash).
-  - **Labeled device list.** `build_device_list` merges Pulse monitors +
-    PortAudio inputs, each with an `id` (the value for `audio_device` — a monitor
-    NAME or a PortAudio index) and a `label` (`[monitor] <desc>` vs the input
-    name), written to `devices.json` (web `/api/devices`, `--list`). The UI
-    filters by source (monitors for system, inputs for mic). Missing
-    PortAudio/`pactl`/monitor → log + zeros, never crash.
+  - **Minimal device list (v0.9.2).** `build_device_list` uses PULSE sources —
+    the REAL devices: the handful of `.monitor` outputs + real input sources, each
+    labeled by its Pulse Description ("Monitor of <sink>" / the input name). The
+    raw ALSA/PortAudio plugin junk (hw:*, rate converters, per-app streams) never
+    appears (~5 entries vs ~25). PortAudio inputs are the fallback only when
+    `pactl` is absent. `devices.json` carries `default_monitor` + `default_source`
+    (web `/api/devices`, `--list`); the UI filters by source and defaults to Auto.
   - **System packages (Arch):** `pipewire-pulse` (`pactl`/`pw-record`),
-    `portaudio` (mic / `sounddevice`).
+    `portaudio` (mic fallback / `sounddevice`).
 - **Socket protocol.** A unix **DATAGRAM** socket (`config.SPECTRUM_SOCKET`,
   default `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Each datagram is a fixed
   **20-byte** frame, one byte per bar (height 0..14). `SOCK_DGRAM` = newest-frame-
@@ -669,8 +679,16 @@ sudo usermod -aG uucp "$USER"   # then re-login
   uses the mic for `system`. The device list is labeled (monitors vs inputs) and
   the UI filters it by source. Bench-validated: system + monitor + playback →
   non-zero bars; cycling devices no longer crashes.
-
-## Credits / third-party
+- **v0.9.2:** spectrum "just works" regardless of volume. (a) **Auto-gain** —
+  bars normalize against a decaying-max reference of recent loudness
+  (`update_ref`/`normalize_levels`), so they're CONTENT-driven, not volume-driven
+  (turn the system volume down, bars stay full). A **silence floor**
+  (`signal_rms` < `SILENCE_FLOOR_RMS`) lets them fall flat without amplifying
+  hiss, and the reference doesn't ratchet up on silence. The gain slider is now
+  **Sensitivity** (biases auto-gain). (b) **Minimal device picker** — the dropdown
+  lists only the real Pulse monitors/inputs (labeled), auto-picking the
+  default-sink monitor / default source; the raw ALSA/hw/plugin junk is gone
+  (~5 vs ~25 entries). Mic now also captures via `pw-record` (PortAudio fallback).
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
   (**MIT**) — the authoritative Futaba M202MD10C command protocol. The
   extended-mode initialization (`0x00 0x01`) that resolved the vertical-scroll

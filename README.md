@@ -57,18 +57,24 @@ python -m checkout.audioviz                     # capture + stream to the daemon
 Then set mode `spectrum` (UI or `state.json`) and pick the **source**:
 
 - **`system`** — captures what's playing via a PipeWire/PulseAudio **monitor**
-  source. PortAudio can't see `.monitor` sources, so this path captures natively
-  with **`pw-record`** (preferred) or `parec` reading the monitor; monitors are
-  enumerated with `pactl`. By default it uses the monitor of the current default
-  sink (`pactl get-default-sink` + `.monitor`); override via the Device dropdown.
-- **`mic`** — captures the default (or chosen) input via `sounddevice`.
+  source, natively with **`pw-record`** (preferred) / `parec` (PortAudio can't see
+  `.monitor` sources). Auto-picks the monitor of the current default sink
+  (`pactl get-default-sink` + `.monitor`).
+- **`mic`** — captures the default (or chosen) input (`pactl get-default-source`),
+  also via `pw-record`; falls back to `sounddevice`/PortAudio if Pulse is absent.
 
-Gain/decay tune sensitivity + smoothing. The Device dropdown labels monitors
-(`[monitor] …`) vs inputs. Spectrum borrows the 9 glyph slots for the bars and
-restores your custom glyphs on exit.
+The **Device** dropdown is minimal: just "Auto" + the handful of real monitors
+(system) or inputs (mic), labeled — no raw ALSA/hw nodes. Auto is usually right.
+
+**Volume-independent (auto-gain).** The bars normalize against recent loudness,
+so they fill the display based on CONTENT regardless of system volume — turn the
+volume down and the bars stay full. A silence floor lets them fall flat on
+silence (no amplifying hiss). **Sensitivity** biases it (center is fine);
+**Smoothing** is the visual decay. Spectrum borrows the 9 glyph slots for the
+bars and restores your custom glyphs on exit.
 
 **System packages** (Arch): `pipewire-pulse` (for `pactl`/`pw-record`) and
-`portaudio` (for the mic path / `sounddevice`).
+`portaudio` (mic fallback / `sounddevice`).
 
 ## Configuration (env vars)
 

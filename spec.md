@@ -469,19 +469,28 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
 ```
 
 - **`checkout.audioviz`** (separate process; never opens the port). Hann window →
-  numpy rFFT → 20 LOG-spaced bands → dB-scaled heights 0..14 with
+  numpy rFFT → 20 LOG-spaced bands → **auto-gained** heights 0..14 with
   **attack-fast/release-slow** decay (`out = max(new, prev*decay)`). Source via
-  `state.json`: `system` / `mic`; `audio_device`/`audio_gain`/`audio_decay`
-  re-read live (capture runs only while mode = spectrum).
-  - **system audio (v0.9.1):** PortAudio can't see PipeWire `.monitor` sources, so
-    it's captured NATIVELY via `pw-record`/`parec` reading the monitor (enumerated
-    with `pactl`; default = `pactl get-default-sink` + `.monitor`). `select_capture`
-    never silently uses the mic for `system`. **mic** uses `sounddevice`.
-  - **hardened restart (v0.9.1):** full PortAudio teardown (null → stop → close,
-    guarded) + debounced switches + try/except open, so cycling devices can't
-    segfault. Device list is LABELED (monitors vs inputs) in `devices.json`
-    (`--list`, served at `/api/devices`); the UI filters by source. Needs
-    `pipewire-pulse` + `portaudio`.
+  `state.json`: `system` / `mic`; `audio_device`/`audio_gain` (sensitivity)/
+  `audio_decay` re-read live (capture runs only while mode = spectrum).
+  - **auto-gain (v0.9.2):** bars normalize against a decaying-max reference of
+    recent loudness (`update_ref`/`normalize_levels`) so the display is
+    volume-INDEPENDENT (content-driven, not affected by system volume); a silence
+    floor (`signal_rms` < `SILENCE_FLOOR_RMS`) makes them fall flat without
+    amplifying hiss and stops the reference ratcheting up on silence.
+    `audio_gain` is now **sensitivity** (biases auto-gain). Constants in
+    `spectrum.py` (tunable).
+  - **capture (v0.9.1):** PortAudio can't see PipeWire `.monitor` sources, so BOTH
+    system (a sink `.monitor`) and mic (an input source) are captured NATIVELY via
+    `pw-record`/`parec` (enumerated with `pactl`; defaults = default-sink
+    `.monitor` / `pactl get-default-source`); `sounddevice` is the fallback.
+    `select_capture` never silently uses the mic for `system`.
+  - **hardened restart (v0.9.1):** full teardown (null → stop → close, guarded) +
+    debounced switches + try/except open, so cycling devices can't segfault.
+  - **minimal device list (v0.9.2):** built from Pulse sources — only the real
+    monitors/inputs, LABELED — in `devices.json` (`--list`, served at
+    `/api/devices`); raw ALSA/hw/plugin nodes excluded; the UI filters by source
+    and defaults to Auto. Needs `pipewire-pulse` (+ `portaudio` for the fallback).
 - **Socket protocol.** Unix `SOCK_DGRAM` (`CHECKOUT_SPECTRUM_SOCK`, default
   `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Each datagram = a fixed **20-byte**
   frame (one height 0..14 per bar). Newest-frame-wins: the daemon **drains to the

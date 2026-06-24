@@ -5,23 +5,27 @@ an FFT, buckets into 20 log-spaced bands, maps each to a height 0..14 with
 attack-fast/release-slow smoothing, and STREAMS the heights to the daemon over
 the unix datagram socket (:mod:`checkout.spectrum`).
 
-Two capture backends (v0.9.1):
-  - **system audio** → a PipeWire/PulseAudio **monitor** source, captured with
-    ``parec``/``pw-record`` (a subprocess reading raw PCM). PortAudio's ALSA
-    backend does NOT reliably expose ``.monitor`` sources, so we go native via
-    Pulse. Monitors are enumerated with ``pactl``; the default is the monitor of
-    the current default sink (``pactl get-default-sink`` + ``.monitor``).
-  - **mic** → the default (or chosen) input via ``sounddevice`` (PortAudio),
-    with a HARDENED stream lifecycle (full stop+close, debounced restarts,
-    try/except open) so cycling devices can't segfault PortAudio.
+Capture (v0.9.1/.2): PortAudio's ALSA backend does NOT reliably expose PipeWire
+``.monitor`` sources, so BOTH **system** (a sink ``.monitor``) and **mic** (an
+input source) are captured NATIVELY with ``pw-record``/``parec`` (a subprocess
+reading raw PCM); ``sounddevice`` (PortAudio) is a FALLBACK only when Pulse is
+absent. The capture lifecycle is HARDENED (full stop+close, debounced restarts,
+try/except open) so cycling devices can't segfault. Sources are enumerated with
+``pactl``; defaults are ``pactl get-default-sink`` + ``.monitor`` (system) and
+``pactl get-default-source`` (mic).
+
+The display is **auto-gained** (v0.9.2): bars normalize against a decaying-max
+reference of recent loudness, so they're volume-INDEPENDENT (content-driven), and
+a silence floor lets them fall flat without amplifying hiss. ``audio_gain`` is now
+**sensitivity** (biases the auto-gain).
 
 SETTINGS come from ``state.json`` (``audio_source`` / ``audio_device`` /
 ``audio_gain`` / ``audio_decay``) — re-read live; a source/device change restarts
 the capture (debounced + safely torn down). The HEAVY per-frame data goes over
 the socket, never state.json. Capture only runs while mode is ``spectrum``.
 
-Devices are written to ``devices.json`` (web-readable) LABELED by kind so the UI
-can tell monitors (system audio) from inputs (mic).
+The MINIMAL device list (real Pulse monitors + inputs, labeled) is written to
+``devices.json`` (web-readable); the raw ALSA/plugin nodes are excluded.
 
 Run::
 

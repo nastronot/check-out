@@ -361,3 +361,74 @@ def test_read_exact_returns_none_at_eof():
 def test_read_exact_returns_none_when_stopped():
     pipe = _FakePipe(bytes(100), chunk=4)
     assert audioviz._read_exact(pipe, 20, lambda: True) is None  # stop flag set
+
+
+# --- v0.9.2: auto-gain (volume-independent) ---------------------------------
+def test_normalize_levels_is_volume_independent():
+    bands = [0.2, 1.0, 0.5, 0.1]
+    loud = spectrum.normalize_levels(bands, max(bands))
+    quiet = spectrum.normalize_levels([b * 0.01 for b in bands], max(bands) * 0.01)
+    assert loud == quiet                       # shape independent of absolute level
+    assert max(loud) == spectrum.MAX_BAR       # the recent-loudest band hits the top
+
+
+def test_normalize_levels_sensitivity_biases_fullness():
+    bands = [0.1, 0.3, 0.05]
+    ref = max(bands)
+    low = spectrum.normalize_levels(bands, ref, sensitivity=0.5)
+    high = spectrum.normalize_levels(bands, ref, sensitivity=2.0)
+    assert sum(high) >= sum(low)
+
+
+def test_update_ref_snaps_up_and_releases_to_floor():
+    ref = spectrum.update_ref(1.0, 10.0)       # snaps UP to a louder peak
+    assert ref == 10.0
+    released = spectrum.update_ref(ref, 0.0)   # silence -> releases (no ratchet)
+    assert spectrum.REF_FLOOR <= released < ref
+    for _ in range(5000):                      # never drops below the floor
+        released = spectrum.update_ref(released, 0.0)
+    assert released == spectrum.REF_FLOOR
+
+
+def test_signal_rms():
+    assert spectrum.signal_rms([]) == 0.0
+    assert abs(spectrum.signal_rms([1, -1, 1, -1]) - 1.0) < 1e-9
+    assert spectrum.signal_rms([0, 0, 0]) == 0.0
+
+
+def _tone(np, amp, n=1024, rate=44100, f=1500):
+    t = np.arange(n) / rate
+    return (amp * np.sin(2 * math.pi * f * t)).astype("float32")
+
+
+def test_autogain_quiet_and_loud_reach_similar_fullness():
+    np = pytest.importorskip("numpy")
+    loud, quiet = audioviz.AudioViz("/tmp/x.sock"), audioviz.AudioViz("/tmp/x.sock")
+    for _ in range(40):                        # adapt the references
+        hl = loud.process(_tone(np, 0.4), 44100)
+        hq = quiet.process(_tone(np, 0.008), 44100)  # 50x quieter
+    assert max(hl) >= 12 and max(hq) >= 12     # both fill despite the level gap
+
+
+def test_autogain_silence_is_flat_and_does_not_ratchet():
+    np = pytest.importorskip("numpy")
+    eng = audioviz.AudioViz("/tmp/x.sock")
+    for _ in range(40):
+        eng.process(_tone(np, 0.4), 44100)
+    ref_loud = eng._ref
+    rng = np.random.RandomState(0)
+    last = None
+    for _ in range(200):                       # below-floor noise = silence
+        last = eng.process((1e-4 * rng.randn(1024)).astype("float32"), 44100)
+    assert max(last) == 0                       # bars fall flat
+    assert eng._ref <= ref_loud                 # reference did NOT ratchet up on noise
+
+
+def test_autogain_readapts_when_signal_returns():
+    np = pytest.importorskip("numpy")
+    eng = audioviz.AudioViz("/tmp/x.sock")
+    for _ in range(60):                        # silence first
+        eng.process((1e-5 * np.ones(1024)).astype("float32"), 44100)
+    for _ in range(40):                        # real audio returns
+        h = eng.process(_tone(np, 0.3), 44100)
+    assert max(h) > 0                           # adapts and shows bars again
