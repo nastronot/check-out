@@ -473,13 +473,22 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   **attack-fast/release-slow** decay (`out = max(new, prev*decay)`). Source via
   `state.json`: `system` / `mic`; `audio_device`/`audio_gain` (sensitivity)/
   `audio_decay` re-read live (capture runs only while mode = spectrum).
-  - **auto-gain (v0.9.2):** bars normalize against a decaying-max reference of
-    recent loudness (`update_ref`/`normalize_levels`) so the display is
-    volume-INDEPENDENT (content-driven, not affected by system volume); a silence
-    floor (`signal_rms` < `SILENCE_FLOOR_RMS`) makes them fall flat without
-    amplifying hiss and stops the reference ratcheting up on silence.
-    `audio_gain` is now **sensitivity** (biases auto-gain). Constants in
-    `spectrum.py` (tunable).
+  - **auto-gain (v0.9.2, envelope reworked v0.9.3):** bars normalize against a
+    running reference so the display is volume-INDEPENDENT (content-driven, not
+    affected by system volume). The reference is an ENVELOPE FOLLOWER (`update_ref`):
+    it rises toward a new peak by `(peak-ref)*AUTOGAIN_ATTACK` (smooth, not an
+    instant snap — so transients don't pump the display) and releases slowly; its
+    target is `percentile_peak` (~85th percentile of the bands, not the single
+    loudest — so the spectrum fills instead of one bass band pinning the top).
+    `normalize_levels` maps each band relative to the reference over
+    `AUTOGAIN_RANGE_DB` (~28). Volume-independence REQUIRES `REF_FLOOR` (1e-4)
+    below quiet-music levels — a high floor pins the reference at low volume and
+    the bars shrink; the SILENCE GATE (`signal_rms` < `SILENCE_FLOOR_RMS`), not the
+    floor, stops noise being amplified. Bar heights are smoothed by `decay_levels`
+    (attack-fast/release-slow, prev persists — the anti-flash). `audio_gain` is now
+    **sensitivity** (biases auto-gain). Constants in `spectrum.py` carry a tuning
+    guide (bars short → lower range/percentile; flashing → lower attack / raise
+    decay; volume leaks → lower `REF_FLOOR`; silence noise → raise `SILENCE_FLOOR_RMS`).
   - **capture (v0.9.1):** PortAudio can't see PipeWire `.monitor` sources, so BOTH
     system (a sink `.monitor`) and mic (an input source) are captured NATIVELY via
     `pw-record`/`parec` (enumerated with `pactl`; defaults = default-sink

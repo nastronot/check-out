@@ -449,15 +449,26 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
   via `state.json`: `audio_source` (`mic` | `system`), `audio_device`,
   `audio_gain` (now **sensitivity**), `audio_decay` (re-read live; a source/device
   change restarts the capture). Capture only runs while mode is `spectrum`.
-  - **Auto-gain (v0.9.2) — volume-independent.** The monitor is captured
-    POST-volume, so the display must not track absolute level. `update_ref` keeps
-    a decaying-maximum reference of recent band loudness (snap up, release over
-    ~1-2s via `AUTOGAIN_RELEASE`); `normalize_levels` maps each band relative to
-    that reference (recent loudest → top, dB over `AUTOGAIN_RANGE_DB`), biased by
-    `sensitivity`. So lowering system volume does NOT shrink the bars. A SILENCE
-    FLOOR (`signal_rms` < `SILENCE_FLOOR_RMS`) outputs 0 and RELEASES the
-    reference (never ratchets up on hiss); `REF_FLOOR` bounds the re-entry jump.
-    The four constants live in `spectrum.py` (tunable).
+  - **Auto-gain (v0.9.2, envelope reworked v0.9.3) — volume-independent.** The
+    monitor is captured POST-volume, so the display must not track absolute level.
+    `update_ref` is an ENVELOPE FOLLOWER of recent loudness: it RISES toward a new
+    peak by `(peak-ref)*AUTOGAIN_ATTACK` (smooth, ~0.4 — not an instant snap, which
+    pumped) and RELEASES by `*AUTOGAIN_RELEASE` (~0.99) when the signal drops. Its
+    target is `percentile_peak` (the `AUTOGAIN_PERCENTILE` ≈ 85th percentile of the
+    bands — a *typical loud* band, NOT the single max, which let one bass band pin
+    the top and crush the rest). `normalize_levels` maps each band relative to the
+    reference (dB over `AUTOGAIN_RANGE_DB` ≈ 28), biased by `sensitivity`; bar
+    heights are then smoothed by `decay_levels` (attack-fast/release-slow, prev
+    persists across frames — the anti-flash mechanism). Lowering system volume does
+    NOT shrink the bars: `ref` tracks the signal, so absolute level cancels — which
+    REQUIRES `REF_FLOOR` (1e-4) BELOW quiet-music levels (a high floor pins `ref`
+    at low volume and the bars shrink). The SILENCE GATE (`signal_rms` <
+    `SILENCE_FLOOR_RMS`), NOT the floor, is what stops noise being amplified:
+    below it the frame outputs 0 and `ref` releases (never ratchets up on hiss).
+    All constants live in `spectrum.py` with a tuning guide — bars too short →
+    lower `AUTOGAIN_RANGE_DB`/percentile; flashing → lower `AUTOGAIN_ATTACK` /
+    raise the decay factor; volume leaks → lower `REF_FLOOR`; silence noise → raise
+    `SILENCE_FLOOR_RMS`.
   - **Two capture backends (v0.9.1).** PortAudio's ALSA backend does NOT expose
     PipeWire/Pulse `.monitor` sources, so audio is captured NATIVELY via a
     `pw-record` (preferred) / `parec` subprocess reading raw s16le PCM
@@ -689,6 +700,18 @@ sudo usermod -aG uucp "$USER"   # then re-login
   lists only the real Pulse monitors/inputs (labeled), auto-picking the
   default-sink monitor / default source; the raw ALSA/hw/plugin junk is gone
   (~5 vs ~25 entries). Mic now also captures via `pw-record` (PortAudio fallback).
+- **v0.9.3:** auto-gain envelope fixes (confirmed on glass). (1) `REF_FLOOR`
+  1e-2 → **1e-4** so it sits below quiet-music levels — it was pinning the
+  reference at low volume, so volume still shrank the bars (it's now a pure
+  divide-by-zero epsilon; the RMS silence gate handles noise). (2) the reference
+  tracks `percentile_peak` (~85th) instead of the single loudest band, and
+  `AUTOGAIN_RANGE_DB` 42 → **28**, so the spectrum fills instead of one bass band
+  pinning the top. (3) `update_ref` is now an **envelope follower** (smooth
+  `AUTOGAIN_ATTACK` rise, not an instant snap) so transients don't pump the whole
+  display; the bar-height `decay_levels` smoothing is confirmed wired (prev
+  persists). Constants carry a tuning guide.
+
+## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
   (**MIT**) — the authoritative Futaba M202MD10C command protocol. The
   extended-mode initialization (`0x00 0x01`) that resolved the vertical-scroll
