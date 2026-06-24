@@ -166,6 +166,17 @@ Built as one buffered serial write (no flicker, cursor-off reliably last). Both 
 full 20 chars; overwrite-in-place. No leading clear, no `0x27` special-case, no
 anchor/reposition trick — all removed now that the init sequence is correct.
 
+**Every write DRAINS to the wire (v1.0.0).** `_write()` calls `self._serial.flush()`
+(POSIX pyserial = `termios.tcdrain` — blocks until all bytes are transmitted) AFTER each
+`write()`. The port is opened non-blocking (`timeout=0`), so `write()` alone just dumps
+the frame into the OS TX buffer and returns; at 9600 baud that buffer drains only ~21fps,
+so the daemon's ~30fps spectrum renders piled frames into it until full (~1-1.5s), and the
+glass always showed that-old frames — the spectrum "latency drift" (bars trail ~1-2s behind
+the music / after a pause). Draining after each write paces the daemon to the real serial
+speed: the buffer can never accumulate a backlog, so spectrum renders at the true wire
+ceiling with no growing latency. Normal modes emit-diff (write rarely), so the drain cost
+there is negligible — one consistent backlog-free path for all modes.
+
 **Driver primitives** wrap exactly these bytes, so the app never emits raw bytes:
 - `initialize()` → `0x1F 0x00 0x01 0x11` (reset + extended mode + scroll off)
 - `clear()` → `0x1F` (note: drops the init state; prefer `blank()`)
@@ -502,7 +513,10 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
     MUST pass **`--latency-msec=20`** (v0.9.6) or it block-buffers ~750ms and dumps
     audio in bursts (gaps ~21ms with the flag vs up to ~2000ms without) — the
     pop-to-top/fall-to-zero PUMP + 1-2s delay behind the spectrum-tuning saga.
-    `select_capture` never silently uses the mic for `system`.
+    `select_capture` never silently uses the mic for `system`. **Tuned defaults
+    (v1.0.0):** `PAREC_LATENCY_MS = 10` (was 20 — tighter) and `BLOCK = 256`
+    (was 1024 — smaller FFT frame = tighter timing, acceptable bass resolution);
+    both tunable.
   - **hardened restart (v0.9.1):** full teardown (null → stop → close, guarded) +
     debounced switches + try/except open, so cycling devices can't segfault.
   - **minimal device list (v0.9.2):** built from Pulse sources — only the real
@@ -522,7 +536,10 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   animation forced `none`. `status.bars` carries the 20 heights for the preview.
 - **Bench-locked (do not retune):** 9600 baud cap, ~21fps full-frame ceiling,
   double-height over 7 partial glyphs, height 0..14 → bottom cell 1..7 then top
-  8..14, `bar_glyph(h)` lights rows `r ≥ 7-h` full width (`0x1F`).
+  8..14, `bar_glyph(h)` lights rows `r ≥ 7-h` full width (`0x1F`). The ~21fps
+  ceiling is now ENFORCED by the per-write serial drain (`tcdrain`, v1.0.0): the
+  daemon blocks on the wire instead of dumping ~30fps renders into the OS TX
+  buffer, so there's no growing latency backlog (see §3, `show()` byte sequence).
 
 ---
 

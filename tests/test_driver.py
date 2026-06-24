@@ -210,9 +210,17 @@ def test_blank_reinits_and_ends_in_cursor_hide(driver, capsys):
 class _FakeSerial:
     def __init__(self):
         self.buf = bytearray()
+        self.flush_calls = 0
+        self.flushed_len_at_flush = []
 
     def write(self, data):
         self.buf += data
+
+    def flush(self):
+        self.flush_calls += 1
+        # Record how many bytes had been written by the time flush ran, so a
+        # test can assert flush happens AFTER the write (drain pacing).
+        self.flushed_len_at_flush.append(len(self.buf))
 
     def close(self):
         pass
@@ -235,6 +243,32 @@ def test_debug_tx_logs_live_writes_and_still_writes_to_port(monkeypatch, capsys)
     # The same bytes actually reached the port, ending in the cursor-hide.
     assert drv._serial.buf[-1] == CURSOR_OFF
     assert drv._serial.buf[0:2] == bytes([0x10, 0x00])
+
+
+def test_write_drains_after_write_to_pace_to_wire():
+    """Every live write DRAINS (flush/tcdrain) AFTER writing, so frames pace to
+    the wire and can't backlog the OS TX buffer (the spectrum latency-drift fix).
+    """
+    drv = VFDDriver.__new__(VFDDriver)
+    drv.dry_run = False
+    drv.port = "fake"
+    drv.baud = 9600
+    drv._serial = _FakeSerial()
+
+    drv.show("hello", "world")
+
+    fake = drv._serial
+    assert fake.flush_calls == 1  # drained exactly once for the one write
+    # The drain ran AFTER the full frame was written (all 45 bytes present).
+    assert fake.flushed_len_at_flush == [len(fake.buf)]
+
+
+def test_dry_run_does_not_touch_serial_or_flush(capsys):
+    """Dry-run must never call write/flush (there is no port)."""
+    drv = VFDDriver(dry_run=True)
+    assert drv._serial is None
+    drv.show("AB", "CD")  # must not raise (no serial, no flush)
+    assert capture_bytes(capsys)  # but it still hexdumps
 
 
 def test_show_sanitizes_non_ascii(driver, capsys):

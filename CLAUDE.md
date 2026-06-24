@@ -82,6 +82,19 @@ the MISSING INITIALIZATION — no extended mode, scroll left on. Resolved.)
 One buffered serial write (no flicker). Overwrite-in-place, NO leading clear, NO
 `0x27` special-case, NO anchor/reposition — all gone now that init is correct.
 
+**Every write DRAINS to the wire (v1.0.0).** After each `self._serial.write(data)`,
+`_write()` calls `self._serial.flush()` — on POSIX pyserial this is
+`termios.tcdrain(fd)`, which BLOCKS until all bytes are transmitted. The port is
+opened non-blocking (`timeout=0`), so a bare `write()` just dumps the frame into
+the OS TX buffer and returns; at 9600 baud the buffer drains only ~21fps, so the
+daemon's ~30fps spectrum renders piled frames into it until full (~1-1.5s) and the
+glass always showed frames that old — the spectrum **latency drift** (bars trail
+~1-2s behind the music and after a pause). Draining after each write paces the
+daemon to the real serial speed, so the TX buffer can never accumulate a backlog:
+spectrum renders at the true wire ceiling with zero growing latency. Normal modes
+emit-diff (write rarely), so the drain there is negligible — one consistent,
+backlog-free path for all modes.
+
 ### Pin map (RJ-style connector)
 | Pin | Use                                            |
 |-----|------------------------------------------------|
@@ -484,7 +497,10 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
     (`PAREC_LATENCY_MS`=20)** or it BLOCK-BUFFERS ~750ms and dumps audio in bursts
     (bench v0.9.6: gaps ~21ms with the flag vs up to ~2000ms without) — that
     burst-buffering was the pop-to-top / fall-to-zero PUMP + 1-2s delay behind the
-    whole spectrum-tuning saga. Both `system` (a monitor) and `mic` (an input
+    whole spectrum-tuning saga. **Tuned defaults (v1.0.0):** `PAREC_LATENCY_MS`=10
+    (was 20 — tighter) and `BLOCK`=256 samples (was 1024 — smaller FFT frame =
+    tighter timing, acceptable bass resolution); both tunable. Both `system` (a
+    monitor) and `mic` (an input
     source) go through this; `sounddevice`/PortAudio (`SoundDeviceCapture`) is the FALLBACK
     when Pulse is absent. `select_capture`: system → the monitor (device override →
     default-sink monitor → first), else None = emit zeros (NEVER the mic); mic →
@@ -580,6 +596,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
   20 log-bands+decay) streaming 20 bar heights to the daemon over a unix datagram
   socket; double-height bars via 7 height-glyphs (user glyphs restore on exit);
   preview renders the bars. (done)
+- **v1.0.0:** serial writes drain to the wire (`tcdrain`) — paces the daemon to
+  9600 baud so the OS TX buffer can't backlog (the spectrum latency-drift fix);
+  tuned spectrum defaults (`PAREC_LATENCY_MS`=10, `BLOCK`=256). (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
@@ -746,6 +765,23 @@ sudo usermod -aG uucp "$USER"   # then re-login
   (`PAREC_LATENCY_MS`) → steady ~21ms gaps (max 31ms, zero >100ms). Confirmed on
   glass: bars bounce smoothly with music, no pump, no delay. The DSP was right
   all along — it was being fed bursts.
+- **v1.0.0:** the LAST spectrum-latency root cause — the SERIAL TX BUFFER backing
+  up. The daemon renders spectrum at `LOOP_HZ` (~30fps) and `show()` → `_write()`
+  did `self._serial.write(data)` fire-and-forget into the OS TX buffer (port
+  opened `timeout=0`, non-blocking). But 9600 baud only drains ~21fps, so ~9
+  frames/s accumulated in the kernel buffer until full (~1-1.5s) and the glass
+  always rendered frames that old — the spectrum delay that drifted in then held,
+  trailing ~1-2s after the music paused. Proven: a standalone 30fps socket
+  receiver tracked the music perfectly; only the serial-writing daemon lagged.
+  Fix: `_write()` now calls `self._serial.flush()` (POSIX pyserial =
+  `termios.tcdrain` — blocks until transmitted) AFTER each write, so the daemon
+  paces to the real wire speed and NEVER queues more than the current frame —
+  zero backlog by construction. Applies to ALL writes (normal modes emit-diff +
+  write rarely, so the drain there is negligible — one uniform path). Also
+  formalized the bench-tuned spectrum defaults: `PAREC_LATENCY_MS` 20 → **10**
+  and `BLOCK` 1024 → **256** (`LOOP_HZ` stays 30 — 60 felt worse). Confirmed on
+  glass: bars track the music with only the minimal fixed pipeline latency, no
+  drift; pausing stops the bars within ~one frame.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

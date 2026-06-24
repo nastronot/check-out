@@ -32,6 +32,12 @@ EMIT-DIFFs to the serial port (so normal modes only write on change), while
 `status.json` is throttled (~`CHECKOUT_STATUS_HZ`). Looping fast costs nothing
 for static modes and gives the spectrum analyzer its frame rate.
 
+Each serial write **drains to the wire** (`flush()`/`tcdrain`) before returning,
+so the daemon paces to the real 9600-baud speed instead of dumping ~30fps frames
+into the OS TX buffer — that buffer backlog was the spectrum **latency drift**
+(bars trailing ~1–2s behind the music). Draining keeps the buffer empty, so
+spectrum renders at the true wire ceiling with no growing lag.
+
 ## Web control surface (optional)
 
 ```bash
@@ -65,12 +71,13 @@ Then set mode `spectrum` (UI or `state.json`) and pick the **source**:
 
 > **Note:** `parec` is preferred because `pw-record`/`pw-cat`, piped, deliver one
 > good buffer from a `.monitor` then starve to near-silence here (bench-confirmed
-> v0.9.5). And `parec` itself is run with **`--latency-msec=20`** — without a
+> v0.9.5). And `parec` itself is run with **`--latency-msec`** — without a
 > latency hint it block-buffers ~750ms and dumps audio in bursts (bench: ~21ms
 > gaps with the flag vs up to ~2000ms without), which showed up as the bars
 > "popping to the top then falling to zero ~2×/sec" with a 1–2s delay (v0.9.6).
 > Together these were the real cause behind the long spectrum-tuning saga — the
-> DSP was correct, just being fed bursts.
+> DSP was correct, just being fed bursts. The bench-tuned defaults are
+> `PAREC_LATENCY_MS=10` and `BLOCK=256` (both tunable in `audioviz.py`).
 
 The **Device** dropdown is minimal: just "Auto" + the handful of real monitors
 (system) or inputs (mic), labeled — no raw ALSA/hw nodes. Auto is usually right.
