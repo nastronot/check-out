@@ -26,14 +26,49 @@ python -m checkout.daemon --once
 You should see a centered date on the top line and a ticking `HH:MM:SS` on the
 bottom line, updating once per second without flicker.
 
+The daemon runs ONE fast loop (~30Hz, `CHECKOUT_LOOP_HZ`): it re-parses
+`state.json` only when its mtime changes, computes the active frame, and
+EMIT-DIFFs to the serial port (so normal modes only write on change), while
+`status.json` is throttled (~`CHECKOUT_STATUS_HZ`). Looping fast costs nothing
+for static modes and gives the spectrum analyzer its frame rate.
+
+## Web control surface (optional)
+
+```bash
+pip install -r web/requirements.txt
+( cd ui && npm install && npm run build )     # build the Svelte UI -> ui/dist
+uvicorn web.app:app --port 8000 --no-access-log   # serves UI + /api
+```
+
+`--no-access-log` keeps the console quiet (the UI polls `/api/status` ~2×/s).
+
+## Spectrum analyzer (optional) — `python -m checkout.audioviz`
+
+SPECTRUM mode shows a 20-band, double-height (14-level) audio analyzer at ~21fps.
+A SEPARATE process captures audio, FFTs it, and streams bar heights to the daemon
+over a unix datagram socket (the daemon stays the sole serial owner).
+
+```bash
+pip install -r requirements-audio.txt          # numpy + sounddevice (PortAudio)
+python -m checkout.audioviz --list             # enumerate input devices
+python -m checkout.audioviz                     # capture + stream to the daemon
+```
+
+Then set mode `spectrum` (UI or `state.json`). Pick the **source** in the UI:
+`system` captures playback via a PipeWire/PulseAudio monitor source; `mic`
+captures the default input. Gain/decay tune sensitivity + smoothing. Spectrum
+borrows the 9 glyph slots for the bars and restores your custom glyphs on exit.
+
 ## Configuration (env vars)
 
 | Variable              | Default          | Purpose                    |
 |-----------------------|------------------|----------------------------|
 | `CHECKOUT_PORT`       | `/dev/ttyUSB0`   | serial device              |
 | `CHECKOUT_BAUD`       | `9600`           | baud rate                  |
-| `CHECKOUT_TICK_MS`    | `250`            | daemon loop period (ms)    |
+| `CHECKOUT_LOOP_HZ`    | `30`             | fast-loop rate (Hz)        |
+| `CHECKOUT_STATUS_HZ`  | `6`              | status.json write rate (Hz)|
 | `CHECKOUT_STATE_PATH` | `./state.json`   | path to the state file     |
+| `CHECKOUT_SPECTRUM_SOCK` | `$XDG_RUNTIME_DIR/checkout-spectrum.sock` | audioviz→daemon socket |
 
 ## Serial permissions
 

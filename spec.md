@@ -202,6 +202,14 @@ data sources ──► frame builder ──► 2x20 renderer ──► serial dr
   Docker health → job/queue counts → a custom message).
 - **Data sources:** pluggable. Start with clock; add others incrementally.
 
+**Single fast loop (v0.9.0).** The daemon runs ONE fast loop (~30Hz,
+`CHECKOUT_LOOP_HZ`), not a 250ms tick. Each iteration mtime-gates `state.json`
+(re-parse only on change), computes the frame, and **emit-diffs** to the port
+(write only when the frame changed). Emit-diffing decouples loop rate from
+serial-write rate, so looping fast is free for normal modes and gives `spectrum`
+its frame rate — one code path, no mode-transition seam. Per-mode timing runs off
+elapsed wall-clock; `status.json` is throttled to ~`CHECKOUT_STATUS_HZ` (~6Hz).
+
 ### 4.3 Constraint-as-feature
 - Hard cap: 2×20. No graphics (character cell display).
 - Lean into it: rotating single-purpose frames, ticker for anything longer, blink/dim
@@ -222,8 +230,10 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
 **`state.json`** (web writes, daemon reads each tick):
 ```jsonc
 {
-  "mode": "clock" | "message" | "scroll" | "marquee",  // legacy "ticker" -> "scroll"
+  "mode": "clock" | "message" | "scroll" | "marquee" | "spectrum",  // legacy "ticker" -> "scroll"
   "message": "text for message/scroll mode",
+  // spectrum (mode "spectrum") SETTINGS only; live bars go over a socket, not here:
+  "audio_source": "system" | "mic", "audio_device": null, "audio_gain": 1.0, "audio_decay": 0.85,
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
   "marquee_text": "...", "marquee_bottom": "static", "marquee_bottom_text": "...",  // bottom is static-only
@@ -447,6 +457,39 @@ ownership. `web/library.py` validates input and writes atomically (reusing
   `drop` — gating only on `dataTransfer.types` is unreliable, its custom-MIME visibility
   during dragover is browser-dependent). HTML5 DnD doesn't fire on touch, so a **click/tap
   fallback** loads into the selected slot (cards are keyboard-activatable).
+
+### 4.9 Phase 3a — spectrum analyzer (v0.9.0)
+A crude real-time audio spectrum analyzer (mode `spectrum`): 20 bands, double-
+height (14 levels over 2 rows), ~21fps. THREE processes; the daemon stays the
+sole serial owner.
+
+```
+audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon ──► VFD
+   ▲ reads audio_* from state.json                              ▲ writes status.bars
+```
+
+- **`checkout.audioviz`** (separate process; never opens the port). `sounddevice`
+  capture → Hann window → numpy rFFT → 20 LOG-spaced bands → dB-scaled heights
+  0..14 with **attack-fast/release-slow** decay (`out = max(new, prev*decay)`).
+  Source via `state.json`: `system` = a PipeWire/Pulse **monitor** (loopback of
+  playback), `mic` = default input; `audio_device`/`audio_gain`/`audio_decay`
+  re-read live. Enumerates inputs to `devices.json` (`--list`, served at
+  `/api/devices`). Missing PortAudio/device/monitor → log once + stream zeros +
+  retry; never crash.
+- **Socket protocol.** Unix `SOCK_DGRAM` (`CHECKOUT_SPECTRUM_SOCK`, default
+  `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Each datagram = a fixed **20-byte**
+  frame (one height 0..14 per bar). Newest-frame-wins: the daemon **drains to the
+  latest** datagram each loop (stale discarded), so a slow reader can't back up a
+  stream. Heavy per-frame data goes here; only settings via `state.json`.
+- **Daemon spectrum path.** On enter: define the **7 bar height-glyphs** (slots
+  0..6; this OVERWRITES those user glyphs) + bind the socket. Each iteration:
+  drain → latest heights (or **decay toward 0** if no datagram within
+  `SPECTRUM_STALE_MS`) → double-height bars → emit-diff a `show()` (~21fps, paced
+  by the serial write). On leave: re-apply `state.glyphs` (RESTORE user glyphs);
+  animation forced `none`. `status.bars` carries the 20 heights for the preview.
+- **Bench-locked (do not retune):** 9600 baud cap, ~21fps full-frame ceiling,
+  double-height over 7 partial glyphs, height 0..14 → bottom cell 1..7 then top
+  8..14, `bar_glyph(h)` lights rows `r ≥ 7-h` full width (`0x1F`).
 
 ---
 

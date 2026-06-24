@@ -108,7 +108,24 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
 - `frames/base.py` — `Frame` interface; `frames/{clock,message,ticker}.py`.
 - `state.py` — atomic load/save of `state.json` + `status.json`.
-- `daemon.py` — main loop + entrypoint; diffs frames, reconnects, shuts down clean.
+- `daemon.py` — the SINGLE FAST LOOP + entrypoint; diffs frames, reconnects, shuts down clean.
+- `spectrum.py` — spectrum protocol + bar rendering + DSP + `SpectrumReceiver`/`Sender` (shared).
+- `audioviz.py` — the audio capture + FFT process (separate; streams bars over a socket).
+
+### Single fast loop (v0.9.0)
+The daemon runs ONE fast loop (~30Hz, `config.LOOP_HZ`), NOT a 250ms tick. Each
+iteration: mtime-gates `state.json` (re-parse only when it changed — a single
+`os.stat`), computes the active frame, and **emit-diffs** to the serial port
+(writes only when the frame changed). Looping fast is free for normal modes
+(clock/message/scroll/marquee touch the port only on content change) because
+emit-diffing decouples loop rate from write rate; it's what gives `spectrum` its
+frame rate — one code path, no mode-transition seam. Per-mode timing is driven
+off elapsed wall-clock (`now_ms`): clock ticks 1/s, scroll steps at
+`scroll_speed_ms`, marquee re-kicks on text change, animations by their ms params
+— all unchanged behaviorally. `status.json` is THROTTLED to ~`config.STATUS_HZ`
+(~6Hz) so the mirror file isn't churned 30×/s (still far inside the 5s liveness
+window). The loop self-paces with `time.monotonic`; a slow serial write (spectrum)
+naturally paces it below `LOOP_HZ`.
 
 ## Phase 2 — control surface (v0.3.0)
 Everything the display can do is driven by `state.json` (the daemon stays sole
@@ -117,7 +134,7 @@ port owner). The web UI is just a writer of this file.
 ### `state.json` (web writes, daemon reads each tick)
 ```jsonc
 {
-  "mode": "clock" | "message" | "scroll" | "marquee",  // active frame (legacy "ticker" -> "scroll")
+  "mode": "clock" | "message" | "scroll" | "marquee" | "spectrum",  // active frame (legacy "ticker" -> "scroll")
   "message": "text for message/scroll mode",
   "align_top": "left" | "center" | "right",     // line 1 justification (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justification (default center)
@@ -139,6 +156,11 @@ port owner). The web UI is just a writer of this file.
   "animation_params": { "on_ms": 500, "off_ms": 500, "step_ms": 200 },  // step_ms times pulse
   "glyphs": { "0": [r0..r6], ... "8": [...] },  // optional 5x7 glyphs; 7 ints, low 5 bits = cols 1..5
   // place a glyph in `message` with {g0}..{g8}
+  // spectrum (mode "spectrum") — SETTINGS only; the live bar data goes over a socket
+  "audio_source": "system" | "mic",   // "system" = PipeWire/Pulse monitor; "mic" = default input
+  "audio_device": null,               // device name/index, or null = source default
+  "audio_gain": 1.0,                  // sensitivity (clamped 0.05..20)
+  "audio_decay": 0.85,                // bar release factor (clamped 0..0.999)
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
   "updated_at": "iso"
 }
@@ -151,9 +173,11 @@ daemon.
 ```jsonc
 { "alive": true, "mode": "...", "top": "....20....", "bottom": "....20....",
   "brightness": "...", "blank": false, "scroll": false,
-  "last_command_id": "...", "updated_at": "iso" }
+  "bars": [0..14]×20 | null,        // spectrum bar heights (for the preview), else null
+  "last_command_id": "...", "heartbeat": N, "updated_at": "iso" }
 ```
-Written atomically on change. This is how the UI mirrors the real display + daemon health.
+Written atomically (throttled to ~`STATUS_HZ`). This is how the UI mirrors the
+real display + daemon health.
 
 ### Command nonce
 `command.id` is a nonce. The daemon runs `command.action` once per *new* id
@@ -166,7 +190,8 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
 - **Modes:** `clock` (`DD MON YYYY` top / `HH:MM:SS AM/PM` 12-hour bottom, e.g.
   `05 JUN 2026` / `08:47:03 PM`; locale-independent), `message` (static; newline
   splits the two lines, else word-wrapped, ≤40 chars), `scroll` (software
-  horizontal scroll — see below), `marquee` (hardware ticker — see below).
+  horizontal scroll — see below), `marquee` (hardware ticker — see below),
+  `spectrum` (audio analyzer — see "Spectrum analyzer" below).
 - **`scroll` (software, flexible — the news-ready home).** The `message`'s two
   lines (newline-split). Each row INDEPENDENTLY picks a CONTENT SOURCE
   (`scroll_top_source` / `scroll_bottom_source` = `message` | `clock`, default
@@ -408,6 +433,48 @@ params) in `<script lang="ts">` handler functions and call them from markup. Use
 real `<button type="button">`/`<label>` controls (not `aria-disabled` on a
 `<section>`) to keep svelte-check's a11y pass clean.
 
+## Phase 3a — spectrum analyzer (v0.9.0)
+A crude real-time audio spectrum analyzer (mode `spectrum`): 20 frequency bars,
+double-height (up to 14 levels over 2 rows), ~21fps. THREE processes cooperate,
+each single-purpose; the daemon stays the sole serial owner:
+
+```
+audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
+   ^ reads audio_* from state.json                          ^ writes status.bars
+```
+
+- **`checkout.audioviz`** (separate process, never opens the port). Captures with
+  `sounddevice`/PortAudio, Hann-windows → numpy rFFT → 20 LOG-spaced bands →
+  dB-scaled heights 0..14, with **attack-fast/release-slow** smoothing
+  (`out = max(new, prev*decay)`). SETTINGS via `state.json`: `audio_source`
+  (`mic` | `system` — a PipeWire/Pulse **monitor** source = loopback of playback),
+  `audio_device`, `audio_gain`, `audio_decay` (re-read live on mtime change;
+  source/device change restarts the stream). Enumerates inputs to `devices.json`
+  (web-readable, `--list`). Missing PortAudio / device / monitor → log once,
+  stream zeros, retry — never crash.
+- **Socket protocol.** A unix **DATAGRAM** socket (`config.SPECTRUM_SOCKET`,
+  default `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Each datagram is a fixed
+  **20-byte** frame, one byte per bar (height 0..14). `SOCK_DGRAM` = newest-frame-
+  wins: the daemon **drains to the LATEST** datagram each loop (discards stale),
+  so a slow reader can't back up a stream and there's no filesystem churn / tear.
+  The HEAVY per-frame data goes here; only settings go via `state.json`.
+- **Daemon spectrum path** (in the fast loop). On ENTER: define the **7 bar
+  height-glyphs** (slots 0..6 via `spectrum.bar_glyph(1..7)`; this OVERWRITES
+  those user-glyph slots), re-init, lazily bind the socket. Each iteration: drain
+  → latest 20 heights (or **decay toward 0** if no datagram within
+  `SPECTRUM_STALE_MS` — don't freeze) → `bar_to_cells` double-height bars →
+  emit-diff a full `show()` (~21fps, paced by the serial write). On LEAVE:
+  re-apply `state.glyphs` (RESTORE the user's glyphs the bars overwrote); glyph
+  re-apply is skipped while in spectrum. Animation is forced `none`. `status.bars`
+  carries the 20 heights (throttled) so the preview renders the analyzer.
+- **Bench-locked params (do NOT retune):** 9600 baud is the hard cap; ~21fps
+  full-frame is the ceiling and looks good; double-height over 7 partial-height
+  glyphs reads clean; bar height 0..14 → bottom cell 1..7 then top cell 8..14;
+  `bar_glyph(h)` lights rows `r >= 7-h` full width (`0x1F`), driver `(row&0x1F)<<3`.
+- **Run:** `pip install -r requirements-audio.txt` then `python -m checkout.audioviz`
+  (and set mode `spectrum`). The 5×7 preview draws the bars directly from
+  `status.bars` (it can't read the hardware bar glyphs) via `spectrumbars.ts`.
+
 ## Versioning
 Semver `major.minor.patch` read as **"big.small.bug"**.
 
@@ -424,10 +491,17 @@ pip install -r web/requirements.txt
 uvicorn web.app:app --port 8000 --no-access-log   # serves UI + /api; shares state/status json
 # dev: `uvicorn web.app:app --reload --no-access-log` + `cd ui && npm run dev` (vite proxies /api)
 # --no-access-log: the UI polls /api/status ~2x/s; skip per-request 200 spam (errors/warnings still show)
+
+# Spectrum analyzer (Phase 3a) — separate process, never opens the port
+pip install -r requirements-audio.txt   # numpy + sounddevice (PortAudio)
+python -m checkout.audioviz --list      # enumerate input devices -> devices.json
+python -m checkout.audioviz             # capture + stream bars to the daemon (set mode "spectrum")
 ```
-Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_TICK_MS`,
-`CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`, `CHECKOUT_LIBRARY_PATH`
-(web-only), `CHECKOUT_UI_DIST`.
+Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_LOOP_HZ`,
+`CHECKOUT_STATUS_HZ`, `CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`,
+`CHECKOUT_LIBRARY_PATH` (web-only), `CHECKOUT_UI_DIST`, `CHECKOUT_SPECTRUM_SOCK`,
+`CHECKOUT_DEVICES_PATH` (audioviz). `CHECKOUT_TICK_MS` is legacy (the loop now
+uses `LOOP_HZ`; kept for `--once`).
 
 ## Serial permissions
 The dev user must belong to the device's group (on Arch this is `uucp`) or run
@@ -450,6 +524,11 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **Phase 2d (v0.7.0):** saved library (`library.json`, web-owned) of messages +
   glyphs with CRUD/recall endpoints + UI panels; `blink` reworked to a brightness
   pulse (distinct from `flash`'s blank). (done)
+- **Phase 3a (v0.9.0):** single fast daemon loop (emit-diffed, mtime-gated state,
+  throttled status); `spectrum` audio analyzer — `audioviz` process (capture+FFT+
+  20 log-bands+decay) streaming 20 bar heights to the daemon over a unix datagram
+  socket; double-height bars via 7 height-glyphs (user glyphs restore on exit);
+  preview renders the bars. (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
@@ -549,6 +628,18 @@ sudo usermod -aG uucp "$USER"   # then re-login
   `daemon_alive` is derived from `/api/status` freshness (`aliveFromStatus`),
   halving request volume; documented `uvicorn --no-access-log`. (c) **mobile
   order** — controls now sit directly under the preview on narrow screens.
+- **v0.9.0:** audio **spectrum** analyzer + daemon loop refactor. The daemon is
+  now ONE fast loop (~30Hz): mtime-gated state re-parse, emit-diffed serial
+  writes, elapsed-time per-mode timing, throttled status — normal modes behave
+  identically, spectrum gets its frame rate, no mode-transition seam. New
+  `audioviz` process captures audio (mic / PipeWire-Pulse system monitor), FFTs,
+  buckets into 20 log bands, decays (attack-fast/release-slow), and streams 20
+  bar heights to the daemon over a unix datagram socket (newest-frame-wins,
+  20-byte frames; settings via `state.json`, heavy data via the socket). Mode
+  `spectrum` defines 7 height-glyphs and renders double-height bars at ~21fps,
+  decays on stale, and restores the user's glyph slots on exit; the preview draws
+  the bars from `status.bars`. UI gains a SPECTRUM mode with source/device/gain/
+  decay controls (`/api/devices` ← `devices.json`).
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
