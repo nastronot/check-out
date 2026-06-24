@@ -42,8 +42,16 @@
   </header>
 
   <main class="layout">
-    <div class="layout__preview">
-      <VfdPreview status={$status} {glyphs} />
+    <!-- LEFT column: one flex stack so the two columns size INDEPENDENTLY. A
+         previous 2-row grid let the tall right column (controls) span both rows
+         and distribute its excess height into the left rows, leaving a big empty
+         gap under the fixed-size preview. One column = one stack = no inflation. -->
+    <div class="layout__left">
+      <div class="layout__preview">
+        <VfdPreview status={$status} {glyphs} />
+      </div>
+      <GlyphEditorPanel />
+      <GlyphLibrary />
     </div>
 
     <div class="layout__controls">
@@ -52,11 +60,6 @@
       <SavedMessages />
       <CommandBar />
       <StatusReadout status={$status} health={$health} />
-    </div>
-
-    <div class="layout__glyphs">
-      <GlyphEditorPanel />
-      <GlyphLibrary />
     </div>
   </main>
 
@@ -110,32 +113,27 @@
   .layout {
     display: grid;
     grid-template-columns: 1.25fr 1fr;
-    grid-template-areas:
-      'preview controls'
-      'glyphs  controls';
     gap: 20px;
+    /* Each column is its OWN flex stack and aligns to the top; the taller column
+       sets the container height and the shorter one is NOT stretched, so neither
+       column gets dead space injected between its panels. */
     align-items: start;
   }
 
-  .layout__preview {
-    grid-area: preview;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
+  .layout__left,
   .layout__controls {
-    grid-area: controls;
     display: flex;
     flex-direction: column;
     gap: 20px;
+    min-width: 0; /* let the column shrink instead of overflowing on narrow widths */
   }
 
-  .layout__glyphs {
-    grid-area: glyphs;
+  /* The preview keeps a fixed 2×20 aspect (set on the canvas); this wrapper adds
+     no extra height, so the preview box stays a constant size across mode/status
+     changes — no layout jump. */
+  .layout__preview {
     display: flex;
     flex-direction: column;
-    gap: 20px;
   }
 
   .footnote {
@@ -148,11 +146,7 @@
 
   @media (max-width: 860px) {
     .layout {
-      grid-template-columns: 1fr;
-      grid-template-areas:
-        'preview'
-        'controls'
-        'glyphs';
+      grid-template-columns: 1fr; /* stack: left column (preview + glyphs) then controls */
     }
   }
 </style>
