@@ -41,11 +41,21 @@ def defaults() -> dict:
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
         # --- marquee (hardware ticker, top row autonomous + FIXED speed) ---
         "marquee_text": "",              # scrolls on the top row (hardware ticker)
-        "marquee_bottom": "clock",       # "static" | "clock" — bottom row source
-        "marquee_bottom_text": "",       # bottom text when marquee_bottom == "static"
-        # --- software scroll (mode "scroll"): per-row scroll + direction ---
-        "scroll_top": True,              # scroll the top row
-        "scroll_bottom": False,          # scroll the bottom row
+        # Bottom row is STATIC TEXT ONLY. A live clock there is impossible: a
+        # bottom write that lands after the hardware scroll resumes STOPS it
+        # (bench-confirmed), so clock-bottom was removed. The field is kept for
+        # back-compat but always normalized to "static".
+        "marquee_bottom": "static",      # "static" only (legacy "clock" -> "static")
+        "marquee_bottom_text": "",       # the static bottom text
+        # --- software scroll (mode "scroll"): per-row source + scroll + dir ---
+        # Each row independently selects a CONTENT SOURCE and (for "message")
+        # whether it scrolls and in which direction. "clock" shows the live time
+        # line. This is the flexible, news-ready mode (a "news" source slots into
+        # _SCROLL_SOURCES later without reshaping the schema).
+        "scroll_top_source": "message",     # "message" | "clock" (future: "news")
+        "scroll_bottom_source": "message",  # "message" | "clock" (future: "news")
+        "scroll_top": True,              # scroll the top row (when source "message")
+        "scroll_bottom": False,          # scroll the bottom row (when source "message")
         "scroll_dir_top": "left",        # "left" | "right"
         "scroll_dir_bottom": "left",     # "left" | "right"
         "brightness": _DEFAULT_BRIGHTNESS,  # int 0..3 (0 Min..3 Max)
@@ -72,6 +82,12 @@ def defaults() -> dict:
 # user-owned map and a write replaces it entirely.
 _NESTED_DEFAULTS = ("animation_params", "command")
 
+# Per-row content sources for software scroll. EXTENSION POINT: add "news" here
+# (and wire a news renderer in the daemon) to give a row a live news feed — the
+# schema/UI shape already accommodate a third option.
+_SCROLL_SOURCES = ("message", "clock")
+_DEFAULT_SCROLL_SOURCE = "message"
+
 
 def _backfill(data: dict) -> dict:
     """Return ``data`` with every default key present (recursively for nested)."""
@@ -91,6 +107,14 @@ def _backfill(data: dict) -> dict:
     # Legacy mode "ticker" is the old single-line top scroll — now "scroll".
     if merged.get("mode") == "ticker":
         merged["mode"] = "scroll"
+    # Marquee bottom is static-only now (live clock-bottom stops the hardware
+    # scroll). Normalize any value (incl. legacy "clock") to "static".
+    if merged.get("marquee_bottom") != "static":
+        merged["marquee_bottom"] = "static"
+    # Per-row scroll sources: coerce anything unknown back to the default.
+    for key in ("scroll_top_source", "scroll_bottom_source"):
+        if merged.get(key) not in _SCROLL_SOURCES:
+            merged[key] = _DEFAULT_SCROLL_SOURCE
     return merged
 
 

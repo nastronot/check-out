@@ -5,9 +5,9 @@
     AppState,
     Animation,
     Brightness,
-    MarqueeBottom,
     Mode,
     ScrollDir,
+    ScrollSource,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -67,12 +67,21 @@
   const setCodePage = (e: Event) => patch({ code_page: num(e) });
   const setScrollSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
 
-  // software scroll (mode "scroll")
+  // software scroll (mode "scroll") — per-row content source + scroll + dir.
+  // SCROLL_SOURCES is the per-row "Source" selector; EXTENSION POINT: add
+  // { value: 'news', label: 'News' } here when the news source lands.
+  const SCROLL_SOURCES: { value: ScrollSource; label: string }[] = [
+    { value: 'message', label: 'Message' },
+    { value: 'clock', label: 'Clock' },
+  ];
+  const setSrcTop = (s: ScrollSource) => patch({ scroll_top_source: s });
+  const setSrcBottom = (s: ScrollSource) => patch({ scroll_bottom_source: s });
   const setScrollTop = (e: Event) => patch({ scroll_top: checked(e) });
   const setScrollBottom = (e: Event) => patch({ scroll_bottom: checked(e) });
   const setDirTop = (d: ScrollDir) => patch({ scroll_dir_top: d });
   const setDirBottom = (d: ScrollDir) => patch({ scroll_dir_bottom: d });
-  // marquee (hardware ticker)
+  // marquee (hardware ticker). Bottom is STATIC TEXT ONLY (a live clock there
+  // stops the hardware scroll), so there's no source selector.
   let marqueeDraft = '';
   let marqueeSeen = '';
   $: if (state && state.marquee_text !== marqueeSeen) {
@@ -84,8 +93,6 @@
     if (marqueeTimer) clearTimeout(marqueeTimer);
     marqueeTimer = setTimeout(() => patch({ marquee_text: marqueeDraft }), 250);
   }
-  const MARQUEE_BOTTOMS: MarqueeBottom[] = ['static', 'clock'];
-  const setMarqueeBottom = (b: MarqueeBottom) => patch({ marquee_bottom: b });
   const setMarqueeBottomText = (e: Event) =>
     patch({ marquee_bottom_text: (e.target as HTMLInputElement).value });
 
@@ -126,14 +133,18 @@
       <div class="field">
         <span class="field__label">
           Message
-          {#if budget.hasNewline}
-            <span class="budget">
-              <span class:over={budget.topOver}>top {budget.top}/20</span>
-              <span class="sep">·</span>
-              <span class:over={budget.bottomOver}>bottom {budget.bottom}/20</span>
-            </span>
-          {:else}
-            <span class:over={budget.topOver}>{budget.top}/20</span>
+          <!-- Budget warning is MESSAGE-only: in SCROLL mode long text is the
+               point (it scrolls), so length is never flagged there. -->
+          {#if state.mode === 'message'}
+            {#if budget.hasNewline}
+              <span class="budget">
+                <span class:over={budget.topOver}>top {budget.top}/20</span>
+                <span class="sep">·</span>
+                <span class:over={budget.bottomOver}>bottom {budget.bottom}/20</span>
+              </span>
+            {:else}
+              <span class:over={budget.topOver}>{budget.top}/20</span>
+            {/if}
           {/if}
         </span>
         <textarea
@@ -172,44 +183,47 @@
         </span>
       </div>
       <div class="field">
-        <span class="field__label">Bottom row</span>
-        <div class="seg">
-          {#each MARQUEE_BOTTOMS as b}
-            <button
-              type="button"
-              aria-pressed={state.marquee_bottom === b}
-              on:click={() => setMarqueeBottom(b)}>{b}</button
-            >
-          {/each}
-        </div>
-        {#if state.marquee_bottom === 'static'}
-          <input
-            type="text"
-            value={state.marquee_bottom_text}
-            on:change={setMarqueeBottomText}
-            placeholder="static bottom text (≤20)"
-            spellcheck="false"
-          />
-        {/if}
+        <span class="field__label">Bottom row (static)</span>
+        <input
+          type="text"
+          value={state.marquee_bottom_text}
+          on:change={setMarqueeBottomText}
+          placeholder="static bottom text (≤20)"
+          spellcheck="false"
+        />
       </div>
+      <p class="tip">
+        Hardware ticker: top row only, fixed speed, 45-char buffer. The bottom row
+        is static — changing it briefly interrupts the top scroll. For a live
+        clock/news ticker, use <strong>SCROLL</strong>.
+      </p>
     {/if}
 
-    <!-- Per-line alignment -->
+    <!-- Per-line alignment. In MARQUEE the top row is the hardware ticker (it
+         controls its own layout), so Line 1 justify is hidden; Line 2 (the
+         static bottom) still justifies. -->
     <div class="field">
       <span class="field__label">Justify</span>
       <div class="align-rows">
-        <div class="align-row">
-          <span class="align-row__label">Line 1</span>
-          <div class="seg seg--sm">
-            {#each ALIGNS as a}
-              <button
-                type="button"
-                aria-pressed={state.align_top === a}
-                on:click={() => setAlignTop(a)}>{a}</button
-              >
-            {/each}
+        {#if state.mode !== 'marquee'}
+          <div class="align-row">
+            <span class="align-row__label">Line 1</span>
+            <div class="seg seg--sm">
+              {#each ALIGNS as a}
+                <button
+                  type="button"
+                  aria-pressed={state.align_top === a}
+                  on:click={() => setAlignTop(a)}>{a}</button
+                >
+              {/each}
+            </div>
           </div>
-        </div>
+        {:else}
+          <p class="field__hint">
+            Line 1 is the hardware ticker (it sets its own layout). Line 2 justify
+            applies to the static bottom.
+          </p>
+        {/if}
         <div class="align-row">
           <span class="align-row__label">Line 2</span>
           <div class="seg seg--sm">
@@ -325,43 +339,89 @@
       {/if}
     </div>
 
-    <!-- SCROLL: per-row scroll + direction + speed -->
+    <!-- SCROLL: per-row content source + scroll + direction + speed. The
+         flexible, news-ready mode: each row picks a source (Message|Clock, room
+         for more) and, for a Message row, whether/how it scrolls. -->
     {#if state.mode === 'scroll'}
       <div class="field">
         <span class="field__label">Scroll rows</span>
-        <div class="align-rows">
-          <div class="align-row">
-            <label class="switch">
-              <input type="checkbox" checked={state.scroll_top} on:change={setScrollTop} />
-              <span class="switch__track"></span>
-              <span class="switch__label">Line 1</span>
-            </label>
-            <div class="seg seg--sm" class:disabled={!state.scroll_top}>
-              {#each DIRS as d}
-                <button
-                  type="button"
-                  disabled={!state.scroll_top}
-                  aria-pressed={state.scroll_dir_top === d}
-                  on:click={() => setDirTop(d)}>{d}</button
-                >
-              {/each}
+        <div class="scroll-rows">
+          <!-- TOP row -->
+          <div class="scroll-row">
+            <span class="scroll-row__name">Top</span>
+            <div class="scroll-row__ctrls">
+              <div class="scroll-ctrl">
+                <span class="scroll-ctrl__label">Source</span>
+                <div class="seg seg--sm">
+                  {#each SCROLL_SOURCES as s}
+                    <button
+                      type="button"
+                      aria-pressed={state.scroll_top_source === s.value}
+                      on:click={() => setSrcTop(s.value)}>{s.label}</button
+                    >
+                  {/each}
+                </div>
+              </div>
+              {#if state.scroll_top_source === 'message'}
+                <div class="scroll-ctrl scroll-ctrl--inline">
+                  <label class="switch">
+                    <input type="checkbox" checked={state.scroll_top} on:change={setScrollTop} />
+                    <span class="switch__track"></span>
+                    <span class="switch__label">Scroll</span>
+                  </label>
+                  <div class="seg seg--sm" class:disabled={!state.scroll_top}>
+                    {#each DIRS as d}
+                      <button
+                        type="button"
+                        disabled={!state.scroll_top}
+                        aria-pressed={state.scroll_dir_top === d}
+                        on:click={() => setDirTop(d)}>{d}</button
+                      >
+                    {/each}
+                  </div>
+                </div>
+              {:else}
+                <span class="field__hint">Live time line (updates each second).</span>
+              {/if}
             </div>
           </div>
-          <div class="align-row">
-            <label class="switch">
-              <input type="checkbox" checked={state.scroll_bottom} on:change={setScrollBottom} />
-              <span class="switch__track"></span>
-              <span class="switch__label">Line 2</span>
-            </label>
-            <div class="seg seg--sm" class:disabled={!state.scroll_bottom}>
-              {#each DIRS as d}
-                <button
-                  type="button"
-                  disabled={!state.scroll_bottom}
-                  aria-pressed={state.scroll_dir_bottom === d}
-                  on:click={() => setDirBottom(d)}>{d}</button
-                >
-              {/each}
+          <!-- BOTTOM row -->
+          <div class="scroll-row">
+            <span class="scroll-row__name">Bottom</span>
+            <div class="scroll-row__ctrls">
+              <div class="scroll-ctrl">
+                <span class="scroll-ctrl__label">Source</span>
+                <div class="seg seg--sm">
+                  {#each SCROLL_SOURCES as s}
+                    <button
+                      type="button"
+                      aria-pressed={state.scroll_bottom_source === s.value}
+                      on:click={() => setSrcBottom(s.value)}>{s.label}</button
+                    >
+                  {/each}
+                </div>
+              </div>
+              {#if state.scroll_bottom_source === 'message'}
+                <div class="scroll-ctrl scroll-ctrl--inline">
+                  <label class="switch">
+                    <input type="checkbox" checked={state.scroll_bottom} on:change={setScrollBottom} />
+                    <span class="switch__track"></span>
+                    <span class="switch__label">Scroll</span>
+                  </label>
+                  <div class="seg seg--sm" class:disabled={!state.scroll_bottom}>
+                    {#each DIRS as d}
+                      <button
+                        type="button"
+                        disabled={!state.scroll_bottom}
+                        aria-pressed={state.scroll_dir_bottom === d}
+                        on:click={() => setDirBottom(d)}>{d}</button
+                      >
+                    {/each}
+                  </div>
+                </div>
+              {:else}
+                <span class="field__hint">Live time line (updates each second).</span>
+              {/if}
             </div>
           </div>
         </div>
@@ -491,6 +551,70 @@
 
   .bright__stop.active {
     color: var(--phosphor);
+  }
+
+  /* marquee constraints tip */
+  .tip {
+    margin: -4px 0 14px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-mute);
+    border-left: 2px solid var(--phosphor-dim);
+    padding: 6px 0 6px 10px;
+  }
+
+  .tip strong {
+    color: var(--phosphor);
+  }
+
+  /* SCROLL: per-row source / scroll / direction, grouped + room to grow */
+  .scroll-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .scroll-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .scroll-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .scroll-row__name {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--phosphor-dim);
+  }
+
+  .scroll-row__ctrls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+  }
+
+  .scroll-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .scroll-ctrl--inline {
+    gap: 10px;
+  }
+
+  .scroll-ctrl__label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--text-mute);
   }
 
   .align-rows {

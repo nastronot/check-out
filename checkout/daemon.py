@@ -47,15 +47,12 @@ _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
-from .renderer import WIDTH, fit_line, render_lines, ticker_window
+from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
 from .state import load_state, save_status
 
 # Software scroll: each step redraws ~40 bytes at 9600 baud (~40ms on the wire),
 # so a step faster than this floor can't keep up — clamp scroll_speed_ms to it.
 SCROLL_FLOOR_MS = 60
-# The hardware ticker runs at a fixed medium speed we can't read; the preview
-# approximates it by software-scrolling the marquee text at this fixed step.
-_MARQUEE_PREVIEW_STEP_MS = 200
 
 # Static frames, keyed by name. "scroll" + "marquee" are handled specially in
 # the tick (they need per-row offsets / the hardware ticker), not via a Frame.
@@ -107,6 +104,7 @@ def _new_ctx() -> dict:
         "last_emit": None,         # last thing shown to the DISPLAY (gates serial writes)
         "last_marquee_text": None,  # last text kicked into the hardware ticker
         "last_marquee_bottom": None,  # last bottom row written in marquee mode
+        "marquee_preview_offset": 0,  # software-scroll offset for the status preview
         "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
     }
@@ -316,56 +314,79 @@ def _scroll_offset(now_ms: int, speed_ms, scroll: bool, direction) -> int | None
     return -raw if direction == "right" else raw
 
 
-def render_scroll(state: dict, now_ms: int) -> tuple[str, str]:
-    """Render mode "scroll": the message's two lines, each row independently
-    scrollable left/right (or statically aligned). Glyph cells count as one."""
+def _scroll_row(
+    state: dict, now: datetime, now_ms: int, which: str, text: str, speed
+) -> str:
+    """Render one row of mode "scroll" per its content source.
+
+    ``source`` (``scroll_{which}_source``) selects what the row shows:
+      - "clock"   -> the live TIME line (HH:MM:SS AM/PM), refreshed each second,
+                     statically aligned (no software scroll). (TODO: a date-vs-time
+                     sub-choice; defaults to time.)
+      - "message" -> ``text`` (this row of the message), which scrolls left/right
+                     per ``scroll_{which}`` + ``scroll_dir_{which}`` or sits aligned.
+    EXTENSION POINT: a future "news" source renders here the same way.
+    """
+    source = state.get(f"scroll_{which}_source", "message")
+    align = _align(state.get(f"align_{which}"))
+    if source == "clock":
+        return render_line(clock_time(now), align=align)
+    offset = _scroll_offset(
+        now_ms, speed, bool(state.get(f"scroll_{which}")),
+        state.get(f"scroll_dir_{which}"),
+    )
+    return render_line(text, align=align, offset=offset)
+
+
+def render_scroll(state: dict, now_ms: int, now: datetime | None = None) -> tuple[str, str]:
+    """Render mode "scroll": each row picks a content SOURCE (message|clock) and,
+    for "message", independently scrolls left/right or sits aligned. The flexible,
+    news-ready mode. Glyph cells count as one. ``now`` is needed for a clock row."""
+    now = now or datetime.now()
     msg = apply_glyph_placeholders(state.get("message") or "")
     if "\n" in msg:
         ltop, _, lbottom = msg.partition("\n")
     else:
         ltop, lbottom = msg, ""
     speed = state.get("scroll_speed_ms", 300)
-    top_off = _scroll_offset(
-        now_ms, speed, bool(state.get("scroll_top")), state.get("scroll_dir_top")
-    )
-    bot_off = _scroll_offset(
-        now_ms, speed, bool(state.get("scroll_bottom")), state.get("scroll_dir_bottom")
-    )
-    return render_lines(
-        ltop,
-        lbottom,
-        top_align=_align(state.get("align_top")),
-        bottom_align=_align(state.get("align_bottom")),
-        top_offset=top_off,
-        bottom_offset=bot_off,
+    return (
+        _scroll_row(state, now, now_ms, "top", ltop, speed),
+        _scroll_row(state, now, now_ms, "bottom", lbottom, speed),
     )
 
 
 def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -> None:
-    """Drive marquee mode: hardware ticker on the top, independent bottom row.
+    """Drive marquee mode: hardware ticker on the top, STATIC bottom row.
 
     The top is the autonomous hardware ticker (re-kicked only when the text
-    changes / after a reset). The bottom is a static line or the live clock,
-    written with ``show_bottom`` which does NOT disturb the running top scroll.
-    status.json's top is a SOFTWARE-scrolled approximation so the preview looks
-    right (the real hardware speed is fixed and unreadable).
+    changes / after a reset). The bottom is static text only, written with
+    ``show_bottom`` (which does NOT disturb a running top scroll) and only when it
+    changes. A live clock bottom is impossible here: a bottom write arriving after
+    the hardware scroll resumes STOPS the scroll, so clock-bottom was removed —
+    SCROLL is the home for a live clock/news ticker. ``marquee_bottom`` is kept
+    in the schema for back-compat but ignored (state.py normalizes it to static).
+
+    status.json's top is a SOFTWARE-scrolled approximation that ADVANCES every
+    tick (via a per-tick offset counter), so the preview animates even though the
+    real hardware speed is fixed and unreadable.
     """
     marquee_text = state.get("marquee_text") or ""
     if marquee_text != ctx["last_marquee_text"]:
         driver.start_ticker(marquee_text)
         ctx["last_marquee_text"] = marquee_text
 
-    if state.get("marquee_bottom") == "static":
-        lbottom = apply_glyph_placeholders(state.get("marquee_bottom_text") or "")
-    else:
-        lbottom = clock_time(now)
+    # Bottom is static-only (see docstring). marquee_bottom_text, fit + aligned.
+    lbottom = apply_glyph_placeholders(state.get("marquee_bottom_text") or "")
     bottom = fit_line(lbottom, align=_align(state.get("align_bottom")))
     if bottom != ctx["last_marquee_bottom"]:
         driver.show_bottom(bottom)
         ctx["last_marquee_bottom"] = bottom
 
-    # Preview approximation: software-scroll the marquee text on the top row.
-    offset = now_ms // _MARQUEE_PREVIEW_STEP_MS
+    # Preview approximation: advance a per-tick offset so the windowed top scrolls
+    # in the UI regardless of wall-clock timing (it won't match the hardware
+    # speed — it just has to MOVE).
+    ctx["marquee_preview_offset"] += 1
+    offset = ctx["marquee_preview_offset"]
     disp_top = ticker_window(marquee_text, offset) if marquee_text else _BLANK_LINE
     _write_status(state, disp_top, bottom, ctx)
 
@@ -421,7 +442,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         emit: tuple = ("blank",)
     else:
         if mode == "scroll":
-            top, bottom = render_scroll(state, now_ms)
+            top, bottom = render_scroll(state, now_ms, now)
         else:
             frame = FRAMES.get(mode, FRAMES[DEFAULT_FRAME])
             top, bottom = render_lines(
