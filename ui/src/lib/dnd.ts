@@ -30,3 +30,15 @@ export function rowsForGlyphId(
   const g = glyphs.find((x) => x.id === id);
   return g ? g.rows : null;
 }
+
+/** Resolve a library→slot drop: the rows to load into `slot`, or null if the
+ *  dragged id isn't in the library. Pure logic behind the slot drop handler, so
+ *  the cross-component drop can be unit-tested without real DnD events. */
+export function resolveGlyphDrop(
+  glyphs: LibraryGlyph[],
+  draggedId: string,
+  slot: number,
+): { slot: number; rows: number[] } | null {
+  const rows = rowsForGlyphId(glyphs, draggedId);
+  return rows ? { slot, rows } : null;
+}

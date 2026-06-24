@@ -2,6 +2,7 @@
   import { deleteGlyph, saveGlyph } from '../api';
   import {
     appState,
+    draggedGlyph,
     library,
     loadGlyphFromLibrary,
     refreshLibrary,
@@ -49,12 +50,14 @@
     }
   }
 
-  // --- drag to reorder (within the library) ---
+  // --- drag: reorder WITHIN the library, or drop onto an editor slot ---
   function onDragStart(e: DragEvent, g: LibraryGlyph): void {
     dragId = g.id;
+    draggedGlyph.set(g.id); // shared signal the slot strip reads (cross-component)
     e.dataTransfer?.setData(GLYPH_DND_TYPE, g.id);
     e.dataTransfer?.setData('text/plain', g.id); // fallback type
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+    // copyMove: allows both the library reorder (move) and the slot load (copy).
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
   }
 
   function onDragOverCard(e: DragEvent, g: LibraryGlyph): void {
@@ -75,6 +78,7 @@
   function onDragEnd(): void {
     dragId = '';
     dragOverId = '';
+    draggedGlyph.set(''); // clear the shared signal whether or not a drop landed
   }
 </script>
 

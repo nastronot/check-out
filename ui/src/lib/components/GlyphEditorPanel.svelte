@@ -3,6 +3,7 @@
   import {
     appState,
     commitGlyph,
+    draggedGlyph,
     glyphSync,
     loadGlyphFromLibrary,
     selectedGlyphSlot,
@@ -15,16 +16,24 @@
   let dropSlot = -1;
 
   function onSlotDragOver(e: DragEvent, i: number): void {
-    if (!e.dataTransfer?.types.includes(GLYPH_DND_TYPE)) return;
+    // Accept the drop iff a library glyph is being dragged. Gate on the SHARED
+    // store (reliable across components) OR the dataTransfer type (custom-MIME
+    // visibility during dragover is browser-dependent). preventDefault is
+    // REQUIRED — without it the browser rejects the drop and never fires `drop`.
+    const dragging =
+      $draggedGlyph !== '' || !!e.dataTransfer?.types.includes(GLYPH_DND_TYPE);
+    if (!dragging) return;
     e.preventDefault(); // mark as a valid drop target (load)
-    e.dataTransfer.dropEffect = 'copy';
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     dropSlot = i;
   }
 
   function onSlotDrop(e: DragEvent, i: number): void {
     e.preventDefault();
     dropSlot = -1;
-    const id = e.dataTransfer?.getData(GLYPH_DND_TYPE);
+    // dataTransfer first (works during `drop`), then the shared store fallback.
+    const id = e.dataTransfer?.getData(GLYPH_DND_TYPE) || $draggedGlyph;
+    draggedGlyph.set('');
     if (id) loadGlyphFromLibrary(i, id); // selects slot i + auto-pushes
   }
 

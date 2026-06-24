@@ -27,6 +27,12 @@ export const library = writable<Library>({ messages: [], glyphs: [] });
 // a saved glyph into whichever slot is selected.
 export const selectedGlyphSlot = writable<number>(0);
 
+// Id of the library glyph currently being dragged, '' when none. Shared across
+// components so the editor's slot strip can accept a cross-component drop without
+// depending on dataTransfer being readable during dragover (custom-MIME-type
+// visibility varies by browser; this store is the reliable signal).
+export const draggedGlyph = writable<string>('');
+
 export type GlyphSync = 'idle' | 'syncing' | 'synced' | 'error';
 export const glyphSync = writable<Record<number, GlyphSync>>({});
 
