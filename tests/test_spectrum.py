@@ -380,12 +380,16 @@ def test_normalize_levels_sensitivity_biases_fullness():
     assert sum(high) >= sum(low)
 
 
-def test_update_ref_snaps_up_and_releases_to_floor():
-    ref = spectrum.update_ref(1.0, 10.0)       # snaps UP to a louder peak
-    assert ref == 10.0
+def test_update_ref_attacks_gradually_and_releases_to_floor():
+    # Rising is a SMOOTH attack (not an instant snap), so a transient can't pump.
+    ref = spectrum.update_ref(1.0, 10.0)       # 1 + (10-1)*0.4 = 4.6, not 10
+    assert 1.0 < ref < 10.0
+    # ...and it keeps climbing toward the peak over successive frames.
+    r2 = spectrum.update_ref(ref, 10.0)
+    assert ref < r2 < 10.0
     released = spectrum.update_ref(ref, 0.0)   # silence -> releases (no ratchet)
     assert spectrum.REF_FLOOR <= released < ref
-    for _ in range(5000):                      # never drops below the floor
+    for _ in range(50000):                     # never drops below the floor
         released = spectrum.update_ref(released, 0.0)
     assert released == spectrum.REF_FLOOR
 

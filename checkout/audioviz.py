@@ -558,9 +558,15 @@ class AudioViz:
             self._ref = spectrum.update_ref(self._ref, 0.0)
             new = [0] * spectrum.NUM_BARS
         else:
-            self._ref = spectrum.update_ref(self._ref, max(bands) if bands else 0.0)
+            # Reference tracks a high PERCENTILE of the bands (a typical loud
+            # band) with a smooth attack — not the single max (which one bass
+            # band would pin) and not an instant snap (which would pump).
+            self._ref = spectrum.update_ref(self._ref, spectrum.percentile_peak(bands))
             new = spectrum.normalize_levels(bands, self._ref, self.sensitivity)
 
+        # Bar smoothing (attack-fast / release-slow): prev = self.levels PERSISTS
+        # across frames and is fed back in, so beats rise instantly but bars fall
+        # smoothly — this is the anti-flash mechanism. Persistence verified here.
         self.levels = spectrum.decay_levels(self.levels, new, self.decay)
         return [int(round(x)) for x in self.levels]
 

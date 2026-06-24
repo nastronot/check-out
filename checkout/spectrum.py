@@ -173,14 +173,25 @@ def to_levels(
 
 
 # --- auto-gain (volume-independent) -----------------------------------------
-# The display normalizes against a running reference of recent loudness, so bars
-# fill the range based on CONTENT, not absolute level — lowering system volume
-# does NOT shrink them. A silence FLOOR stops it amplifying hiss/silence into
-# full-scale garbage. All four are tunable (documented):
-SILENCE_FLOOR_RMS = 0.0015   # input RMS below this = silence -> bars fall to ~0
-AUTOGAIN_RELEASE = 0.99      # per-frame decaying-max release (~1-2s adaptation @ ~43fps)
-AUTOGAIN_RANGE_DB = 42.0     # dynamic range (dB below the running peak) shown as 0..MAX_BAR
-REF_FLOOR = 1e-2             # min reference; bounds the re-entry jump after silence
+# The display normalizes each band against a running REFERENCE of recent
+# loudness, so bars fill the range based on CONTENT, not absolute level —
+# lowering system volume does NOT shrink them. The reference is an ENVELOPE
+# FOLLOWER over a high PERCENTILE of the bands (not the single loudest band, or
+# one bass band would pin the top and crush everything else). The SILENCE GATE is
+# on input RMS — that, not the reference, is what stops noise being amplified.
+#
+# TUNING GUIDE (the agent can't hear; tune these on glass):
+#   bars too SHORT / don't fill   -> lower AUTOGAIN_RANGE_DB, or lower AUTOGAIN_PERCENTILE
+#   whole display FLASHES / pumps -> lower AUTOGAIN_ATTACK, or raise the decay factor (UI Smoothing)
+#   volume STILL shrinks the bars -> lower REF_FLOOR (must sit BELOW quiet-music band levels)
+#   silence shows noise           -> raise SILENCE_FLOOR_RMS
+#   bars hang / adapt too slowly  -> lower AUTOGAIN_RELEASE
+SILENCE_FLOOR_RMS = 0.0015   # input RMS below this = silence -> bars fall to ~0 (the noise gate)
+AUTOGAIN_ATTACK = 0.4        # reference RISE fraction/frame toward a louder peak (smooth, not instant)
+AUTOGAIN_RELEASE = 0.99      # reference release/frame when the signal drops (~1-2s @ ~43fps)
+AUTOGAIN_RANGE_DB = 28.0     # dynamic range (dB below the reference) shown as 0..MAX_BAR
+AUTOGAIN_PERCENTILE = 85.0   # reference tracks this percentile of the bands (a typical loud band)
+REF_FLOOR = 1e-4             # tiny epsilon ONLY (never divide by ~0); MUST be below quiet-music levels
 
 
 def signal_rms(samples) -> float:
@@ -191,24 +202,50 @@ def signal_rms(samples) -> float:
     return float((sum(float(x) * float(x) for x in samples) / n) ** 0.5)
 
 
-def update_ref(ref, peak, release: float = AUTOGAIN_RELEASE,
-               ref_floor: float = REF_FLOOR) -> float:
-    """Advance the auto-gain reference: a decaying maximum of the band peak.
+def percentile_peak(bands, pct: float = AUTOGAIN_PERCENTILE) -> float:
+    """The ``pct``-th percentile of the band magnitudes (linear interpolation).
 
-    ``ref = max(peak, ref*release, ref_floor)`` — it snaps UP to a new loud peak
-    instantly and RELEASES slowly toward ``ref_floor`` so it adapts over ~1-2s.
-    Pass ``peak=0`` on silence so it releases (never ratchets up on noise)."""
-    return max(float(peak), float(ref) * release, ref_floor)
+    The auto-gain REFERENCE target: a *typical loud* band rather than the single
+    loudest, so a normal-loud spectrum fills toward the top instead of one bass
+    band pinning the reference and crushing the rest."""
+    vals = sorted(float(b) for b in bands)
+    if not vals:
+        return 0.0
+    k = (len(vals) - 1) * (max(0.0, min(100.0, pct)) / 100.0)
+    lo = math.floor(k)
+    hi = math.ceil(k)
+    if lo == hi:
+        return vals[int(lo)]
+    return vals[int(lo)] + (vals[int(hi)] - vals[int(lo)]) * (k - lo)
+
+
+def update_ref(ref, peak, attack: float = AUTOGAIN_ATTACK,
+               release: float = AUTOGAIN_RELEASE, ref_floor: float = REF_FLOOR) -> float:
+    """Envelope-follow the auto-gain reference toward ``peak``.
+
+    Rising: ``ref += (peak - ref) * attack`` — a SMOOTH attack, so a single
+    transient (a kick) can't instantly inflate the reference and crush every bar
+    for that frame (the pump/flash). Falling: ``ref *= release`` — slow, so it
+    adapts over ~1-2s. ``ref_floor`` is just a divide-by-zero epsilon. Pass
+    ``peak=0`` on silence so it releases (never ratchets up on noise)."""
+    ref = float(ref)
+    peak = float(peak)
+    if peak > ref:
+        ref += (peak - ref) * max(0.0, min(1.0, attack))   # smooth attack, not an instant snap
+    else:
+        ref *= release
+    return max(ref, ref_floor)
 
 
 def normalize_levels(bands, ref, sensitivity: float = 1.0,
                      max_bar: int = MAX_BAR, range_db: float = AUTOGAIN_RANGE_DB) -> list[int]:
     """Map band magnitudes to bar heights NORMALIZED against ``ref``.
 
-    Each band is divided by ``ref`` (so the recent loudest band ≈ the top),
-    biased by ``sensitivity`` (1.0 = neutral; >1 fuller, <1 dimmer), then dB-mapped:
-    0 dB (at ref) → ``max_bar``, ``-range_db`` → 0. Volume-independent because
-    ``ref`` tracks the recent peak — absolute level cancels.
+    Each band is divided by ``ref`` (so a typical loud band ≈ the top), biased by
+    ``sensitivity`` (1.0 = neutral; >1 fuller, <1 dimmer), then dB-mapped: 0 dB
+    (at ref) → ``max_bar``, ``-range_db`` → 0. Volume-independent because ``ref``
+    tracks the signal — absolute level cancels (so ``REF_FLOOR`` must be below
+    quiet-music levels, else low volume pins ``ref`` and the bars shrink).
     """
     ref = max(float(ref), REF_FLOOR)
     s = max(float(sensitivity), 1e-6)
