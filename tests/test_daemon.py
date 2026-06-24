@@ -393,6 +393,82 @@ def test_fast_loop_scroll_steps_on_elapsed_time(monkeypatch):
     assert a != c      # advanced after speed_ms elapsed
 
 
+# --- spectrum mode -----------------------------------------------------------
+class _FakeRx:
+    """A SpectrumReceiver stand-in: drain() yields queued frames (latest each)."""
+    def __init__(self, frames=None):
+        self.frames = list(frames or [])
+    def drain(self):
+        if not self.frames:
+            return None
+        frame = self.frames[-1]   # newest-wins
+        self.frames = []
+        return frame
+
+
+def _spectrum_ctx():
+    ctx = daemon._new_ctx()
+    ctx["spectrum_rx_failed"] = True   # don't bind a real socket in tests
+    return ctx
+
+
+def test_spectrum_enter_defines_seven_bar_glyphs(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([[7] * 20])
+    capsys.readouterr()
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    tx = _all_tx_bytes(capsys.readouterr().out)
+    assert tx.count(0x03) == 7          # 7 DefineCharacter writes (height glyphs)
+    assert ctx["spectrum_active"] is True
+
+
+def test_spectrum_drains_latest_and_renders_bars(monkeypatch):
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = _CountingDriver()
+    ctx = _spectrum_ctx()
+    # A burst of frames in the queue: the newest ([14]*20) wins.
+    ctx["spectrum_rx"] = _FakeRx([[1] * 20, [9] * 20, [14] * 20])
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    assert ctx["spectrum_heights"] == [14] * 20
+    assert written[-1]["mode"] == "spectrum"
+    assert written[-1]["bars"] == [14] * 20
+    assert drv.shows == 1               # bars drawn
+
+
+def test_spectrum_decays_to_zero_when_stale(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([])    # nothing arriving
+    ctx["spectrum_heights"] = [10] * 20
+    ctx["spectrum_recv_ms"] = 0         # last frame long ago
+    # now well past SPECTRUM_STALE_MS -> bars decay one step per tick.
+    t0 = datetime(2026, 6, 19, 12, 0, 0)
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=t0)
+    assert ctx["spectrum_heights"] == [9] * 20
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx,
+                     now=datetime(2026, 6, 19, 12, 0, 0, 250_000))
+    assert ctx["spectrum_heights"] == [8] * 20
+
+
+def test_spectrum_restores_user_glyphs_on_exit(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([[5] * 20])
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)   # enter: bar glyphs
+    capsys.readouterr()
+    # Leave to a mode whose state carries a user glyph -> it must be re-defined.
+    state = {"mode": "clock", "glyphs": {"0": [1, 2, 4, 8, 16, 1, 2]}}
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    tx = _all_tx_bytes(capsys.readouterr().out)
+    assert ctx["spectrum_active"] is False
+    assert 0x03 in tx                  # user glyph re-defined (restored)
+
+
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)

@@ -78,6 +78,36 @@ def test_scroll_sources_validate_and_default(state_path):
     assert loaded["scroll_bottom_source"] == "message"
 
 
+def test_spectrum_audio_fields_default(state_path):
+    loaded = state.load_state()
+    assert loaded["audio_source"] == "system"
+    assert loaded["audio_device"] is None
+    assert loaded["audio_gain"] == 1.0
+    assert loaded["audio_decay"] == 0.85
+
+
+def test_spectrum_audio_fields_validate_and_merge(state_path):
+    import json
+
+    state_path.write_text(
+        json.dumps(
+            {
+                "mode": "spectrum",
+                "audio_source": "bogus",   # -> "system"
+                "audio_gain": 99,          # clamped to 20
+                "audio_decay": -1,         # clamped to 0.0
+                "audio_device": "Monitor of Speakers",
+            }
+        )
+    )
+    loaded = state.load_state()
+    assert loaded["mode"] == "spectrum"
+    assert loaded["audio_source"] == "system"
+    assert loaded["audio_gain"] == 20.0
+    assert loaded["audio_decay"] == 0.0
+    assert loaded["audio_device"] == "Monitor of Speakers"
+
+
 def test_legacy_ticker_mode_migrates_to_scroll(state_path):
     import json
 
