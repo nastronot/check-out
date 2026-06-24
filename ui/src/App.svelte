@@ -50,8 +50,10 @@
       <div class="layout__preview">
         <VfdPreview status={$status} {glyphs} />
       </div>
-      <GlyphEditorPanel />
-      <GlyphLibrary />
+      <div class="layout__glyphs">
+        <GlyphEditorPanel />
+        <GlyphLibrary />
+      </div>
     </div>
 
     <div class="layout__controls">
@@ -121,7 +123,8 @@
   }
 
   .layout__left,
-  .layout__controls {
+  .layout__controls,
+  .layout__glyphs {
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -146,7 +149,22 @@
 
   @media (max-width: 860px) {
     .layout {
-      grid-template-columns: 1fr; /* stack: left column (preview + glyphs) then controls */
+      grid-template-columns: 1fr;
+    }
+    /* Flatten the left column into the grid so its children can interleave with
+       controls, then order them: preview → controls → glyph editor+library
+       (controls are the primary interaction, so they sit right under preview). */
+    .layout__left {
+      display: contents;
+    }
+    .layout__preview {
+      order: 1;
+    }
+    .layout__controls {
+      order: 2;
+    }
+    .layout__glyphs {
+      order: 3;
     }
   }
 </style>
