@@ -50,18 +50,22 @@ from datetime import datetime
 from . import config, spectrum
 from .state import atomic_write_json, load_state
 
-# Capture params. BLOCK samples per FFT frame; ~43 frames/s at 44.1kHz/1024 —
-# above the daemon's ~21fps render, which is fine (newest-frame-wins).
-BLOCK = 1024
+# Capture params. BLOCK samples per FFT frame; smaller = tighter timing (more
+# frames/s, lower per-frame latency) at the cost of coarser low-frequency
+# resolution. 256 @ 44.1kHz ~= 172 frames/s — well above the daemon's ~21fps
+# render (newest-frame-wins), bench-tuned for snappy bars with acceptable bass.
+# Tunable: raise (512/1024) for finer bass, lower for tighter timing.
+BLOCK = 256
 DEFAULT_RATE = 44100
 ZERO_FRAME = [0] * spectrum.NUM_BARS
 
 # parec MUST request a low latency or it BLOCK-BUFFERS ~750ms and dumps audio in
 # bursts (bench-proven v0.9.6): ~30 chunks at 0ms apart, then a ~760ms gap,
 # repeating — which the daemon saw as a pop-to-top / fall-to-zero pump plus a
-# 1-2s delay. `--latency-msec=20` makes the gaps ~21ms (smooth). Tunable: higher
-# = burstier/laggier, lower = more wakeups; 20ms is bench-good.
-PAREC_LATENCY_MS = 20
+# 1-2s delay. `--latency-msec` makes the gaps small + steady (smooth). Tunable:
+# higher = burstier/laggier, lower = more wakeups; 10ms is bench-tuned (tighter
+# than the original 20ms).
+PAREC_LATENCY_MS = 10
 
 # Supervisor cadence + restart debounce (coalesce rapid device switches).
 POLL_MS = 200
