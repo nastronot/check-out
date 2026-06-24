@@ -579,7 +579,11 @@ def test_capture_tool_none_when_neither_present(monkeypatch):
 def test_parec_command_is_the_confirmed_working_invocation():
     cmd = audioviz.parec_command("parec", "sink.monitor", 44100, 1)
     assert cmd == ["parec", "--device=sink.monitor", "--format=s16le",
-                   "--rate=44100", "--channels=1"]
+                   "--rate=44100", "--channels=1",
+                   f"--latency-msec={audioviz.PAREC_LATENCY_MS}"]
+    # The low-latency flag is REQUIRED — without it parec block-buffers ~750ms
+    # and dumps audio in bursts (the pump + delay).
+    assert f"--latency-msec={audioviz.PAREC_LATENCY_MS}" in cmd
 
 
 def test_pw_record_command_is_the_fallback():

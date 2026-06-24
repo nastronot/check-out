@@ -480,8 +480,12 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
     `pw-cat`, piped, deliver ONE good buffer from a `.monitor` then STARVE to
     near-silence** (RMS ~0.00003; bench-proven v0.9.5) — the real cause of the
     spectrum "fills then dies", NOT the DSP. `parec --device=<src> --format=s16le
-    …` sustains (RMS ~0.2). Both `system` (a monitor) and `mic` (an input source)
-    go through this; `sounddevice`/PortAudio (`SoundDeviceCapture`) is the FALLBACK
+    …` sustains (RMS ~0.2). **parec MUST also pass `--latency-msec`
+    (`PAREC_LATENCY_MS`=20)** or it BLOCK-BUFFERS ~750ms and dumps audio in bursts
+    (bench v0.9.6: gaps ~21ms with the flag vs up to ~2000ms without) — that
+    burst-buffering was the pop-to-top / fall-to-zero PUMP + 1-2s delay behind the
+    whole spectrum-tuning saga. Both `system` (a monitor) and `mic` (an input
+    source) go through this; `sounddevice`/PortAudio (`SoundDeviceCapture`) is the FALLBACK
     when Pulse is absent. `select_capture`: system → the monitor (device override →
     default-sink monitor → first), else None = emit zeros (NEVER the mic); mic →
     the Pulse input (default-source) or the PortAudio fallback.
@@ -734,6 +738,14 @@ sudo usermod -aG uucp "$USER"   # then re-login
   now PREFERS parec (was pw-record), pw-record kept as fallback. Reverses the
   v0.9.1 guess that "parec emits nothing" (that was a bad invocation). The
   v0.9.2–v0.9.4 DSP was correct, just starved.
+- **v0.9.6:** the FINAL spectrum root cause (ends the saga) — parec was
+  BLOCK-BUFFERING. Bench (a bare pipe): without a latency hint parec dumps ~30
+  chunks at ~0ms apart then a ~760ms (up to ~2000ms) gap, repeating — a ~750ms
+  buffer in bursts, which the daemon saw as the pop-to-top / fall-to-zero PUMP
+  plus a 1-2s delay. `parec_command` now passes `--latency-msec=20`
+  (`PAREC_LATENCY_MS`) → steady ~21ms gaps (max 31ms, zero >100ms). Confirmed on
+  glass: bars bounce smoothly with music, no pump, no delay. The DSP was right
+  all along — it was being fed bursts.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

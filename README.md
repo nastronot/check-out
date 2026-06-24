@@ -65,8 +65,12 @@ Then set mode `spectrum` (UI or `state.json`) and pick the **source**:
 
 > **Note:** `parec` is preferred because `pw-record`/`pw-cat`, piped, deliver one
 > good buffer from a `.monitor` then starve to near-silence here (bench-confirmed
-> v0.9.5) — which is what made the bars "fill then die". `parec --device=…`
-> sustains.
+> v0.9.5). And `parec` itself is run with **`--latency-msec=20`** — without a
+> latency hint it block-buffers ~750ms and dumps audio in bursts (bench: ~21ms
+> gaps with the flag vs up to ~2000ms without), which showed up as the bars
+> "popping to the top then falling to zero ~2×/sec" with a 1–2s delay (v0.9.6).
+> Together these were the real cause behind the long spectrum-tuning saga — the
+> DSP was correct, just being fed bursts.
 
 The **Device** dropdown is minimal: just "Auto" + the handful of real monitors
 (system) or inputs (mic), labeled — no raw ALSA/hw nodes. Auto is usually right.

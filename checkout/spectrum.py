@@ -190,6 +190,8 @@ def to_levels(
 #   bars too SHORT overall         -> lower AUTOGAIN_RANGE_DB, or raise AUTOGAIN_HEADROOM_DB (center up)
 #   bars CLIP at the top (all max) -> raise AUTOGAIN_RANGE_DB, or lower AUTOGAIN_HEADROOM_DB (center down)
 #   whole display FLASHES / pumps  -> lower AUTOGAIN_ATTACK, or raise the decay factor (UI Smoothing)
+#   PUMP + ~1-2s DELAY (pop/fall)  -> NOT the DSP: parec is block-buffering; ensure
+#                                     audioviz.PAREC_LATENCY_MS is set (--latency-msec). (v0.9.6)
 #   volume STILL shrinks the bars  -> lower REF_FLOOR (must sit BELOW quiet-music band levels)
 #   silence shows noise            -> raise SILENCE_FLOOR_RMS
 SILENCE_FLOOR_RMS = 0.0015   # input RMS below this = silence -> bars fall to ~0 (the noise gate)

@@ -498,7 +498,10 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
     `pactl get-default-source`); `sounddevice` is the last-resort fallback.
     **parec is preferred because `pw-record`/`pw-cat`, piped, deliver one buffer
     then STARVE to near-silence** (RMS ~0.00003; bench-proven) — the real cause of
-    the spectrum "fills then dies"; `parec --device=…` sustains (~0.2).
+    the spectrum "fills then dies"; `parec --device=…` sustains (~0.2). And parec
+    MUST pass **`--latency-msec=20`** (v0.9.6) or it block-buffers ~750ms and dumps
+    audio in bursts (gaps ~21ms with the flag vs up to ~2000ms without) — the
+    pop-to-top/fall-to-zero PUMP + 1-2s delay behind the spectrum-tuning saga.
     `select_capture` never silently uses the mic for `system`.
   - **hardened restart (v0.9.1):** full teardown (null → stop → close, guarded) +
     debounced switches + try/except open, so cycling devices can't segfault.
