@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { GLYPH_DND_TYPE, reorderIds, rowsForGlyphId } from '../lib/dnd';
+import {
+  GLYPH_DND_TYPE,
+  reorderIds,
+  resolveGlyphDrop,
+  rowsForGlyphId,
+} from '../lib/dnd';
 import type { LibraryGlyph } from '../lib/types';
 
 const G = (id: string, rows: number[] = [0, 0, 0, 0, 0, 0, 0]): LibraryGlyph => ({
@@ -28,5 +33,17 @@ describe('library drag-and-drop helpers', () => {
     const glyphs = [G('a', [1, 0, 0, 0, 0, 0, 0]), G('b', [0, 31, 0, 0, 0, 0, 0])];
     expect(rowsForGlyphId(glyphs, 'b')).toEqual([0, 31, 0, 0, 0, 0, 0]);
     expect(rowsForGlyphId(glyphs, 'missing')).toBeNull();
+  });
+
+  it('resolveGlyphDrop copies the dragged glyph rows to the target slot', () => {
+    // Guards the cross-component library->slot drop logic against regression:
+    // dropping glyph "b" on slot 5 must yield b's rows targeted at slot 5.
+    const glyphs = [G('a', [1, 0, 0, 0, 0, 0, 0]), G('b', [0, 31, 0, 0, 0, 0, 0])];
+    expect(resolveGlyphDrop(glyphs, 'b', 5)).toEqual({
+      slot: 5,
+      rows: [0, 31, 0, 0, 0, 0, 0],
+    });
+    // A drag id that isn't in the library is a no-op (null), not a bad write.
+    expect(resolveGlyphDrop(glyphs, 'missing', 2)).toBeNull();
   });
 });

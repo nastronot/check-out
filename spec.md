@@ -368,7 +368,10 @@ ui/ (Svelte)  ──HTTP /api──▶  web/ (FastAPI)  ──writes state.json�
   - `POST /api/command` `{action,args}` — stamps `state.command = {id:<uuid>,...}` so the
     daemon runs it once (self_test | reset | redefine_glyphs).
   - `GET /api/health` — `{ok, daemon_alive}`; `daemon_alive` is derived from status.json
-    freshness (< 5 s old + `alive`).
+    freshness (< 5 s old + `alive`). Kept for external checks; the UI no longer hot-polls
+    it (v0.8.3) — it derives `daemon_alive` client-side from the `/api/status` it already
+    polls (`aliveFromStatus`, same freshness rule), so only `/api/status` is on the hot
+    loop. Run uvicorn with `--no-access-log` to silence the ~2×/s poll's request log.
   - `/` — serves the built UI (`ui/dist`).
 - **Preview mirrors status, not the controls.** `VfdPreview` renders a pixel-accurate
   2×20 of 5×7 phosphor dots from `/api/status` (so it shows real clock ticks, ticker
@@ -436,10 +439,14 @@ ownership. `web/library.py` validates input and writes atomically (reusing
 - **UI:** `SavedMessages` (save current / recall / delete) and `GlyphLibrary` (save the
   selected slot / load / reorder / delete; mini phosphor thumbnails via the shared
   dot-render). The selected editor slot is a shared store so the library targets it.
-- **Drag-and-drop (v0.7.1):** drag a library glyph onto a slot (g0–g8) to load it there
-  (drop target highlights; the slot becomes selected); drag within the library to reorder
-  (persisted to `library.json`, optimistic + revert). HTML5 DnD doesn't fire on touch, so a
-  **click/tap fallback** loads into the selected slot (cards are keyboard-activatable).
+- **Drag-and-drop (v0.7.1; cross-component fix v0.8.3):** drag a library glyph onto a slot
+  (g0–g8) to load it there (drop target highlights; the slot becomes selected); drag within
+  the library to reorder (persisted to `library.json`, optimistic + revert). The library→slot
+  drop crosses two components, so it relies on a shared `draggedGlyph` store: the slot's
+  `dragover` `preventDefault()`s whenever that store is set (so the browser actually fires
+  `drop` — gating only on `dataTransfer.types` is unreliable, its custom-MIME visibility
+  during dragover is browser-dependent). HTML5 DnD doesn't fire on touch, so a **click/tap
+  fallback** loads into the selected slot (cards are keyboard-activatable).
 
 ---
 

@@ -290,6 +290,12 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
   `command.id` nonce → daemon runs once), `GET /api/health`
   (`daemon_alive` = status.json fresh < 5s), the library endpoints (below),
   `/` serves the built UI (`ui/dist`).
+- **Polling (v0.8.3):** the UI hot-polls ONLY `GET /api/status` (~500ms, for
+  clock/marquee motion). `daemon_alive` is DERIVED client-side from that status's
+  freshness (`aliveFromStatus` in `stores.ts`: `alive` && `updated_at` < 5s old —
+  the same rule as `/api/health`), so there's no redundant health hot-poll. The
+  `/api/health` endpoint stays for external checks. Run uvicorn with
+  `--no-access-log` so the 2×/s status poll doesn't flood the console.
 - **Preview mirrors status, not controls.** `VfdPreview` renders a pixel-accurate
   2×20 of 5×7 phosphor dots from `/api/status`, so it shows real clock ticks /
   ticker motion / brightness / blank. Built-in 5×7 font for ASCII; the 9 user
@@ -313,6 +319,9 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
     Code page. Split out of Control to declutter; same state fields + same
     optimistic/debounced `PUT /api/state` (a pure relocation, no schema change).
   - **Commands** = fire-once actions (self_test/reset); **Daemon** = status.
+  - **Mobile (≤860px, v0.8.3):** single column; `layout__left` flattens via
+    `display: contents` and `order` puts CONTROLS right after the preview
+    (preview → controls → glyph editor+library), since controls are primary.
 - **Config:** `CHECKOUT_STATE_PATH` / `CHECKOUT_STATUS_PATH` (shared with daemon)
   via `checkout.config`; `CHECKOUT_UI_DIST` for the built UI. Docker is Phase 3.
 
@@ -366,13 +375,20 @@ path, which the daemon already consumes. `web/library.py` does atomic writes
   (save selected slot / load / reorder / delete, mini phosphor thumbnails via the
   shared dot-render). The selected editor slot is a shared store
   (`selectedGlyphSlot`) so the library targets it.
-- **Drag-and-drop (v0.7.1):** drag a library glyph **onto a slot** (g0–g8) to
-  load it there (the slot highlights on drag-over and becomes selected on drop);
-  drag a glyph **within the library** to reorder (persisted via
-  `POST /api/library/glyphs/order`, optimistic with revert). HTML5 DnD doesn't
-  fire on touch, so the **click/tap fallback** loads a glyph into the selected
-  slot (cards are keyboard-activatable `role="button"`). Pure DnD logic lives in
-  `dnd.ts` (`reorderIds` / `rowsForGlyphId`), test-covered.
+- **Drag-and-drop (v0.7.1; cross-component fix v0.8.3):** drag a library glyph
+  **onto a slot** (g0–g8) to load it there (the slot highlights on drag-over and
+  becomes selected on drop); drag a glyph **within the library** to reorder
+  (persisted via `POST /api/library/glyphs/order`, optimistic with revert). The
+  library→slot drop spans two components, so it uses a shared `draggedGlyph` store
+  (set on dragstart, cleared on dragend) as the reliable "what's being dragged"
+  signal — the slot's `dragover` calls `preventDefault()` whenever that store is
+  set (NOT gated only on `dataTransfer.types`, whose custom-MIME visibility during
+  dragover is browser-dependent; without `preventDefault` the browser silently
+  drops the `drop` event), and the drop reads `dataTransfer` first then the store
+  as fallback. HTML5 DnD doesn't fire on touch, so the **click/tap fallback** loads
+  a glyph into the selected slot (cards are keyboard-activatable `role="button"`).
+  Pure DnD logic lives in `dnd.ts` (`reorderIds` / `rowsForGlyphId` /
+  `resolveGlyphDrop`), test-covered.
 
 ### UI toolchain + verify loop (MANDATORY)
 The UI is Svelte 4 + Vite 5 + TypeScript, built/tested with Node (Node 22 via nvm
@@ -405,8 +421,9 @@ python -m checkout.daemon             # live, opens the serial port
 # Web control surface (Phase 2b) — separate process, never opens the port
 pip install -r web/requirements.txt
 ( cd ui && npm install && npm run build )   # build the Svelte app -> ui/dist
-uvicorn web.app:app --port 8000             # serves UI + /api; shares state/status json
-# dev: `uvicorn web.app:app --reload` + `cd ui && npm run dev` (vite proxies /api)
+uvicorn web.app:app --port 8000 --no-access-log   # serves UI + /api; shares state/status json
+# dev: `uvicorn web.app:app --reload --no-access-log` + `cd ui && npm run dev` (vite proxies /api)
+# --no-access-log: the UI polls /api/status ~2x/s; skip per-request 200 spam (errors/warnings still show)
 ```
 Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_TICK_MS`,
 `CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`, `CHECKOUT_LIBRARY_PATH`
@@ -523,6 +540,15 @@ sudo usermod -aG uucp "$USER"   # then re-login
   stability** — the two columns are now independent flex stacks (`layout__left`),
   removing the dead gap the old row-spanning grid injected under the fixed-size
   preview; the preview keeps a constant 2×20 aspect across mode/status changes.
+- **v0.8.3:** three fixes. (a) **library→slot drag-drop** — dragging a library
+  glyph onto an editor slot did nothing on desktop; the slot's `dragover` now
+  `preventDefault()`s based on a shared `draggedGlyph` store (set on dragstart) so
+  the `drop` fires reliably across components (custom-MIME visibility during
+  dragover is browser-dependent), and the drop reads `dataTransfer` then the store.
+  (b) **polling consolidated** — dropped the redundant `/api/health` hot-poll;
+  `daemon_alive` is derived from `/api/status` freshness (`aliveFromStatus`),
+  halving request volume; documented `uvicorn --no-access-log`. (c) **mobile
+  order** — controls now sit directly under the preview on narrow screens.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
