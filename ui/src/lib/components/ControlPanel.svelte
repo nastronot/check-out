@@ -1,9 +1,11 @@
 <script lang="ts">
   import { lineBudget } from '../message';
+  import { audioDevices, refreshDevices } from '../stores';
   import type {
     Align,
     AppState,
     Animation,
+    AudioSource,
     Mode,
     ScrollDir,
     ScrollSource,
@@ -12,7 +14,7 @@
   export let state: AppState | null = null;
   export let patch: (p: Partial<AppState>) => void;
 
-  const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee'];
+  const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee', 'spectrum'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
   const ALIGNS: Align[] = ['left', 'center', 'right'];
 
@@ -76,6 +78,27 @@
   }
   const setMarqueeBottomText = (e: Event) =>
     patch({ marquee_bottom_text: (e.target as HTMLInputElement).value });
+
+  // spectrum analyzer. SOURCE = mic | system (PipeWire/Pulse monitor of
+  // playback); DEVICE picks a specific input (from devices.json); gain/decay
+  // tune sensitivity + smoothing. The live bar data arrives over a socket — these
+  // are just settings the audioviz process reads from state.json.
+  const SOURCES: { value: AudioSource; label: string }[] = [
+    { value: 'system', label: 'System' },
+    { value: 'mic', label: 'Mic' },
+  ];
+  let devicesLoaded = false;
+  $: if (state?.mode === 'spectrum' && !devicesLoaded) {
+    devicesLoaded = true;
+    void refreshDevices();
+  }
+  const setAudioSource = (s: AudioSource) => patch({ audio_source: s });
+  function setAudioDevice(e: Event): void {
+    const v = (e.target as HTMLSelectElement).value;
+    patch({ audio_device: v === '' ? null : v });
+  }
+  const setAudioGain = (e: Event) => patch({ audio_gain: num(e) });
+  const setAudioDecay = (e: Event) => patch({ audio_decay: num(e) });
 
   const DIRS: ScrollDir[] = ['left', 'right'];
   // Merge one animation_params field, keeping the siblings (full object so the
@@ -180,9 +203,79 @@
       </p>
     {/if}
 
+    <!-- SPECTRUM (audio analyzer: a separate audioviz process captures + FFTs
+         and streams 20 bar heights to the daemon over a socket). -->
+    {#if state.mode === 'spectrum'}
+      <div class="field">
+        <span class="field__label">Source</span>
+        <div class="seg">
+          {#each SOURCES as s}
+            <button
+              type="button"
+              aria-pressed={state.audio_source === s.value}
+              on:click={() => setAudioSource(s.value)}>{s.label}</button
+            >
+          {/each}
+        </div>
+        <span class="field__hint">
+          <strong>System</strong> captures playback via a PipeWire/Pulse monitor;
+          <strong>Mic</strong> captures the default input.
+        </span>
+      </div>
+
+      <div class="field">
+        <span class="field__label">Device</span>
+        <select value={state.audio_device ?? ''} on:change={setAudioDevice}>
+          <option value="">Auto (source default)</option>
+          {#each $audioDevices as d}
+            <option value={String(d.index)}>
+              {d.name}{d.is_monitor ? ' · monitor' : ''}
+            </option>
+          {/each}
+        </select>
+        {#if $audioDevices.length === 0}
+          <span class="field__hint">
+            No devices listed yet — run <code>python -m checkout.audioviz</code>
+            (it enumerates inputs and streams the bars).
+          </span>
+        {/if}
+      </div>
+
+      <div class="field">
+        <span class="field__label">
+          Gain <span class="bright-readout">{state.audio_gain.toFixed(1)}×</span>
+        </span>
+        <input
+          type="range" min="0.1" max="8" step="0.1"
+          aria-label="audio gain"
+          value={state.audio_gain}
+          on:input={setAudioGain}
+        />
+      </div>
+
+      <div class="field">
+        <span class="field__label">
+          Smoothing <span class="bright-readout">{state.audio_decay.toFixed(2)}</span>
+        </span>
+        <input
+          type="range" min="0.5" max="0.98" step="0.01"
+          aria-label="audio decay"
+          value={state.audio_decay}
+          on:input={setAudioDecay}
+        />
+        <span class="field__hint">Higher = bars fall more slowly (less twitch).</span>
+      </div>
+
+      <p class="tip">
+        Spectrum uses the 9 glyph slots for the bars — your custom glyphs pause
+        during spectrum and restore on exit.
+      </p>
+    {/if}
+
     <!-- Per-line alignment. In MARQUEE the top row is the hardware ticker (it
          controls its own layout), so Line 1 justify is hidden; Line 2 (the
-         static bottom) still justifies. -->
+         static bottom) still justifies. N/A in SPECTRUM (both rows are bars). -->
+    {#if state.mode !== 'spectrum'}
     <div class="field">
       <span class="field__label">Justify</span>
       <div class="align-rows">
@@ -219,12 +312,14 @@
         </div>
       </div>
     </div>
+    {/if}
 
     <!-- Brightness, Blank, HW scroll, and Code page now live in the Display
          panel (mode-agnostic device settings). Control is per-mode only. -->
 
-    <!-- Animation (N/A in marquee: the hardware ticker owns the top row) -->
-    {#if state.mode !== 'marquee'}
+    <!-- Animation (N/A in marquee: the ticker owns the top row; N/A in
+         spectrum: the bars own both rows and the daemon forces "none"). -->
+    {#if state.mode !== 'marquee' && state.mode !== 'spectrum'}
     <div class="field">
       <span class="field__label">Animation</span>
       <div class="seg">

@@ -20,6 +20,7 @@ CHECKOUT_STATUS_PATH (via ``checkout.config``).
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from datetime import datetime, timezone
@@ -123,6 +124,21 @@ def post_command(body: CommandBody) -> dict:
 def get_health() -> dict:
     """Liveness derived from status.json freshness."""
     return {"ok": True, "daemon_alive": _daemon_alive(load_status())}
+
+
+@app.get("/api/devices")
+def get_devices() -> dict:
+    """The audio input devices the audioviz process enumerated (for the spectrum
+    SOURCE selector). Read-only mirror of devices.json; ``{"devices": []}`` if the
+    audio process hasn't run (so the UI degrades to source mic/system only)."""
+    from checkout import config as _config
+
+    try:
+        with open(_config.DEVICES_PATH, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError, ValueError, OSError):
+        return {"devices": []}
+    return data if isinstance(data, dict) else {"devices": []}
 
 
 # --- library (web-owned; daemon never reads it) ----------------------------

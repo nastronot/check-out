@@ -10,9 +10,16 @@
 //   canonical, backfilled result).
 
 import { get, writable } from 'svelte/store';
-import { getLibrary, getState, getStatus, putState, reorderGlyphs } from './api';
+import {
+  getDevices,
+  getLibrary,
+  getState,
+  getStatus,
+  putState,
+  reorderGlyphs,
+} from './api';
 import { normGlyph } from './glyphedit';
-import type { AppState, Health, Library, Status } from './types';
+import type { AppState, AudioDevice, Health, Library, Status } from './types';
 
 // Mirror of the backend's STALE_SECONDS: a status older than this (or absent)
 // means the daemon isn't writing, so it's treated as offline.
@@ -22,6 +29,19 @@ export const status = writable<Status | null>(null);
 export const health = writable<Health>({ ok: false, daemon_alive: false });
 export const appState = writable<AppState | null>(null);
 export const library = writable<Library>({ messages: [], glyphs: [] });
+
+// Audio input devices for the spectrum SOURCE selector (from devices.json, which
+// the audioviz process writes). Empty until that process has run.
+export const audioDevices = writable<AudioDevice[]>([]);
+
+/** Refresh the audio device list (cheap; called when spectrum controls show). */
+export async function refreshDevices(): Promise<void> {
+  try {
+    audioDevices.set((await getDevices()).devices ?? []);
+  } catch {
+    /* audioviz hasn't written devices.json yet — keep mic/system only */
+  }
+}
 
 // The glyph editor's active slot (0..8), shared so the glyph library can load
 // a saved glyph into whichever slot is selected.

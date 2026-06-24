@@ -3,6 +3,7 @@
 
 import type {
   AppState,
+  AudioDevice,
   CommandRef,
   Health,
   Library,
@@ -24,6 +25,9 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 export const getStatus = () => req<Status>('/api/status');
 export const getState = () => req<AppState>('/api/state');
 export const getHealth = () => req<Health>('/api/health');
+
+/** Audio input devices for the spectrum SOURCE selector (from devices.json). */
+export const getDevices = () => req<{ devices: AudioDevice[] }>('/api/devices');
 
 /** Merge-patch a partial desired state; returns the full persisted state. */
 export const putState = (patch: Partial<AppState>) =>

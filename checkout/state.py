@@ -35,7 +35,7 @@ def _now_iso() -> str:
 def defaults() -> dict:
     """A fresh state dict with every key at its default value."""
     return {
-        "mode": "clock",                 # "clock"|"message"|"scroll"|"marquee"
+        "mode": "clock",                 # "clock"|"message"|"scroll"|"marquee"|"spectrum"
         "message": "",                   # text for message / scroll modes
         "align_top": "center",           # "left" | "center" | "right" — line 1
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
@@ -71,6 +71,12 @@ def defaults() -> dict:
         # editor-natural convention; the driver translates to the wire format
         # (<<3). Place a glyph in a message with the {gN} placeholder.
         "glyphs": {},
+        # --- spectrum analyzer (mode "spectrum"). The HEAVY per-frame bar data
+        # goes over a unix socket, NOT here; only these settings live in state. ---
+        "audio_source": "system",        # "mic" | "system" (PipeWire/Pulse monitor)
+        "audio_device": None,            # device name/index, or null = default/auto
+        "audio_gain": 1.0,               # sensitivity multiplier
+        "audio_decay": 0.85,             # bar release factor (attack-fast/release-slow)
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -115,7 +121,20 @@ def _backfill(data: dict) -> dict:
     for key in ("scroll_top_source", "scroll_bottom_source"):
         if merged.get(key) not in _SCROLL_SOURCES:
             merged[key] = _DEFAULT_SCROLL_SOURCE
+    # Spectrum audio settings: source is mic|system; gain/decay are clamped floats.
+    if merged.get("audio_source") not in ("mic", "system"):
+        merged["audio_source"] = "system"
+    merged["audio_gain"] = _clamp_float(merged.get("audio_gain"), 1.0, 0.05, 20.0)
+    merged["audio_decay"] = _clamp_float(merged.get("audio_decay"), 0.85, 0.0, 0.999)
     return merged
+
+
+def _clamp_float(value, default: float, lo: float, hi: float) -> float:
+    """Coerce ``value`` to a float in ``[lo, hi]``, falling back to ``default``."""
+    try:
+        return max(lo, min(hi, float(value)))
+    except (TypeError, ValueError):
+        return default
 
 
 def status_defaults() -> dict:

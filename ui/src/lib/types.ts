@@ -1,6 +1,8 @@
 // Mirrors checkout/state.py — keep in sync with the daemon's schema.
 
-export type Mode = 'clock' | 'message' | 'scroll' | 'marquee';
+export type Mode = 'clock' | 'message' | 'scroll' | 'marquee' | 'spectrum';
+/** Spectrum audio source: the mic, or a PipeWire/Pulse monitor of playback. */
+export type AudioSource = 'mic' | 'system';
 /** Brightness is a discrete level index 0..3 (0 Min, 1 Med, 2 Med+, 3 Max). */
 export type Brightness = 0 | 1 | 2 | 3;
 export type Animation = 'none' | 'flash' | 'blink' | 'pulse';
@@ -48,8 +50,22 @@ export interface AppState {
   animation: Animation;
   animation_params: { on_ms: number; off_ms: number; step_ms: number };
   glyphs: Record<string, number[]>;
+  // spectrum analyzer settings (the live bar data goes over a socket, not here)
+  audio_source: AudioSource;
+  audio_device: string | number | null;
+  audio_gain: number;
+  audio_decay: number;
   command: CommandRef;
   updated_at?: string;
+}
+
+/** An audio input device from devices.json (the spectrum SOURCE selector). */
+export interface AudioDevice {
+  index: number;
+  name: string;
+  max_input_channels: number;
+  is_monitor: boolean;
+  default_samplerate?: number;
 }
 
 export interface Status {
@@ -60,6 +76,8 @@ export interface Status {
   brightness: Brightness;
   blank: boolean;
   scroll: boolean;
+  /** Spectrum mode: the 20 bar heights (0..14) the daemon last rendered, else null. */
+  bars: number[] | null;
   last_command_id: string | null;
   updated_at: string | null;
 }
