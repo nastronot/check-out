@@ -556,3 +556,32 @@ def test_engine_spread_is_volume_independent():
         hl = loud.process(_pink(np, 0.5, i % 9), 44100)
         hq = quiet.process(_pink(np, 0.05, i % 9), 44100)   # 10x quieter, same content
     assert abs(sum(hl) - sum(hq)) <= 12
+
+
+# --- v0.9.5: capture tool priority (parec sustains; pw-record starves) -------
+def test_capture_tool_prefers_parec(monkeypatch):
+    # Both present -> parec (pw-record starves a piped reader after one buffer).
+    monkeypatch.setattr(audioviz.shutil, "which", lambda t: "/usr/bin/" + t)
+    assert audioviz._capture_tool() == "parec"
+
+
+def test_capture_tool_falls_back_to_pw_record(monkeypatch):
+    monkeypatch.setattr(audioviz.shutil, "which",
+                        lambda t: "/usr/bin/pw-record" if t == "pw-record" else None)
+    assert audioviz._capture_tool() == "pw-record"
+
+
+def test_capture_tool_none_when_neither_present(monkeypatch):
+    monkeypatch.setattr(audioviz.shutil, "which", lambda t: None)
+    assert audioviz._capture_tool() is None
+
+
+def test_parec_command_is_the_confirmed_working_invocation():
+    cmd = audioviz.parec_command("parec", "sink.monitor", 44100, 1)
+    assert cmd == ["parec", "--device=sink.monitor", "--format=s16le",
+                   "--rate=44100", "--channels=1"]
+
+
+def test_pw_record_command_is_the_fallback():
+    cmd = audioviz.parec_command("pw-record", "sink.monitor", 44100, 1)
+    assert cmd[0] == "pw-record" and "--target" in cmd and cmd[-1] == "-"

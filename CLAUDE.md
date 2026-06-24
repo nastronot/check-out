@@ -472,13 +472,17 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
     release fast enough; too short → lower `RANGE_DB` / raise `HEADROOM_DB`; clip
     at top → raise `RANGE_DB` / lower `HEADROOM_DB`; flashing → lower
     `AUTOGAIN_ATTACK` / raise decay; volume leaks → lower `REF_FLOOR`.
-  - **Two capture backends (v0.9.1).** PortAudio's ALSA backend does NOT expose
-    PipeWire/Pulse `.monitor` sources, so audio is captured NATIVELY via a
-    `pw-record` (preferred) / `parec` subprocess reading raw s16le PCM
-    (`ParecCapture` + reader thread; `_read_exact` accumulates partial pipe
-    reads). Both `system` (a monitor) and `mic` (an input source) go through this;
-    `sounddevice`/PortAudio (`SoundDeviceCapture`) is the FALLBACK when Pulse is
-    absent. `select_capture`: system → the monitor (device override →
+  - **Two capture backends (v0.9.1; tool priority fixed v0.9.5).** PortAudio's
+    ALSA backend does NOT expose PipeWire/Pulse `.monitor` sources, so audio is
+    captured NATIVELY via a **`parec`** (preferred) / `pw-record` (fallback)
+    subprocess reading raw s16le PCM (`ParecCapture` + reader thread; `_read_exact`
+    accumulates partial pipe reads). **parec is preferred because `pw-record`/
+    `pw-cat`, piped, deliver ONE good buffer from a `.monitor` then STARVE to
+    near-silence** (RMS ~0.00003; bench-proven v0.9.5) — the real cause of the
+    spectrum "fills then dies", NOT the DSP. `parec --device=<src> --format=s16le
+    …` sustains (RMS ~0.2). Both `system` (a monitor) and `mic` (an input source)
+    go through this; `sounddevice`/PortAudio (`SoundDeviceCapture`) is the FALLBACK
+    when Pulse is absent. `select_capture`: system → the monitor (device override →
     default-sink monitor → first), else None = emit zeros (NEVER the mic); mic →
     the Pulse input (default-source) or the PortAudio fallback.
   - **Hardened restart (v0.9.1).** Switching devices used to segfault PortAudio.
@@ -723,6 +727,13 @@ sudo usermod -aG uucp "$USER"   # then re-login
   music SPREADS across the display and is stable. `AUTOGAIN_RELEASE` 0.99 → **0.95**
   (recovers in ~0.5-1s). Sim: pink-ish broadband → max 14 / median ~9 / all 20
   bands lit, stable (no sink), volume-independent.
+- **v0.9.5:** the ACTUAL "fills then dies" root cause — capture, not DSP.
+  `pw-record`/`pw-cat` piped from a `.monitor` deliver one good buffer then STARVE
+  to near-silence (RMS 0.00769 → 0.00003…, bench-proven with a bare pipe);
+  `parec --device=<src> --format=s16le …` sustains (RMS ~0.23). `_capture_tool()`
+  now PREFERS parec (was pw-record), pw-record kept as fallback. Reverses the
+  v0.9.1 guess that "parec emits nothing" (that was a bad invocation). The
+  v0.9.2–v0.9.4 DSP was correct, just starved.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

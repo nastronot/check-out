@@ -57,11 +57,16 @@ python -m checkout.audioviz                     # capture + stream to the daemon
 Then set mode `spectrum` (UI or `state.json`) and pick the **source**:
 
 - **`system`** — captures what's playing via a PipeWire/PulseAudio **monitor**
-  source, natively with **`pw-record`** (preferred) / `parec` (PortAudio can't see
+  source, natively with **`parec`** (preferred) / `pw-record` (PortAudio can't see
   `.monitor` sources). Auto-picks the monitor of the current default sink
   (`pactl get-default-sink` + `.monitor`).
 - **`mic`** — captures the default (or chosen) input (`pactl get-default-source`),
-  also via `pw-record`; falls back to `sounddevice`/PortAudio if Pulse is absent.
+  also via `parec`; falls back to `sounddevice`/PortAudio if Pulse is absent.
+
+> **Note:** `parec` is preferred because `pw-record`/`pw-cat`, piped, deliver one
+> good buffer from a `.monitor` then starve to near-silence here (bench-confirmed
+> v0.9.5) — which is what made the bars "fill then die". `parec --device=…`
+> sustains.
 
 The **Device** dropdown is minimal: just "Auto" + the handful of real monitors
 (system) or inputs (mic), labeled — no raw ALSA/hw nodes. Auto is usually right.

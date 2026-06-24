@@ -491,10 +491,14 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
     faster release; short → lower range / raise headroom; clip → raise range /
     lower headroom; flashing → lower attack / raise decay; volume leaks → lower
     `REF_FLOOR`).
-  - **capture (v0.9.1):** PortAudio can't see PipeWire `.monitor` sources, so BOTH
-    system (a sink `.monitor`) and mic (an input source) are captured NATIVELY via
-    `pw-record`/`parec` (enumerated with `pactl`; defaults = default-sink
-    `.monitor` / `pactl get-default-source`); `sounddevice` is the fallback.
+  - **capture (v0.9.1; tool priority fixed v0.9.5):** PortAudio can't see PipeWire
+    `.monitor` sources, so BOTH system (a sink `.monitor`) and mic (an input
+    source) are captured NATIVELY via **`parec`** (preferred) / `pw-record`
+    (fallback) (enumerated with `pactl`; defaults = default-sink `.monitor` /
+    `pactl get-default-source`); `sounddevice` is the last-resort fallback.
+    **parec is preferred because `pw-record`/`pw-cat`, piped, deliver one buffer
+    then STARVE to near-silence** (RMS ~0.00003; bench-proven) — the real cause of
+    the spectrum "fills then dies"; `parec --device=…` sustains (~0.2).
     `select_capture` never silently uses the mic for `system`.
   - **hardened restart (v0.9.1):** full teardown (null → stop → close, guarded) +
     debounced switches + try/except open, so cycling devices can't segfault.
