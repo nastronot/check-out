@@ -490,3 +490,69 @@ def test_engine_decay_holds_bars_after_a_silent_frame():
     # decay_levels (prev persists, out=max(new, prev*factor)) holds the bars —
     # they don't flash to 0 on a single quiet frame.
     assert max(h) >= before * 0.5
+
+
+# --- v0.9.4: broadband ref + centered normalization (no sink, spread) --------
+def test_band_mean_is_arithmetic_mean():
+    assert spectrum.band_mean([]) == 0.0
+    assert spectrum.band_mean([2.0, 4.0]) == 3.0
+
+
+def test_normalize_levels_centered_with_headroom():
+    # A band AT the reference lands mid-high (NOT pinned to the top).
+    at = spectrum.normalize_levels([1.0], 1.0)[0]
+    expected = round(spectrum.AUTOGAIN_RANGE_DB
+                     / (spectrum.AUTOGAIN_RANGE_DB + spectrum.AUTOGAIN_HEADROOM_DB)
+                     * spectrum.MAX_BAR)
+    assert at == expected and 0 < at < spectrum.MAX_BAR
+    assert spectrum.normalize_levels([10.0], 1.0)[0] == spectrum.MAX_BAR  # headroom -> top
+    assert spectrum.normalize_levels([0.001], 1.0)[0] == 0                # far below -> 0
+
+
+def test_normalize_levels_spreads_a_realistic_spectrum():
+    # A typical tilted spectrum should SPREAD across the display, not collapse.
+    bands = [1.0, 0.7, 0.5, 0.35, 0.25, 0.18, 0.13, 0.1, 0.07, 0.05,
+             0.04, 0.03, 0.025, 0.02, 0.016, 0.013, 0.01, 0.008, 0.006, 0.005]
+    lv = spectrum.normalize_levels(bands, spectrum.band_mean(bands))
+    assert max(lv) >= 12                       # loud bands near the top
+    assert (max(lv) - min(lv)) >= 6            # a genuine spread (not all one level)
+    assert sum(1 for x in lv if x > 0) >= 12   # most bands visible (no collapse)
+
+
+def test_update_ref_release_recovers_quickly():
+    # AUTOGAIN_RELEASE 0.95 -> reference falls below ~40% within ~18 frames.
+    ref = 1.0
+    for _ in range(18):
+        ref = spectrum.update_ref(ref, 0.0)
+    assert ref < 0.4
+
+
+def _pink(np, vol, seed):
+    rng = np.random.RandomState(seed)
+    F = np.fft.rfft(rng.randn(1024))
+    f = np.arange(F.size).astype(float)
+    f[0] = 1.0
+    sig = np.fft.irfft(F / np.sqrt(f), 1024)   # 1/sqrt(f) tilt = pink-ish broadband
+    return (sig / np.max(np.abs(sig)) * vol).astype("float32")
+
+
+def test_engine_converges_to_a_spread_not_a_sink():
+    np = pytest.importorskip("numpy")
+    sig = _pink(np, 0.4, 7)
+    eng = audioviz.AudioViz("/tmp/x.sock")
+    for _ in range(120):                       # ~3s of the same broadband frame
+        h = eng.process(sig, 44100)
+    assert max(h) >= 12                        # fills toward the top
+    assert sum(h) >= 60                        # did NOT sink to ~0
+    assert (max(h) - min(h)) >= 5              # spread across the display
+    h2 = eng.process(sig, 44100)               # stable: no ongoing downward drift
+    assert abs(sum(h2) - sum(h)) <= 6
+
+
+def test_engine_spread_is_volume_independent():
+    np = pytest.importorskip("numpy")
+    loud, quiet = audioviz.AudioViz("/tmp/x.sock"), audioviz.AudioViz("/tmp/x.sock")
+    for i in range(120):
+        hl = loud.process(_pink(np, 0.5, i % 9), 44100)
+        hq = quiet.process(_pink(np, 0.05, i % 9), 44100)   # 10x quieter, same content
+    assert abs(sum(hl) - sum(hq)) <= 12
