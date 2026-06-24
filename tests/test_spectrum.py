@@ -369,7 +369,14 @@ def test_normalize_levels_is_volume_independent():
     loud = spectrum.normalize_levels(bands, max(bands))
     quiet = spectrum.normalize_levels([b * 0.01 for b in bands], max(bands) * 0.01)
     assert loud == quiet                       # shape independent of absolute level
-    assert max(loud) == spectrum.MAX_BAR       # the recent-loudest band hits the top
+    # Centered map: a band AT the reference lands mid-high (~range/(range+headroom)),
+    # NOT pinned to the top — louder bands have headroom above it.
+    at_ref = round(spectrum.AUTOGAIN_RANGE_DB
+                   / (spectrum.AUTOGAIN_RANGE_DB + spectrum.AUTOGAIN_HEADROOM_DB)
+                   * spectrum.MAX_BAR)
+    assert max(loud) == at_ref
+    # A band ABOVE the reference reaches the top (headroom).
+    assert spectrum.normalize_levels([4.0], 1.0)[0] == spectrum.MAX_BAR
 
 
 def test_normalize_levels_sensitivity_biases_fullness():

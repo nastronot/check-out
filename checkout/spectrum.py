@@ -174,23 +174,30 @@ def to_levels(
 
 # --- auto-gain (volume-independent) -----------------------------------------
 # The display normalizes each band against a running REFERENCE of recent
-# loudness, so bars fill the range based on CONTENT, not absolute level —
-# lowering system volume does NOT shrink them. The reference is an ENVELOPE
-# FOLLOWER over a high PERCENTILE of the bands (not the single loudest band, or
-# one bass band would pin the top and crush everything else). The SILENCE GATE is
-# on input RMS — that, not the reference, is what stops noise being amplified.
+# BROADBAND loudness ("how loud is the audio right now"), so bars fill the range
+# based on CONTENT, not absolute level — lowering system volume does NOT shrink
+# them. The reference is the MEAN of the bands (`band_mean`), NOT a high
+# percentile of the SAME frame's bands: a percentile reference equals the loudest
+# bands, and "at ref -> top" then drops the median-and-below bands to the floor
+# (bars "fill then sink"). With a broadband reference and a CENTERED map (a band
+# AT ref -> a healthy mid-high bar, with HEADROOM above for louder bands and RANGE
+# below for quieter ones), typical music SPREADS across the display. The SILENCE
+# GATE on input RMS — not the reference — is what stops noise being amplified.
 #
 # TUNING GUIDE (the agent can't hear; tune these on glass):
-#   bars too SHORT / don't fill   -> lower AUTOGAIN_RANGE_DB, or lower AUTOGAIN_PERCENTILE
-#   whole display FLASHES / pumps -> lower AUTOGAIN_ATTACK, or raise the decay factor (UI Smoothing)
-#   volume STILL shrinks the bars -> lower REF_FLOOR (must sit BELOW quiet-music band levels)
-#   silence shows noise           -> raise SILENCE_FLOOR_RMS
-#   bars hang / adapt too slowly  -> lower AUTOGAIN_RELEASE
+#   bars SINK / collapse over time -> ref tracking too high a level: keep ref = band_mean,
+#                                     and ensure AUTOGAIN_RELEASE is fast enough to recover
+#   bars too SHORT overall         -> lower AUTOGAIN_RANGE_DB, or raise AUTOGAIN_HEADROOM_DB (center up)
+#   bars CLIP at the top (all max) -> raise AUTOGAIN_RANGE_DB, or lower AUTOGAIN_HEADROOM_DB (center down)
+#   whole display FLASHES / pumps  -> lower AUTOGAIN_ATTACK, or raise the decay factor (UI Smoothing)
+#   volume STILL shrinks the bars  -> lower REF_FLOOR (must sit BELOW quiet-music band levels)
+#   silence shows noise            -> raise SILENCE_FLOOR_RMS
 SILENCE_FLOOR_RMS = 0.0015   # input RMS below this = silence -> bars fall to ~0 (the noise gate)
-AUTOGAIN_ATTACK = 0.4        # reference RISE fraction/frame toward a louder peak (smooth, not instant)
-AUTOGAIN_RELEASE = 0.99      # reference release/frame when the signal drops (~1-2s @ ~43fps)
-AUTOGAIN_RANGE_DB = 28.0     # dynamic range (dB below the reference) shown as 0..MAX_BAR
-AUTOGAIN_PERCENTILE = 85.0   # reference tracks this percentile of the bands (a typical loud band)
+AUTOGAIN_ATTACK = 0.4        # reference RISE fraction/frame toward a louder level (smooth, not instant)
+AUTOGAIN_RELEASE = 0.99      # reference release/frame when the signal drops
+AUTOGAIN_RANGE_DB = 24.0     # dB BELOW the reference mapped down to 0 (a band -RANGE_DB under ref = empty)
+AUTOGAIN_HEADROOM_DB = 9.0   # dB ABOVE the reference that reaches MAX_BAR (a band AT ref -> ~RANGE/(RANGE+HEADROOM)*MAX)
+AUTOGAIN_PERCENTILE = 85.0   # percentile_peak() default (kept for utility/tests; NOT the ref target)
 REF_FLOOR = 1e-4             # tiny epsilon ONLY (never divide by ~0); MUST be below quiet-music levels
 
 
@@ -202,12 +209,26 @@ def signal_rms(samples) -> float:
     return float((sum(float(x) * float(x) for x in samples) / n) ** 0.5)
 
 
+def band_mean(bands) -> float:
+    """Broadband loudness = the (arithmetic) MEAN band magnitude — the auto-gain
+    REFERENCE target. It represents "how loud overall right now", so absolute
+    volume cancels while typical per-band content still fills the display. The
+    mean (not RMS, which over-weights the loud bands, nor a high percentile, which
+    tracks only the loudest) sits near the middle of the spectrum, so the centered
+    normalization spreads bars ACROSS the display instead of collapsing them to
+    the loudest few ("fill then sink")."""
+    vals = [float(b) for b in bands]
+    if not vals:
+        return 0.0
+    return sum(vals) / len(vals)
+
+
 def percentile_peak(bands, pct: float = AUTOGAIN_PERCENTILE) -> float:
     """The ``pct``-th percentile of the band magnitudes (linear interpolation).
 
-    The auto-gain REFERENCE target: a *typical loud* band rather than the single
-    loudest, so a normal-loud spectrum fills toward the top instead of one bass
-    band pinning the reference and crushing the rest."""
+    A utility (kept + tested); NOT used as the auto-gain reference target — that
+    is :func:`band_energy` (a broadband measure), so the display doesn't collapse
+    to the loudest bands."""
     vals = sorted(float(b) for b in bands)
     if not vals:
         return 0.0
@@ -237,23 +258,28 @@ def update_ref(ref, peak, attack: float = AUTOGAIN_ATTACK,
     return max(ref, ref_floor)
 
 
-def normalize_levels(bands, ref, sensitivity: float = 1.0,
-                     max_bar: int = MAX_BAR, range_db: float = AUTOGAIN_RANGE_DB) -> list[int]:
-    """Map band magnitudes to bar heights NORMALIZED against ``ref``.
+def normalize_levels(bands, ref, sensitivity: float = 1.0, max_bar: int = MAX_BAR,
+                     range_db: float = AUTOGAIN_RANGE_DB,
+                     headroom_db: float = AUTOGAIN_HEADROOM_DB) -> list[int]:
+    """Map band magnitudes to bar heights CENTERED on ``ref`` (broadband loudness).
 
-    Each band is divided by ``ref`` (so a typical loud band ≈ the top), biased by
-    ``sensitivity`` (1.0 = neutral; >1 fuller, <1 dimmer), then dB-mapped: 0 dB
-    (at ref) → ``max_bar``, ``-range_db`` → 0. Volume-independent because ``ref``
-    tracks the signal — absolute level cancels (so ``REF_FLOOR`` must be below
-    quiet-music levels, else low volume pins ``ref`` and the bars shrink).
+    ``db_rel = 20*log10(band/ref)`` is mapped over ``[-range_db, +headroom_db]`` →
+    ``[0, max_bar]``. So a band AT the reference lands at a healthy mid-high bar
+    (``range_db/(range_db+headroom_db) * max_bar``), louder bands have HEADROOM to
+    reach the top, and quieter bands spread DOWN to 0 — typical music fills across
+    the display instead of collapsing to the loudest few bands. ``sensitivity``
+    (1.0 = neutral; >1 fuller, <1 dimmer) shifts every band up/down. Volume-
+    independent because ``ref`` tracks the signal — absolute level cancels (so
+    ``REF_FLOOR`` must be below quiet-music levels, else low volume pins it).
     """
     ref = max(float(ref), REF_FLOOR)
     s = max(float(sensitivity), 1e-6)
+    span = max(1e-6, float(range_db) + float(headroom_db))
     out: list[int] = []
     for v in bands:
         norm = (float(v) / ref) * s
         db = 20.0 * math.log10(max(norm, 1e-9))
-        level = (db + range_db) / range_db * max_bar
+        level = (db + range_db) / span * max_bar
         out.append(int(round(max(0.0, min(float(max_bar), level)))))
     return out
 

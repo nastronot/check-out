@@ -558,10 +558,11 @@ class AudioViz:
             self._ref = spectrum.update_ref(self._ref, 0.0)
             new = [0] * spectrum.NUM_BARS
         else:
-            # Reference tracks a high PERCENTILE of the bands (a typical loud
-            # band) with a smooth attack — not the single max (which one bass
-            # band would pin) and not an instant snap (which would pump).
-            self._ref = spectrum.update_ref(self._ref, spectrum.percentile_peak(bands))
+            # Reference tracks BROADBAND loudness (band_mean) with a smooth
+            # attack — "how loud overall now", so volume cancels but the centered
+            # map still spreads typical content across the display (a per-band
+            # percentile would collapse everything but the loudest bands -> sink).
+            self._ref = spectrum.update_ref(self._ref, spectrum.band_mean(bands))
             new = spectrum.normalize_levels(bands, self._ref, self.sensitivity)
 
         # Bar smoothing (attack-fast / release-slow): prev = self.levels PERSISTS
