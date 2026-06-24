@@ -161,6 +161,40 @@ def test_scroll_speed_clamped_to_floor():
     assert a == b
 
 
+def test_render_scroll_clock_source_shows_time_and_ticks(monkeypatch):
+    # A row whose source is "clock" shows the TIME line and updates each second.
+    state = {
+        "message": "IGNORED TOP\nIGNORED BOTTOM",
+        "scroll_top_source": "clock",
+        "scroll_bottom_source": "message",
+    }
+    t0 = datetime(2026, 6, 19, 12, 0, 0)
+    t1 = datetime(2026, 6, 19, 12, 0, 1)
+    top0, bottom0 = daemon.render_scroll(state, 0, t0)
+    top1, _ = daemon.render_scroll(state, 0, t1)
+    assert top0.strip() == "12:00:00 PM"   # clock TIME line, not the message
+    assert top1.strip() == "12:00:01 PM"   # ticks each second
+    assert bottom0.strip() == "IGNORED BOTTOM"  # message row unaffected
+
+
+def test_render_scroll_mixed_clock_top_scrolling_message_bottom():
+    # Top clock (static, refreshed) + bottom scrolling message both render 20-wide.
+    state = {
+        "message": "\nA LONG BOTTOM MESSAGE THAT SCROLLS ACROSS THE ROW",
+        "scroll_top_source": "clock",
+        "scroll_bottom_source": "message",
+        "scroll_bottom": True,
+        "scroll_dir_bottom": "left",
+        "scroll_speed_ms": 100,
+    }
+    now = datetime(2026, 6, 19, 12, 0, 0)
+    b0 = daemon.render_scroll(state, 0, now)[1]
+    b1 = daemon.render_scroll(state, 300, now)[1]
+    top = daemon.render_scroll(state, 0, now)[0]
+    assert top.strip() == "12:00:00 PM"
+    assert len(b0) == 20 and b0 != b1  # bottom message scrolls
+
+
 def test_legacy_ticker_mode_renders_as_scroll(monkeypatch):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = _CountingDriver()
@@ -172,11 +206,12 @@ def test_legacy_ticker_mode_renders_as_scroll(monkeypatch):
 
 
 # --- marquee (hardware ticker) -----------------------------------------------
-def test_marquee_starts_ticker_once_and_updates_bottom_each_tick(monkeypatch, capsys):
+def test_marquee_starts_ticker_once_and_writes_static_bottom(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = daemon._new_ctx()
-    state = {"mode": "marquee", "marquee_text": "HELLO NEWS", "marquee_bottom": "clock"}
+    state = {"mode": "marquee", "marquee_text": "HELLO NEWS",
+             "marquee_bottom_text": "BOTTOM"}
 
     capsys.readouterr()
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0))
@@ -185,19 +220,49 @@ def test_marquee_starts_ticker_once_and_updates_bottom_each_tick(monkeypatch, ca
     assert t1[t1.index(0x05) + 1:].count(0x0D) >= 1
     assert [0x10, 0x14] in [t1[i:i + 2] for i in range(len(t1) - 1)]  # bottom written
 
-    # Next tick (+1s): same marquee text -> NO ticker re-send, only bottom update.
+    # Next tick (+1s): same marquee text + STATIC bottom -> nothing re-sent (no
+    # ticker re-kick, no bottom rewrite). The bottom is static, never a clock.
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
-    t2 = _all_tx_bytes(capsys.readouterr().out)
-    assert 0x05 not in t2                   # ticker NOT re-sent
-    assert [0x10, 0x14] in [t2[i:i + 2] for i in range(len(t2) - 1)]  # bottom did update
-    assert [0x10, 0x00] not in [t2[i:i + 2] for i in range(len(t2) - 1)]  # top untouched
+    assert _all_tx_bytes(capsys.readouterr().out) == []
+
+
+def test_marquee_clock_bottom_request_is_static_only(monkeypatch):
+    """A legacy marquee_bottom='clock' must NOT drive a live clock — it's ignored
+    (static-only), so the bottom is the static text and never ticks per second."""
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "marquee", "marquee_text": "HI", "marquee_bottom": "clock",
+             "marquee_bottom_text": "STATIC BOTTOM"}
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0))
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    # Bottom is the static text both ticks (no AM/PM clock, no per-second change).
+    assert written[-1]["bottom"].strip() == "STATIC BOTTOM"
+    assert ":" not in written[-1]["bottom"]
+
+
+def test_marquee_preview_top_advances_each_tick(monkeypatch):
+    """status.top is a software preview window that MOVES every tick even with a
+    fixed `now` (it advances a per-tick offset, not wall-clock)."""
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "marquee",
+             "marquee_text": "A LONG MARQUEE MESSAGE THAT SCROLLS ON THE TOP ROW"}
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    daemon.tick_once(drv, state, ctx, now=NOW)  # SAME now
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    tops = [w["top"] for w in written]
+    assert len(set(tops)) == 3  # advances tick to tick despite a fixed clock
 
 
 def test_marquee_re_kicks_ticker_after_reset(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = daemon._new_ctx()
-    state = {"mode": "marquee", "marquee_text": "NEWS", "marquee_bottom": "clock"}
+    state = {"mode": "marquee", "marquee_text": "NEWS", "marquee_bottom_text": "X"}
     daemon.tick_once(drv, state, ctx, now=NOW)  # starts ticker
     capsys.readouterr()
 

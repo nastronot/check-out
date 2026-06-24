@@ -43,12 +43,39 @@ def test_defaults_include_full_phase2_schema(state_path):
 def test_marquee_and_scroll_fields_default(state_path):
     loaded = state.load_state()
     assert loaded["marquee_text"] == ""
-    assert loaded["marquee_bottom"] == "clock"
+    assert loaded["marquee_bottom"] == "static"  # static-only now (was "clock")
     assert loaded["marquee_bottom_text"] == ""
+    assert loaded["scroll_top_source"] == "message"
+    assert loaded["scroll_bottom_source"] == "message"
     assert loaded["scroll_top"] is True
     assert loaded["scroll_bottom"] is False
     assert loaded["scroll_dir_top"] == "left"
     assert loaded["scroll_dir_bottom"] == "left"
+
+
+def test_marquee_bottom_clock_normalizes_to_static(state_path):
+    import json
+
+    # A legacy marquee_bottom="clock" is tolerated but normalized to static-only.
+    state_path.write_text(json.dumps({"mode": "marquee", "marquee_bottom": "clock"}))
+    loaded = state.load_state()
+    assert loaded["marquee_bottom"] == "static"
+
+
+def test_scroll_sources_validate_and_default(state_path):
+    import json
+
+    state_path.write_text(
+        json.dumps(
+            {
+                "scroll_top_source": "clock",     # valid -> kept
+                "scroll_bottom_source": "bogus",  # invalid -> default "message"
+            }
+        )
+    )
+    loaded = state.load_state()
+    assert loaded["scroll_top_source"] == "clock"
+    assert loaded["scroll_bottom_source"] == "message"
 
 
 def test_legacy_ticker_mode_migrates_to_scroll(state_path):
