@@ -1,31 +1,42 @@
 """checkout.audioviz — audio capture + FFT → 20 log bands → socket stream.
 
-A SEPARATE process (it never touches the serial port). It captures audio with
-``sounddevice`` (PortAudio), runs an FFT, buckets into 20 log-spaced bands, maps
-each to a height 0..14 with attack-fast/release-slow smoothing, and STREAMS the
-heights to the daemon over the unix datagram socket (:mod:`checkout.spectrum`).
+A SEPARATE process (it never touches the serial port). It captures audio, runs
+an FFT, buckets into 20 log-spaced bands, maps each to a height 0..14 with
+attack-fast/release-slow smoothing, and STREAMS the heights to the daemon over
+the unix datagram socket (:mod:`checkout.spectrum`).
+
+Two capture backends (v0.9.1):
+  - **system audio** → a PipeWire/PulseAudio **monitor** source, captured with
+    ``parec``/``pw-record`` (a subprocess reading raw PCM). PortAudio's ALSA
+    backend does NOT reliably expose ``.monitor`` sources, so we go native via
+    Pulse. Monitors are enumerated with ``pactl``; the default is the monitor of
+    the current default sink (``pactl get-default-sink`` + ``.monitor``).
+  - **mic** → the default (or chosen) input via ``sounddevice`` (PortAudio),
+    with a HARDENED stream lifecycle (full stop+close, debounced restarts,
+    try/except open) so cycling devices can't segfault PortAudio.
 
 SETTINGS come from ``state.json`` (``audio_source`` / ``audio_device`` /
-``audio_gain`` / ``audio_decay``) — re-read on mtime change so the UI sliders
-apply live; the source/device change restarts the capture stream. The HEAVY
-per-frame data goes over the socket, never state.json.
+``audio_gain`` / ``audio_decay``) — re-read live; a source/device change restarts
+the capture (debounced + safely torn down). The HEAVY per-frame data goes over
+the socket, never state.json. Capture only runs while mode is ``spectrum``.
 
-It enumerates capture devices to ``devices.json`` (web-readable) for the UI
-selector. Missing PortAudio / no device / no monitor are handled gracefully:
-it logs once and streams zeros (so the daemon's bars decay to flat) while
-retrying, rather than crashing.
+Devices are written to ``devices.json`` (web-readable) LABELED by kind so the UI
+can tell monitors (system audio) from inputs (mic).
 
 Run::
 
     python -m checkout.audioviz            # capture + stream
-    python -m checkout.audioviz --list     # just enumerate devices -> devices.json
+    python -m checkout.audioviz --list     # enumerate devices -> devices.json
 """
 
 from __future__ import annotations
 
 import argparse
+import shutil
 import signal
+import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 
@@ -36,9 +47,14 @@ from .state import atomic_write_json, load_state
 # above the daemon's ~21fps render, which is fine (newest-frame-wins).
 BLOCK = 1024
 DEFAULT_RATE = 44100
-SETTINGS_POLL_S = 0.5     # how often to re-check state.json for live settings
 ZERO_FRAME = [0] * spectrum.NUM_BARS
 
+# Supervisor cadence + restart debounce (coalesce rapid device switches).
+POLL_MS = 200
+RESTART_DEBOUNCE_MS = 400
+IDLE_SLEEP_S = 0.05
+
+_UNSET = object()
 _stop = False
 
 
@@ -51,13 +67,62 @@ def _handle_signal(signum, frame) -> None:
     _stop = True
 
 
-# --- device enumeration ------------------------------------------------------
-def enumerate_devices() -> list[dict]:
-    """Return the available INPUT devices as plain dicts (empty on any failure).
+def _now_ms() -> float:
+    return time.monotonic() * 1000.0
 
-    A device whose name contains "monitor" is flagged ``is_monitor`` — that's how
-    a PipeWire/PulseAudio loopback-of-playback ("system" audio) source appears.
-    """
+
+# --- pulse (pactl) enumeration ----------------------------------------------
+def _run_cmd(args, timeout: float = 2.0) -> str | None:
+    """Run a command, returning stdout on success or None (missing/error)."""
+    try:
+        res = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return res.stdout if res.returncode == 0 else None
+
+
+def parse_pulse_sources(short_text: str | None) -> list[dict]:
+    """Parse ``pactl list sources short`` rows into ``{name, is_monitor}``."""
+    out: list[dict] = []
+    for line in (short_text or "").splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[1].strip():
+            name = parts[1].strip()
+            out.append({"name": name, "is_monitor": name.endswith(".monitor")})
+    return out
+
+
+def parse_source_descriptions(long_text: str | None) -> dict:
+    """Map source name → human Description from ``pactl list sources`` (long)."""
+    desc: dict = {}
+    cur = None
+    for line in (long_text or "").splitlines():
+        s = line.strip()
+        if s.startswith("Name:"):
+            cur = s[len("Name:"):].strip()
+        elif s.startswith("Description:") and cur:
+            desc[cur] = s[len("Description:"):].strip()
+            cur = None
+    return desc
+
+
+def default_sink_monitor() -> str | None:
+    """The monitor source of the current default sink (``<sink>.monitor``)."""
+    out = _run_cmd(["pactl", "get-default-sink"])
+    if not out:
+        return None
+    sink = out.strip()
+    return f"{sink}.monitor" if sink else None
+
+
+def _pretty_monitor(name: str) -> str:
+    base = name[:-len(".monitor")] if name.endswith(".monitor") else name
+    return base.replace("alsa_output.", "")
+
+
+# --- portaudio (mic) enumeration --------------------------------------------
+def enumerate_devices() -> list[dict]:
+    """PortAudio INPUT devices (mics) as plain dicts; empty on any failure."""
     try:
         import sounddevice as sd
     except Exception as exc:  # PortAudio missing, etc.
@@ -86,22 +151,75 @@ def enumerate_devices() -> list[dict]:
     return out
 
 
-def write_devices(devices: list[dict], path: str | None = None) -> None:
-    """Atomically write the device list for the UI selector (devices.json)."""
+# --- unified, LABELED device list -------------------------------------------
+def build_device_list(
+    pulse_sources: list[dict] | None = None,
+    descriptions: dict | None = None,
+    inputs: list[dict] | None = None,
+) -> list[dict]:
+    """Combine Pulse monitors (system audio) + PortAudio inputs (mic), labeled.
+
+    Each entry: ``{id, label, kind, is_monitor, backend, ...}`` where ``id`` is
+    the value the UI writes into ``audio_device`` (a monitor source NAME for
+    monitors, the PortAudio index string for inputs). Args injectable for tests.
+    """
+    if pulse_sources is None:
+        pulse_sources = parse_pulse_sources(_run_cmd(["pactl", "list", "sources", "short"]))
+    if descriptions is None:
+        descriptions = parse_source_descriptions(_run_cmd(["pactl", "list", "sources"]))
+    if inputs is None:
+        inputs = enumerate_devices()
+
+    devices: list[dict] = []
+    for s in pulse_sources:
+        if not s.get("is_monitor"):
+            continue
+        name = s["name"]
+        pretty = descriptions.get(name) or _pretty_monitor(name)
+        devices.append(
+            {
+                "id": name,
+                "label": f"[monitor] {pretty}",
+                "kind": "monitor",
+                "is_monitor": True,
+                "backend": "pulse",
+            }
+        )
+    for d in inputs:
+        if d.get("is_monitor"):
+            continue  # monitors come from Pulse, not PortAudio
+        devices.append(
+            {
+                "id": str(d["index"]),
+                "label": d["name"],
+                "kind": "input",
+                "is_monitor": False,
+                "backend": "portaudio",
+                "index": d["index"],
+                "default_samplerate": d.get("default_samplerate", DEFAULT_RATE),
+            }
+        )
+    return devices
+
+
+def write_devices(devices, default_monitor=None, path: str | None = None) -> None:
+    """Atomically write the labeled device list for the UI selector."""
     atomic_write_json(
         path or config.DEVICES_PATH,
-        {"devices": devices, "updated_at": datetime.now().isoformat()},
+        {
+            "devices": devices,
+            "default_monitor": default_monitor,
+            "updated_at": datetime.now().isoformat(),
+        },
     )
 
 
+# --- capture selection (pure) -----------------------------------------------
 def find_device(devices: list[dict], source: str, device=None) -> int | None:
-    """Choose a capture device index (pure logic, unit-testable).
+    """Legacy PortAudio input chooser (kept for the mic path + tests).
 
-    - An explicit ``device`` (int index or name substring) wins when it matches
-      an input device; an explicit-but-missing device returns None.
-    - ``source == "system"`` → the first monitor input (loopback of playback).
-    - ``source == "mic"`` (or no monitor found) → None, i.e. PortAudio's default
-      input device.
+    ``device`` (index or name substring) wins; ``source == "system"`` → first
+    monitor; else None = default input.
     """
     inputs = [d for d in devices if d.get("max_input_channels", 0) > 0]
     if device not in (None, "", "default"):
@@ -115,13 +233,230 @@ def find_device(devices: list[dict], source: str, device=None) -> int | None:
         for d in inputs:
             if needle in d["name"].lower():
                 return d["index"]
-        return None  # asked-for device not present
+        return None
     if source == "system":
         for d in inputs:
             if d.get("is_monitor"):
                 return d["index"]
-        return None  # no monitor -> caller falls back to default + logs
-    return None      # "mic" -> default input device
+        return None
+    return None
+
+
+def _resolve_monitor(device, monitors: list[dict], default_monitor) -> str | None:
+    if device not in (None, "", "default"):
+        d = str(device)
+        for m in monitors:
+            if d == m["id"] or d.lower() in m["label"].lower():
+                return m["id"]
+        if d.endswith(".monitor"):
+            return d  # raw monitor name override (not in the cached list)
+    if default_monitor and any(m["id"] == default_monitor for m in monitors):
+        return default_monitor
+    if monitors:
+        return monitors[0]["id"]
+    return default_monitor  # trust pactl's default even if the list came up empty
+
+
+def _resolve_input(device, inputs: list[dict]) -> int | None:
+    if device not in (None, "", "default"):
+        d = str(device)
+        try:
+            idx = int(d)
+            if any(i.get("index") == idx for i in inputs):
+                return idx
+        except (ValueError, TypeError):
+            pass
+        for i in inputs:
+            if d.lower() in i["label"].lower():
+                return i.get("index")
+        return None
+    return None  # default input device
+
+
+def select_capture(source, device, devices, default_monitor):
+    """Resolve (source, device) to a capture key, or None for no capture.
+
+    Returns ``("pulse", monitor_name)`` for system audio, ``("portaudio", idx)``
+    for the mic (idx None = default), or ``None`` when system audio is requested
+    but no monitor exists (so we emit zeros — NOT silently fall back to the mic).
+    """
+    monitors = [d for d in devices if d.get("is_monitor")]
+    if source == "system":
+        name = _resolve_monitor(device, monitors, default_monitor)
+        return ("pulse", name) if name else None
+    inputs = [d for d in devices if not d.get("is_monitor")]
+    return ("portaudio", _resolve_input(device, inputs))
+
+
+# --- debounce ----------------------------------------------------------------
+class ChangeDebouncer:
+    """Coalesce rapid value changes: :meth:`due` is True once the value has been
+    stable (unchanged) for ``window_ms``. Switching quickly through the device
+    dropdown therefore yields ONE restart at the final value."""
+
+    def __init__(self, window_ms: float = RESTART_DEBOUNCE_MS) -> None:
+        self.window_ms = window_ms
+        self._pending = _UNSET
+        self._since = 0.0
+
+    def observe(self, value, now_ms: float) -> None:
+        if self._pending is _UNSET or value != self._pending:
+            self._pending = value
+            self._since = now_ms
+
+    def peek(self):
+        return self._pending
+
+    def due(self, now_ms: float) -> bool:
+        return self._pending is not _UNSET and (now_ms - self._since) >= self.window_ms
+
+    def take(self):
+        value = self._pending
+        self._pending = _UNSET
+        return value
+
+
+# --- capture backends --------------------------------------------------------
+def _capture_tool() -> str | None:
+    # Prefer pw-record: on PipeWire it reliably captures a node's `.monitor`,
+    # whereas parec (via pipewire-pulse) was observed to emit nothing for some
+    # monitor sources on this setup. Fall back to parec if pw-record is absent.
+    for tool in ("pw-record", "parec"):
+        if shutil.which(tool):
+            return tool
+    return None
+
+
+def parec_command(tool: str, source: str, rate: int, channels: int) -> list[str]:
+    """Build the raw-PCM (s16le) capture command for a Pulse monitor source."""
+    if tool == "pw-record":
+        return ["pw-record", "--target", source, "--rate", str(rate),
+                "--channels", str(channels), "--format", "s16", "-"]
+    # parec (pacat --record): raw s16le PCM to stdout
+    return ["parec", f"--device={source}", "--format=s16le",
+            f"--rate={rate}", f"--channels={channels}"]
+
+
+def _read_exact(stream, nbytes: int, stopped) -> bytes | None:
+    """Read exactly ``nbytes`` from a pipe, accumulating partial reads.
+
+    Returns the full block, or None at EOF / when ``stopped()`` goes True. A raw
+    pipe ``read(n)`` may return fewer than ``n`` bytes; without accumulating, the
+    leftover desyncs the s16le frame boundary and audio is dropped."""
+    buf = bytearray()
+    while len(buf) < nbytes:
+        if stopped():
+            return None
+        chunk = stream.read(nbytes - len(buf))
+        if not chunk:
+            return None  # EOF
+        buf += chunk
+    return bytes(buf)
+
+
+class ParecCapture:
+    """System-audio capture via a pw-record/parec subprocess + reader thread."""
+
+    def __init__(self, source_name, rate, on_chunk, channels=1, tool=None):
+        self.source = source_name
+        self.rate = int(rate)
+        self.on_chunk = on_chunk
+        self.channels = channels
+        self.tool = tool or _capture_tool()
+        self._proc = None
+        self._thread = None
+        self._stop = False
+
+    def start(self) -> None:
+        if self.tool is None:
+            raise RuntimeError("no parec/pw-record found (install pipewire-pulse)")
+        import numpy as np  # fail early + clearly if numpy is missing
+        self._np = np
+        cmd = parec_command(self.tool, self.source, self.rate, self.channels)
+        self._proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0
+        )
+        self._stop = False
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+
+    def _reader(self) -> None:
+        np = self._np
+        nbytes = BLOCK * self.channels * 2  # s16le = 2 bytes/sample
+        proc = self._proc
+        try:
+            while not self._stop and proc is not None and proc.poll() is None:
+                # Read EXACTLY a full block: a pipe read can return fewer bytes,
+                # so accumulate (else partial reads desync and drop audio).
+                data = _read_exact(proc.stdout, nbytes, lambda: self._stop)
+                if data is None:
+                    break
+                arr = np.frombuffer(data, dtype="<i2").astype("float32") / 32768.0
+                if self.channels > 1:
+                    arr = arr.reshape(-1, self.channels).mean(axis=1)
+                try:
+                    self.on_chunk(arr, self.rate)
+                except Exception:
+                    pass
+        except Exception as exc:
+            log(f"capture reader stopped: {exc}")
+
+    def stop(self) -> None:
+        self._stop = True
+        proc, self._proc = self._proc, None
+        if proc is not None:
+            for step in (proc.terminate, lambda: proc.wait(timeout=1.0)):
+                try:
+                    step()
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            thread.join(timeout=1.0)
+
+
+class SoundDeviceCapture:
+    """Mic capture via PortAudio with a HARDENED teardown (full stop+close)."""
+
+    def __init__(self, device_index, rate, on_chunk):
+        self.device_index = device_index
+        self.rate = int(rate)
+        self.on_chunk = on_chunk
+        self._stream = None
+
+    def start(self) -> None:
+        import sounddevice as sd
+
+        def _cb(indata, frames, time_info, status):
+            mono = indata[:, 0] if getattr(indata, "ndim", 1) > 1 else indata
+            try:
+                self.on_chunk(mono, self.rate)
+            except Exception:
+                pass
+
+        stream = sd.InputStream(
+            device=self.device_index, channels=1, samplerate=self.rate,
+            blocksize=BLOCK, dtype="float32", callback=_cb,
+        )
+        stream.start()
+        self._stream = stream
+
+    def stop(self) -> None:
+        # Null the handle FIRST so a re-entrant/failed teardown can't reuse it,
+        # then fully stop() THEN close() — each guarded so a bad prior stream
+        # can't block (or crash) the next open. PortAudio segfaults if a stream
+        # isn't cleanly torn down before the next is opened.
+        stream, self._stream = self._stream, None
+        if stream is None:
+            return
+        for step in (stream.stop, stream.close):
+            try:
+                step()
+            except Exception as exc:
+                log(f"portaudio teardown: {exc}")
 
 
 # --- DSP engine --------------------------------------------------------------
@@ -182,7 +517,7 @@ class AudioViz:
         self.sender.close()
 
 
-# --- capture loop ------------------------------------------------------------
+# --- supervisor --------------------------------------------------------------
 def _read_settings(state: dict) -> tuple[str, object, float, float]:
     return (
         state.get("audio_source", "system"),
@@ -192,113 +527,120 @@ def _read_settings(state: dict) -> tuple[str, object, float, float]:
     )
 
 
+def _input_rate(devices, idx) -> float:
+    for d in devices:
+        if d.get("kind") == "input" and d.get("index") == idx:
+            return float(d.get("default_samplerate", DEFAULT_RATE))
+    return float(DEFAULT_RATE)
+
+
+def _safe_stop(capture) -> None:
+    if capture is None:
+        return
+    try:
+        capture.stop()
+    except Exception as exc:
+        log(f"capture stop failed: {exc}")
+
+
+def make_capture(key, on_chunk, devices):
+    """Construct (but don't start) the capture backend for a key, or None."""
+    if key is None:
+        return None
+    kind, ident = key
+    if kind == "pulse":
+        return ParecCapture(ident, DEFAULT_RATE, on_chunk)
+    return SoundDeviceCapture(ident, _input_rate(devices, ident), on_chunk)
+
+
+def _restart_capture(old, key, on_chunk, devices):
+    """Safely tear down ``old`` and start the capture for ``key``.
+
+    A failed OPEN is caught and logged — the result is just "no capture / zeros",
+    never a crash. Returns the new capture, or None.
+    """
+    _safe_stop(old)
+    if key is None:
+        return None
+    kind, ident = key
+    capture = make_capture(key, on_chunk, devices)
+    try:
+        capture.start()
+    except Exception as exc:
+        log(f"open failed [{kind}] {ident!r}: {exc}; emitting zeros")
+        _safe_stop(capture)
+        return None
+    log(f"capturing [{kind}] {ident if ident is not None else 'default'}")
+    return capture
+
+
 def run(socket_path: str | None = None) -> int:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
     av = AudioViz(socket_path)
-    devices = enumerate_devices()
-    write_devices(devices)
+    devices = build_device_list()
+    default_monitor = default_sink_monitor()
+    write_devices(devices, default_monitor)
+    monitors = [d for d in devices if d.get("is_monitor")]
+    log(f"{len(devices)} devices ({len(monitors)} monitors); "
+        f"default monitor: {default_monitor}")
 
-    state = load_state()
-    source, device, gain, decay = _read_settings(state)
-    av.configure(gain, decay)
-
-    try:
-        import sounddevice as sd
-    except Exception as exc:
-        log(f"no audio backend ({exc}); streaming zeros. Install sounddevice.")
-        return _zeros_loop(av)
-
-    log(f"source={source} device={device!r} gain={gain} decay={decay}")
-    warned_no_monitor = False
+    on_chunk = lambda s, r: av.send(av.process(s, r))  # noqa: E731
+    debouncer = ChangeDebouncer(RESTART_DEBOUNCE_MS)
+    applied = _UNSET
+    capture = None
+    last_poll = -1e9
 
     while not _stop:
-        idx = find_device(devices, source, device)
-        if idx is None and source == "system" and not warned_no_monitor:
-            log("no PipeWire/Pulse monitor source found; using default input")
-            warned_no_monitor = True
-        rate = _device_rate(devices, idx)
+        now = _now_ms()
+        if now - last_poll >= POLL_MS:
+            last_poll = now
+            state = load_state()
+            source, device, gain, decay = _read_settings(state)
+            av.configure(gain, decay)
+            # Capture only while in spectrum mode (no parec churn otherwise).
+            desired = (
+                select_capture(source, device, devices, default_monitor)
+                if state.get("mode") == "spectrum"
+                else None
+            )
+            debouncer.observe(desired, now)
 
-        def _callback(indata, frames, time_info, status):  # PortAudio thread
-            if _stop:
-                return
-            mono = indata[:, 0] if getattr(indata, "ndim", 1) > 1 else indata
-            try:
-                av.send(av.process(mono, rate))
-            except Exception:
-                av.send(ZERO_FRAME)
+        first = applied is _UNSET
+        if (first or debouncer.peek() != applied) and debouncer.due(now):
+            target = debouncer.take()
+            capture = _restart_capture(capture, target, on_chunk, devices)
+            applied = target
+            if capture is None and target is not None:
+                log("capture unavailable for the selected source; emitting zeros")
 
-        try:
-            with sd.InputStream(
-                device=idx, channels=1, samplerate=rate,
-                blocksize=BLOCK, dtype="float32", callback=_callback,
-            ):
-                log(f"capturing on device {idx if idx is not None else 'default'} @ {rate:.0f}Hz")
-                # Supervise: re-read settings on change; restart on source/device swap.
-                while not _stop:
-                    time.sleep(SETTINGS_POLL_S)
-                    new_state = load_state()
-                    nsrc, ndev, ngain, ndecay = _read_settings(new_state)
-                    av.configure(ngain, ndecay)
-                    if (nsrc, ndev) != (source, device):
-                        source, device = nsrc, ndev
-                        warned_no_monitor = False
-                        log(f"source/device changed -> {source} {device!r}; restarting")
-                        break  # leave the `with`, reopen the stream
-                    if new_state.get("mode") != "spectrum":
-                        # Not in spectrum: keep the stream but stop spamming the
-                        # socket — a couple of zero frames let the daemon's bars
-                        # rest if it happens to still be draining.
-                        av.send_zeros()
-        except Exception as exc:
-            log(f"capture error ({exc}); retrying in 1s")
-            _sleep_zeros(av, 1.0)
-            devices = enumerate_devices()  # device list may have changed
-            write_devices(devices)
+        if capture is None:
+            av.send_zeros()
+        time.sleep(IDLE_SLEEP_S)
 
+    _safe_stop(capture)
     av.close()
     return 0
-
-
-def _device_rate(devices: list[dict], idx) -> float:
-    for d in devices:
-        if d.get("index") == idx:
-            return float(d.get("default_samplerate", DEFAULT_RATE))
-    return float(DEFAULT_RATE)
-
-
-def _zeros_loop(av: AudioViz) -> int:
-    """Fallback when there's no audio backend at all: stream zeros until stopped."""
-    while not _stop:
-        av.send(ZERO_FRAME)
-        time.sleep(1.0 / 30)
-    av.close()
-    return 0
-
-
-def _sleep_zeros(av: AudioViz, seconds: float) -> None:
-    end = time.monotonic() + seconds
-    while not _stop and time.monotonic() < end:
-        av.send_zeros()
-        time.sleep(1.0 / 30)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="checkout.audioviz", description=__doc__)
     parser.add_argument(
         "--list", action="store_true",
-        help="enumerate input devices to devices.json (and stdout) then exit",
+        help="enumerate devices to devices.json (and stdout) then exit",
     )
     args = parser.parse_args(argv)
     if args.list:
-        devices = enumerate_devices()
-        write_devices(devices)
+        devices = build_device_list()
+        default_monitor = default_sink_monitor()
+        write_devices(devices, default_monitor)
         for d in devices:
-            tag = " [monitor]" if d["is_monitor"] else ""
-            print(f"{d['index']:>3}  {d['name']}{tag}")
+            mark = "*" if d["id"] == default_monitor else " "
+            print(f"{mark} {d['label']}")
         if not devices:
-            print("(no input devices found)")
+            print("(no devices found — is pipewire-pulse / PortAudio installed?)")
+        print(f"\ndefault system monitor: {default_monitor or '(none)'}")
         return 0
     return run()
 
