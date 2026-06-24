@@ -436,3 +436,50 @@ def test_autogain_readapts_when_signal_returns():
     for _ in range(40):                        # real audio returns
         h = eng.process(_tone(np, 0.3), 44100)
     assert max(h) > 0                           # adapts and shows bars again
+
+
+# --- v0.9.3: auto-gain envelope fixes ---------------------------------------
+def test_percentile_peak_is_a_high_percentile_not_the_max():
+    bands = list(range(1, 21))                 # 1..20
+    p85 = spectrum.percentile_peak(bands, 85)
+    assert 16.0 < p85 < 19.0                    # ~85th percentile of 1..20
+    assert p85 < max(bands)                      # NOT the single loudest band
+    assert spectrum.percentile_peak([]) == 0.0
+    assert spectrum.percentile_peak([5.0]) == 5.0
+
+
+def test_normalize_levels_volume_independent_across_range():
+    # The SAME spectrum at very different absolute levels -> identical bars, now
+    # that REF_FLOOR sits below quiet-music levels (Bug 1).
+    base = [0.05, 0.4, 1.0, 0.2, 0.6, 0.1]
+    ref = spectrum.percentile_peak(base)
+    out0 = spectrum.normalize_levels(base, ref)
+    for scale in (10.0, 1.0, 0.1, 0.01, 0.002):
+        scaled = [b * scale for b in base]
+        assert spectrum.normalize_levels(scaled, ref * scale) == out0
+
+
+def test_update_ref_attack_climbs_over_frames_then_releases():
+    # Smooth attack: a single big peak does NOT pin the reference instantly.
+    ref = spectrum.REF_FLOOR
+    first = spectrum.update_ref(ref, 10.0)
+    assert first < 10.0                          # didn't snap to the peak
+    r = first
+    for _ in range(20):                          # repeated frames climb toward it
+        r = spectrum.update_ref(r, 10.0)
+    assert r > first and r > 9.0                  # converges up over time
+    assert spectrum.update_ref(r, 0.0) < r        # lower signal -> releases
+
+
+def test_engine_decay_holds_bars_after_a_silent_frame():
+    np = pytest.importorskip("numpy")
+    eng = audioviz.AudioViz("/tmp/x.sock")
+    sig = _tone(np, 0.5)
+    for _ in range(40):                          # warm the bars up
+        eng.process(sig, 44100)
+    before = max(eng.levels)
+    assert before > 0
+    h = eng.process(np.zeros(1024, dtype="float32"), 44100)  # ONE silent frame
+    # decay_levels (prev persists, out=max(new, prev*factor)) holds the bars —
+    # they don't flash to 0 on a single quiet frame.
+    assert max(h) >= before * 0.5
