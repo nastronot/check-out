@@ -56,6 +56,13 @@ BLOCK = 1024
 DEFAULT_RATE = 44100
 ZERO_FRAME = [0] * spectrum.NUM_BARS
 
+# parec MUST request a low latency or it BLOCK-BUFFERS ~750ms and dumps audio in
+# bursts (bench-proven v0.9.6): ~30 chunks at 0ms apart, then a ~760ms gap,
+# repeating — which the daemon saw as a pop-to-top / fall-to-zero pump plus a
+# 1-2s delay. `--latency-msec=20` makes the gaps ~21ms (smooth). Tunable: higher
+# = burstier/laggier, lower = more wakeups; 20ms is bench-good.
+PAREC_LATENCY_MS = 20
+
 # Supervisor cadence + restart debounce (coalesce rapid device switches).
 POLL_MS = 200
 RESTART_DEBOUNCE_MS = 400
@@ -380,14 +387,18 @@ def _capture_tool() -> str | None:
 def parec_command(tool: str, source: str, rate: int, channels: int) -> list[str]:
     """Build the raw-PCM (s16le) capture command for a Pulse source.
 
-    parec is the PRIMARY tool (bench-confirmed to sustain). pw-record is a
-    deprioritized fallback (it starves a piped reader after one buffer here)."""
+    parec is the PRIMARY tool. It MUST request a low latency (``--latency-msec``)
+    or it block-buffers ~750ms and dumps audio in bursts → a visible pump + delay
+    (the root cause of the long spectrum-tuning saga; bench-proven v0.9.6).
+    pw-record is a deprioritized fallback (it starves a piped reader after one
+    buffer here, v0.9.5) and has no equivalent low-latency flag we rely on."""
     if tool == "pw-record":
         return ["pw-record", "--target", source, "--rate", str(rate),
                 "--channels", str(channels), "--format", "s16", "-"]
-    # parec (pacat --record): raw s16le PCM to stdout — bench-confirmed sustaining.
+    # parec (pacat --record): raw s16le PCM to stdout, LOW-LATENCY (not block-buffered).
     return ["parec", f"--device={source}", "--format=s16le",
-            f"--rate={rate}", f"--channels={channels}"]
+            f"--rate={rate}", f"--channels={channels}",
+            f"--latency-msec={PAREC_LATENCY_MS}"]
 
 
 def _read_exact(stream, nbytes: int, stopped) -> bytes | None:
