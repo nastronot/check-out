@@ -194,7 +194,7 @@ def to_levels(
 #   silence shows noise            -> raise SILENCE_FLOOR_RMS
 SILENCE_FLOOR_RMS = 0.0015   # input RMS below this = silence -> bars fall to ~0 (the noise gate)
 AUTOGAIN_ATTACK = 0.4        # reference RISE fraction/frame toward a louder level (smooth, not instant)
-AUTOGAIN_RELEASE = 0.99      # reference release/frame when the signal drops
+AUTOGAIN_RELEASE = 0.95      # reference release/frame when the signal drops (~0.5-1s recovery @ ~43fps)
 AUTOGAIN_RANGE_DB = 24.0     # dB BELOW the reference mapped down to 0 (a band -RANGE_DB under ref = empty)
 AUTOGAIN_HEADROOM_DB = 9.0   # dB ABOVE the reference that reaches MAX_BAR (a band AT ref -> ~RANGE/(RANGE+HEADROOM)*MAX)
 AUTOGAIN_PERCENTILE = 85.0   # percentile_peak() default (kept for utility/tests; NOT the ref target)
