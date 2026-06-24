@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import VfdPreview from './lib/components/VfdPreview.svelte';
   import ControlPanel from './lib/components/ControlPanel.svelte';
+  import DisplayPanel from './lib/components/DisplayPanel.svelte';
   import CommandBar from './lib/components/CommandBar.svelte';
   import StatusReadout from './lib/components/StatusReadout.svelte';
   import GlyphEditorPanel from './lib/components/GlyphEditorPanel.svelte';
@@ -47,6 +48,7 @@
 
     <div class="layout__controls">
       <ControlPanel state={$appState} patch={patchState} />
+      <DisplayPanel state={$appState} patch={patchState} />
       <SavedMessages />
       <CommandBar />
       <StatusReadout status={$status} health={$health} />

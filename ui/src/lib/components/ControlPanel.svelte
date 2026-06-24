@@ -4,7 +4,6 @@
     Align,
     AppState,
     Animation,
-    Brightness,
     Mode,
     ScrollDir,
     ScrollSource,
@@ -14,18 +13,8 @@
   export let patch: (p: Partial<AppState>) => void;
 
   const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee'];
-  // Brightness has FOUR discrete levels (index 0..3); a stepped slider, NOT a %.
-  const BRIGHTNESS_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
   const ALIGNS: Align[] = ['left', 'center', 'right'];
-  const CODE_PAGES: { value: number; label: string }[] = [
-    { value: 0, label: 'Default' },
-    { value: 1, label: 'Japanese' },
-    { value: 2, label: 'CP850' },
-    { value: 3, label: 'CP852' },
-    { value: 4, label: 'CP855' },
-    { value: 5, label: 'CP857' },
-  ];
 
   // Local mirror of the message so typing is smooth; PUTs are debounced.
   let messageDraft = '';
@@ -56,15 +45,7 @@
   const setMode = (m: Mode) => patch({ mode: m });
   const setAlignTop = (a: Align) => patch({ align_top: a });
   const setAlignBottom = (a: Align) => patch({ align_bottom: a });
-  const setBrightness = (e: Event) =>
-    patch({ brightness: clampLevel(num(e)) });
-  function clampLevel(n: number): Brightness {
-    return Math.max(0, Math.min(3, Math.round(n))) as Brightness;
-  }
   const setAnimation = (a: Animation) => patch({ animation: a });
-  const setBlank = (e: Event) => patch({ blank: checked(e) });
-  const setScroll = (e: Event) => patch({ scroll: checked(e) });
-  const setCodePage = (e: Event) => patch({ code_page: num(e) });
   const setScrollSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
 
   // software scroll (mode "scroll") — per-row content source + scroll + dir.
@@ -239,61 +220,11 @@
       </div>
     </div>
 
-    <!-- Brightness + scroll -->
-    <div class="field">
-      <span class="field__label">
-        Brightness
-        <span class="bright-readout">{BRIGHTNESS_LABELS[clampLevel(state.brightness)]}</span>
-      </span>
-      <div class="bright">
-        <input
-          class="bright__slider"
-          type="range"
-          min="0"
-          max="3"
-          step="1"
-          aria-label="brightness level"
-          value={clampLevel(state.brightness)}
-          on:input={setBrightness}
-        />
-        <div class="bright__stops" aria-hidden="true">
-          {#each BRIGHTNESS_LABELS as label, i}
-            <button
-              type="button"
-              class="bright__stop"
-              class:active={clampLevel(state.brightness) === i}
-              on:click={() => patch({ brightness: clampLevel(i) })}>{label}</button
-            >
-          {/each}
-        </div>
-      </div>
-    </div>
+    <!-- Brightness, Blank, HW scroll, and Code page now live in the Display
+         panel (mode-agnostic device settings). Control is per-mode only. -->
 
-    <div class="row switches">
-      <label class="switch">
-        <input type="checkbox" checked={state.blank} on:change={setBlank} />
-        <span class="switch__track"></span>
-        <span class="switch__label">Blank</span>
-      </label>
-
-      <label class="switch" title="Hardware vertical scroll — for marquee effects">
-        <input type="checkbox" checked={state.scroll} on:change={setScroll} />
-        <span class="switch__track"></span>
-        <span class="switch__label">HW scroll</span>
-      </label>
-    </div>
-
-    <!-- Code page -->
-    <div class="field">
-      <span class="field__label">Code page</span>
-      <select value={state.code_page} on:change={setCodePage}>
-        {#each CODE_PAGES as cp}
-          <option value={cp.value}>{cp.value} · {cp.label}</option>
-        {/each}
-      </select>
-    </div>
-
-    <!-- Animation -->
+    <!-- Animation (N/A in marquee: the hardware ticker owns the top row) -->
+    {#if state.mode !== 'marquee'}
     <div class="field">
       <span class="field__label">Animation</span>
       <div class="seg">
@@ -338,6 +269,7 @@
         </div>
       {/if}
     </div>
+    {/if}
 
     <!-- SCROLL: per-row content source + scroll + direction + speed. The
          flexible, news-ready mode: each row picks a source (Message|Clock, room
@@ -448,10 +380,6 @@
     font-size: 13px;
   }
 
-  .switches {
-    margin-bottom: 14px;
-  }
-
   .timing {
     margin-top: 10px;
   }
@@ -481,76 +409,6 @@
   .budget {
     display: inline-flex;
     gap: 5px;
-  }
-
-  /* brightness: a 4-stop stepped slider (NOT a continuous %) */
-  .bright {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .bright-readout {
-    color: var(--phosphor);
-    letter-spacing: 0.1em;
-  }
-
-  .bright__slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    padding: 0;
-    border-radius: 3px;
-    background: linear-gradient(
-      90deg,
-      var(--phosphor-deep),
-      var(--phosphor-dim),
-      var(--phosphor)
-    );
-    box-shadow: var(--shadow-inset);
-    cursor: pointer;
-  }
-
-  .bright__slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 18px;
-    border-radius: 3px;
-    background: var(--phosphor-ink);
-    border: 1px solid var(--phosphor);
-    box-shadow: 0 0 8px var(--phosphor);
-  }
-
-  .bright__slider::-moz-range-thumb {
-    width: 14px;
-    height: 18px;
-    border-radius: 3px;
-    background: var(--phosphor-ink);
-    border: 1px solid var(--phosphor);
-    box-shadow: 0 0 8px var(--phosphor);
-  }
-
-  .bright__stops {
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .bright__stop {
-    appearance: none;
-    background: none;
-    border: 0;
-    padding: 0;
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    color: var(--text-faint);
-    cursor: pointer;
-  }
-
-  .bright__stop.active {
-    color: var(--phosphor);
   }
 
   /* marquee constraints tip */
