@@ -216,7 +216,10 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
   (default 200 → ~1.2 s full sweep). blink/pulse fold into the brightness step
   (no frame redraw). The daemon writes the on-glass result to status.json each
   tick (blank top/bottom for flash-off, the applied `brightness` for blink/pulse),
-  so the preview animates all of them with no preview-side change.
+  so the preview animates all of them with no preview-side change. **N/A in
+  marquee (v0.8.1):** the hardware ticker owns the top row, so the daemon forces
+  `animation = "none"` on the marquee path (a leftover setting from another mode
+  can't blank/pulse it) and the UI hides the Animation control in marquee.
   > **invert** was intentionally NOT added: a character VFD with 9 glyph slots
   > can't do a true per-pixel invert for arbitrary text, and a flooded
   > approximation would just look like a worse flash.
@@ -286,10 +289,17 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
 - **Controls** (`PUT /api/state` on change): mode, message (+`{gN}` hint),
   brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker
   speed. `CommandBar` fires self_test/reset; `StatusReadout` shows daemon health.
-- **Layout (v0.8.0):** two columns. LEFT = header/preview, Glyph Editor, Glyph
-  Library. RIGHT = Control, Saved Messages, Commands, Daemon (the daemon status
-  panel sits at the bottom of the right column, under Commands). The masthead's
-  meta text is baseline-aligned to the logo.
+- **Layout (v0.8.0, panels v0.8.1):** two columns. LEFT = header/preview, Glyph
+  Editor, Glyph Library. RIGHT = Control, Display, Saved Messages, Commands,
+  Daemon. The masthead's meta text is baseline-aligned to the logo.
+  - **Control** = PER-MODE only: mode selector, the per-mode inputs (message /
+    marquee text+tip / scroll per-row source+scroll+dir+speed), Justify (where
+    applicable), and Animation (hidden in marquee).
+  - **Display** (`DisplayPanel.svelte`, v0.8.1) = MODE-AGNOSTIC device settings
+    that apply regardless of mode: brightness (4-stop slider), Blank, HW scroll,
+    Code page. Split out of Control to declutter; same state fields + same
+    optimistic/debounced `PUT /api/state` (a pure relocation, no schema change).
+  - **Commands** = fire-once actions (self_test/reset); **Daemon** = status.
 - **Config:** `CHECKOUT_STATE_PATH` / `CHECKOUT_STATUS_PATH` (shared with daemon)
   via `checkout.config`; `CHECKOUT_UI_DIST` for the built UI. Docker is Phase 3.
 
@@ -486,6 +496,12 @@ sudo usermod -aG uucp "$USER"   # then re-login
   point), per-row scroll/dir/speed kept, and the over-budget char warning removed
   in SCROLL (MESSAGE still warns). Layout: daemon status moved to the right column
   under Commands; masthead meta baseline-aligned to the logo.
+- **v0.8.1:** declutter — split the mode-agnostic device settings (brightness,
+  Blank, HW scroll, code page) out of Control into a new `DisplayPanel.svelte`
+  (right-column order Control, Display, Saved Messages, Commands, Daemon). Control
+  is now per-mode only. Animation is hidden in marquee mode and the daemon forces
+  `"none"` there so a leftover animation can't affect the ticker. UI-only relocation
+  (no state/daemon schema change beyond the marquee animation guard).
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

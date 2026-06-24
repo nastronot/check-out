@@ -308,7 +308,9 @@ OVERRIDES the static brightness, v0.7.2). blink/pulse fold into the brightness s
 frame redraw). The daemon writes the on-glass result to status.json each tick — blank
 top/bottom for flash-off, the applied `brightness` for blink/pulse — so the preview
 animates all of them. **invert** was intentionally skipped: a character VFD (9 glyph
-slots) can't do a true per-pixel invert for arbitrary text.
+slots) can't do a true per-pixel invert for arbitrary text. **N/A in marquee (v0.8.1):**
+the hardware ticker owns the top row, so the daemon forces `animation = "none"` on the
+marquee path and the UI hides the Animation control there.
 
 **Re-init rule.** After `self_test()`, `reset()`, or `define_character()` the display may
 drop extended-mode/scroll-off; `initialize()` is re-run before the next `show()`. The
@@ -369,10 +371,13 @@ ui/ (Svelte)  ──HTTP /api──▶  web/ (FastAPI)  ──writes state.json�
 - **Aesthetic:** blue-green VFD phosphor (`#3df0c8`) on black, POS/rack-gear faceplate —
   thin rules, monospaced labels, subtle bevels, tactile switches, a faint scanline/bloom
   on the preview only. Plain hand-tuned CSS.
-- **Controls** (`PUT /api/state` on change): mode, message (+40-char budget, `{gN}` hint),
-  brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker speed.
-  `CommandBar` fires once; `StatusReadout` shows daemon health; `GlyphEditorPanel` is the
-  glyph editor (§4.7).
+- **Controls** (`PUT /api/state` on change). Two panels split per-mode from device
+  settings (v0.8.1): **Control** (per-mode) = mode, message (+40-char budget, `{gN}` hint),
+  marquee text+tip, scroll per-row source/scroll/dir/speed, Justify, animation (+on/off ms;
+  hidden in marquee); **Display** (`DisplayPanel.svelte`, mode-agnostic device settings) =
+  brightness, blank, hardware scroll, code page. Right-column panel order: Control, Display,
+  Saved Messages, Commands, Daemon. `CommandBar` fires once; `StatusReadout` shows daemon
+  health; `GlyphEditorPanel` is the glyph editor (§4.7).
 - **Dev/build:** vite dev server proxies `/api` → uvicorn:8000; `npm run build` → `ui/dist`
   which uvicorn serves in prod. Docker is deferred to Phase 3 but the layout is
   container-ready. See `web/README.md` and `ui/README.md`.
