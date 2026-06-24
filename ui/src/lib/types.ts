@@ -59,12 +59,16 @@ export interface AppState {
   updated_at?: string;
 }
 
-/** An audio input device from devices.json (the spectrum SOURCE selector). */
+/** A capture device from devices.json (the spectrum SOURCE selector).
+ *  `id` is the value written to `audio_device` (a monitor source NAME for
+ *  monitors, the PortAudio index string for inputs); `label` is for display. */
 export interface AudioDevice {
-  index: number;
-  name: string;
-  max_input_channels: number;
+  id: string;
+  label: string;
+  kind: 'monitor' | 'input';
   is_monitor: boolean;
+  backend?: 'pulse' | 'portaudio';
+  index?: number;
   default_samplerate?: number;
 }
 

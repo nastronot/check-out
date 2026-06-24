@@ -92,6 +92,11 @@
     devicesLoaded = true;
     void refreshDevices();
   }
+  // Show only the devices relevant to the chosen source: monitors for "system"
+  // (loopback of playback), real inputs for "mic". Keeps the list scannable.
+  $: devicesForSource = $audioDevices.filter((d) =>
+    state?.audio_source === 'system' ? d.is_monitor : !d.is_monitor,
+  );
   const setAudioSource = (s: AudioSource) => patch({ audio_source: s });
   function setAudioDevice(e: Event): void {
     const v = (e.target as HTMLSelectElement).value;
@@ -226,17 +231,24 @@
       <div class="field">
         <span class="field__label">Device</span>
         <select value={state.audio_device ?? ''} on:change={setAudioDevice}>
-          <option value="">Auto (source default)</option>
-          {#each $audioDevices as d}
-            <option value={String(d.index)}>
-              {d.name}{d.is_monitor ? ' · monitor' : ''}
-            </option>
+          <option value="">
+            {state.audio_source === 'system'
+              ? 'Auto (default sink monitor)'
+              : 'Auto (default input)'}
+          </option>
+          {#each devicesForSource as d}
+            <option value={d.id}>{d.label}</option>
           {/each}
         </select>
-        {#if $audioDevices.length === 0}
+        {#if devicesForSource.length === 0}
           <span class="field__hint">
-            No devices listed yet — run <code>python -m checkout.audioviz</code>
-            (it enumerates inputs and streams the bars).
+            {#if state.audio_source === 'system'}
+              No monitor sources found — needs PipeWire/Pulse. Run
+              <code>python -m checkout.audioviz --list</code>.
+            {:else}
+              No input devices listed — run
+              <code>python -m checkout.audioviz --list</code>.
+            {/if}
           </span>
         {/if}
       </div>
