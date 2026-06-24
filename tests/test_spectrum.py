@@ -273,25 +273,40 @@ def test_default_sink_monitor(monkeypatch):
     assert audioviz.default_sink_monitor() is None
 
 
-def test_build_device_list_labels_monitors_vs_inputs():
+def test_default_source_name(monkeypatch):
+    monkeypatch.setattr(audioviz, "_run_cmd", lambda args, timeout=2.0: "my_input\n")
+    assert audioviz.default_source_name() == "my_input"
+    monkeypatch.setattr(audioviz, "_run_cmd", lambda *a, **k: None)
+    assert audioviz.default_source_name() is None
+
+
+def test_build_device_list_is_minimal_pulse_monitors_and_inputs():
+    # Pulse sources ARE the real, minimal list — monitors + real inputs, labeled.
     pulse = [
         {"name": "sink.monitor", "is_monitor": True},
-        {"name": "mic.src", "is_monitor": False},   # non-monitor pulse src -> NOT listed
+        {"name": "mic.src", "is_monitor": False},
     ]
-    desc = {"sink.monitor": "Monitor of Speakers"}
-    inputs = [{"index": 3, "name": "Built-in Mic", "is_monitor": False, "default_samplerate": 44100}]
-    devs = {d["id"]: d for d in audioviz.build_device_list(pulse, desc, inputs)}
-    assert devs["sink.monitor"]["kind"] == "monitor"
-    assert devs["sink.monitor"]["is_monitor"] is True
-    assert devs["sink.monitor"]["label"] == "[monitor] Monitor of Speakers"
-    assert devs["3"]["kind"] == "input" and devs["3"]["is_monitor"] is False
-    assert "mic.src" not in devs                # monitors from pulse, inputs from portaudio
+    desc = {"sink.monitor": "Monitor of Speakers", "mic.src": "Built-in Mic"}
+    devs = {d["id"]: d for d in audioviz.build_device_list(pulse, desc, inputs=[])}
+    assert devs["sink.monitor"]["kind"] == "monitor" and devs["sink.monitor"]["is_monitor"]
+    assert devs["sink.monitor"]["label"] == "Monitor of Speakers"
+    assert devs["mic.src"]["kind"] == "input" and not devs["mic.src"]["is_monitor"]
+    assert devs["mic.src"]["label"] == "Built-in Mic"
+    assert all(d["backend"] == "pulse" for d in devs.values())
+
+
+def test_build_device_list_falls_back_to_portaudio_without_pulse():
+    # No pactl/Pulse -> the PortAudio inputs are the (best-effort) fallback list.
+    inputs = [{"index": 3, "name": "USB Mic", "is_monitor": False, "default_samplerate": 44100}]
+    devs = {d["id"]: d for d in audioviz.build_device_list([], {}, inputs)}
+    assert devs["3"]["kind"] == "input" and devs["3"]["backend"] == "portaudio"
+    assert devs["3"]["label"] == "USB Mic"
 
 
 _DEVS = [
-    {"id": "sink.monitor", "label": "[monitor] Monitor of Speakers", "kind": "monitor", "is_monitor": True},
-    {"id": "hdmi.monitor", "label": "[monitor] HDMI", "kind": "monitor", "is_monitor": True},
-    {"id": "3", "label": "Built-in Mic", "kind": "input", "is_monitor": False, "index": 3},
+    {"id": "sink.monitor", "label": "Monitor of Speakers", "kind": "monitor", "is_monitor": True, "backend": "pulse"},
+    {"id": "hdmi.monitor", "label": "Monitor of HDMI", "kind": "monitor", "is_monitor": True, "backend": "pulse"},
+    {"id": "alsa_input.mic", "label": "Built-in Mic", "kind": "input", "is_monitor": False, "backend": "pulse"},
 ]
 
 
@@ -308,9 +323,17 @@ def test_select_capture_system_without_monitor_is_none_not_mic():
     assert audioviz.select_capture("system", None, inputs_only, None) is None
 
 
-def test_select_capture_mic_uses_portaudio():
-    assert audioviz.select_capture("mic", None, _DEVS, "sink.monitor") == ("portaudio", None)
-    assert audioviz.select_capture("mic", "3", _DEVS, "sink.monitor") == ("portaudio", 3)
+def test_select_capture_mic_uses_pulse_input():
+    # Default source, then an explicit override — both via pw-record (pulse).
+    assert audioviz.select_capture("mic", None, _DEVS, "sink.monitor", "alsa_input.mic") == ("pulse", "alsa_input.mic")
+    assert audioviz.select_capture("mic", "alsa_input.mic", _DEVS, "sink.monitor", "x") == ("pulse", "alsa_input.mic")
+
+
+def test_select_capture_mic_falls_back_to_portaudio_without_pulse():
+    pa = [{"id": "3", "label": "USB Mic", "kind": "input", "is_monitor": False,
+           "backend": "portaudio", "index": 3}]
+    assert audioviz.select_capture("mic", None, pa, None, None) == ("portaudio", None)
+    assert audioviz.select_capture("mic", "3", pa, None, None) == ("portaudio", 3)
 
 
 class _FakePipe:

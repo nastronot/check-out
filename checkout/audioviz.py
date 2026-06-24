@@ -171,44 +171,58 @@ def build_device_list(
         inputs = enumerate_devices()
 
     devices: list[dict] = []
+    # Pulse sources are the REAL devices: actual output monitors + capture inputs.
+    # Using them (not PortAudio) keeps the list MINIMAL — the raw ALSA plugin /
+    # hw:* / rate-converter / per-app-stream nodes PortAudio enumerates never
+    # appear. A handful of monitors + the real inputs, each labeled.
     for s in pulse_sources:
-        if not s.get("is_monitor"):
-            continue
         name = s["name"]
-        pretty = descriptions.get(name) or _pretty_monitor(name)
+        label = descriptions.get(name) or _pretty_monitor(name)
         devices.append(
             {
                 "id": name,
-                "label": f"[monitor] {pretty}",
-                "kind": "monitor",
-                "is_monitor": True,
+                "label": label,
+                "kind": "monitor" if s.get("is_monitor") else "input",
+                "is_monitor": bool(s.get("is_monitor")),
                 "backend": "pulse",
             }
         )
-    for d in inputs:
-        if d.get("is_monitor"):
-            continue  # monitors come from Pulse, not PortAudio
-        devices.append(
-            {
-                "id": str(d["index"]),
-                "label": d["name"],
-                "kind": "input",
-                "is_monitor": False,
-                "backend": "portaudio",
-                "index": d["index"],
-                "default_samplerate": d.get("default_samplerate", DEFAULT_RATE),
-            }
-        )
+    if not devices:
+        # Fallback: no pactl/Pulse at all — enumerate PortAudio inputs (mic only).
+        for d in (inputs if inputs is not None else enumerate_devices()):
+            if d.get("is_monitor"):
+                continue
+            devices.append(
+                {
+                    "id": str(d["index"]),
+                    "label": d["name"],
+                    "kind": "input",
+                    "is_monitor": False,
+                    "backend": "portaudio",
+                    "index": d["index"],
+                    "default_samplerate": d.get("default_samplerate", DEFAULT_RATE),
+                }
+            )
     return devices
 
 
-def write_devices(devices, default_monitor=None, path: str | None = None) -> None:
+def default_source_name() -> str | None:
+    """The current default INPUT source (``pactl get-default-source``), for mic."""
+    out = _run_cmd(["pactl", "get-default-source"])
+    if not out:
+        return None
+    return out.strip() or None
+
+
+def write_devices(devices, default_monitor=None, default_source=None,
+                  path: str | None = None) -> None:
     """Atomically write the labeled device list for the UI selector."""
     atomic_write_json(
         path or config.DEVICES_PATH,
         {
             "devices": devices,
             "default_monitor": default_monitor,
+            "default_source": default_source,
             "updated_at": datetime.now().isoformat(),
         },
     )
@@ -258,6 +272,7 @@ def _resolve_monitor(device, monitors: list[dict], default_monitor) -> str | Non
 
 
 def _resolve_input(device, inputs: list[dict]) -> int | None:
+    """PortAudio fallback input chooser (by index/label)."""
     if device not in (None, "", "default"):
         d = str(device)
         try:
@@ -273,19 +288,43 @@ def _resolve_input(device, inputs: list[dict]) -> int | None:
     return None  # default input device
 
 
-def select_capture(source, device, devices, default_monitor):
+def _resolve_pulse_input(device, inputs: list[dict], default_source) -> str | None:
+    if device not in (None, "", "default"):
+        d = str(device)
+        for i in inputs:
+            if d == i["id"] or d.lower() in i["label"].lower():
+                return i["id"]
+        if not d.isdigit():
+            return d  # raw source name override
+    if default_source and (not inputs or any(i["id"] == default_source for i in inputs)):
+        return default_source
+    if inputs:
+        return inputs[0]["id"]
+    return default_source
+
+
+def select_capture(source, device, devices, default_monitor, default_source=None):
     """Resolve (source, device) to a capture key, or None for no capture.
 
-    Returns ``("pulse", monitor_name)`` for system audio, ``("portaudio", idx)``
-    for the mic (idx None = default), or ``None`` when system audio is requested
-    but no monitor exists (so we emit zeros — NOT silently fall back to the mic).
+    - system → ``("pulse", monitor_name)`` (the chosen / default-sink / first
+      monitor), or ``None`` if no monitor exists — emit zeros, NEVER the mic.
+    - mic → ``("pulse", input_name)`` when Pulse inputs / a default source exist
+      (captured by pw-record like system), else the PortAudio fallback
+      ``("portaudio", idx)``.
     """
     monitors = [d for d in devices if d.get("is_monitor")]
     if source == "system":
         name = _resolve_monitor(device, monitors, default_monitor)
         return ("pulse", name) if name else None
-    inputs = [d for d in devices if not d.get("is_monitor")]
-    return ("portaudio", _resolve_input(device, inputs))
+    pulse_inputs = [d for d in devices
+                    if d.get("kind") == "input" and d.get("backend") == "pulse"]
+    if pulse_inputs or default_source:
+        name = _resolve_pulse_input(device, pulse_inputs, default_source)
+        if name:
+            return ("pulse", name)
+    pa_inputs = [d for d in devices
+                 if d.get("kind") == "input" and d.get("backend") == "portaudio"]
+    return ("portaudio", _resolve_input(device, pa_inputs))
 
 
 # --- debounce ----------------------------------------------------------------
@@ -597,7 +636,8 @@ def run(socket_path: str | None = None) -> int:
     av = AudioViz(socket_path)
     devices = build_device_list()
     default_monitor = default_sink_monitor()
-    write_devices(devices, default_monitor)
+    default_source = default_source_name()
+    write_devices(devices, default_monitor, default_source)
     monitors = [d for d in devices if d.get("is_monitor")]
     log(f"{len(devices)} devices ({len(monitors)} monitors); "
         f"default monitor: {default_monitor}")
@@ -617,7 +657,7 @@ def run(socket_path: str | None = None) -> int:
             av.configure(gain, decay)
             # Capture only while in spectrum mode (no parec churn otherwise).
             desired = (
-                select_capture(source, device, devices, default_monitor)
+                select_capture(source, device, devices, default_monitor, default_source)
                 if state.get("mode") == "spectrum"
                 else None
             )
@@ -650,13 +690,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         devices = build_device_list()
         default_monitor = default_sink_monitor()
-        write_devices(devices, default_monitor)
-        for d in devices:
-            mark = "*" if d["id"] == default_monitor else " "
-            print(f"{mark} {d['label']}")
+        default_source = default_source_name()
+        write_devices(devices, default_monitor, default_source)
+        for kind, title in (("monitor", "MONITORS (system)"), ("input", "INPUTS (mic)")):
+            print(title)
+            for d in (x for x in devices if x["kind"] == kind):
+                default_id = default_monitor if kind == "monitor" else default_source
+                mark = "*" if d["id"] == default_id else " "
+                print(f"  {mark} {d['label']}")
         if not devices:
             print("(no devices found — is pipewire-pulse / PortAudio installed?)")
-        print(f"\ndefault system monitor: {default_monitor or '(none)'}")
+        print(f"\ndefault monitor: {default_monitor or '(none)'}")
+        print(f"default input:   {default_source or '(none)'}")
         return 0
     return run()
 
