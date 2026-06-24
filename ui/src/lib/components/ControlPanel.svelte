@@ -224,7 +224,9 @@
         </div>
         <span class="field__hint">
           <strong>System</strong> captures playback via a PipeWire/Pulse monitor;
-          <strong>Mic</strong> captures the default input.
+          <strong>Mic</strong> captures the default input. Bars are
+          <strong>volume-independent</strong> (auto-gain) and fall to flat on
+          silence.
         </span>
       </div>
 
@@ -255,14 +257,18 @@
 
       <div class="field">
         <span class="field__label">
-          Gain <span class="bright-readout">{state.audio_gain.toFixed(1)}×</span>
+          Sensitivity <span class="bright-readout">{state.audio_gain.toFixed(1)}×</span>
         </span>
         <input
-          type="range" min="0.1" max="8" step="0.1"
-          aria-label="audio gain"
+          type="range" min="0.3" max="3" step="0.1"
+          aria-label="sensitivity"
           value={state.audio_gain}
           on:input={setAudioGain}
         />
+        <span class="field__hint">
+          Auto-gain keeps the bars full regardless of system volume; sensitivity
+          biases it (center is fine for most content).
+        </span>
       </div>
 
       <div class="field">

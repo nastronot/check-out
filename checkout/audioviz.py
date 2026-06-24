@@ -465,20 +465,23 @@ class AudioViz:
 
     def __init__(self, socket_path: str | None = None) -> None:
         self.sender = spectrum.SpectrumSender(socket_path)
-        self.gain = 1.0
+        # "sensitivity" biases the auto-gain (1.0 = neutral); kept under the
+        # legacy audio_gain field for back-compat.
+        self.sensitivity = 1.0
         self.decay = 0.85
         self.levels = [0.0] * spectrum.NUM_BARS
+        self._ref = spectrum.REF_FLOOR   # auto-gain running reference
         self._np = None
         self._window = None
         self._edges = None
         self._n = None
         self._rate = None
 
-    def configure(self, gain, decay) -> None:
+    def configure(self, sensitivity, decay) -> None:
         try:
-            self.gain = float(gain)
+            self.sensitivity = float(sensitivity)
         except (TypeError, ValueError):
-            self.gain = 1.0
+            self.sensitivity = 1.0
         try:
             self.decay = float(decay)
         except (TypeError, ValueError):
@@ -495,13 +498,26 @@ class AudioViz:
             self._edges = spectrum.log_band_edges(spectrum.NUM_BARS, rate, n)
 
     def process(self, samples, rate: float) -> list[int]:
-        """One audio chunk (1-D float samples) → 20 integer bar heights."""
+        """One audio chunk (1-D float samples) → 20 integer bar heights.
+
+        AUTO-GAIN: normalize against a running reference so bars are volume-
+        independent (content-driven). Below the silence floor, output ~0 and let
+        the reference release (don't amplify silence/hiss into full-scale)."""
         self._ensure_dsp(len(samples), rate)
         np = self._np
-        windowed = np.asarray(samples, dtype=float) * self._window
-        mag = np.abs(np.fft.rfft(windowed))
+        arr = np.asarray(samples, dtype=float)
+        rms = float(np.sqrt(np.mean(np.square(arr)))) if arr.size else 0.0
+        mag = np.abs(np.fft.rfft(arr * self._window))
         bands = spectrum.bucketize(mag, self._edges)
-        new = spectrum.to_levels(bands, gain=self.gain)
+
+        if rms < spectrum.SILENCE_FLOOR_RMS:
+            # Silence: release the reference (peak 0) and let the bars fall.
+            self._ref = spectrum.update_ref(self._ref, 0.0)
+            new = [0] * spectrum.NUM_BARS
+        else:
+            self._ref = spectrum.update_ref(self._ref, max(bands) if bands else 0.0)
+            new = spectrum.normalize_levels(bands, self._ref, self.sensitivity)
+
         self.levels = spectrum.decay_levels(self.levels, new, self.decay)
         return [int(round(x)) for x in self.levels]
 

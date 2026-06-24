@@ -160,6 +160,7 @@ def to_levels(
 
     Each magnitude is scaled by ``gain`` then converted to dB; ``floor_db``..0 dB
     maps linearly onto 0..max_bar (clamped). A larger gain lifts quiet signals.
+    Legacy fixed-gain mapping — the live path uses :func:`normalize_levels`.
     """
     out: list[int] = []
     for v in values:
@@ -168,6 +169,55 @@ def to_levels(
         norm = (db - floor_db) / (0.0 - floor_db)
         norm = max(0.0, min(1.0, norm))
         out.append(int(round(norm * max_bar)))
+    return out
+
+
+# --- auto-gain (volume-independent) -----------------------------------------
+# The display normalizes against a running reference of recent loudness, so bars
+# fill the range based on CONTENT, not absolute level — lowering system volume
+# does NOT shrink them. A silence FLOOR stops it amplifying hiss/silence into
+# full-scale garbage. All four are tunable (documented):
+SILENCE_FLOOR_RMS = 0.0015   # input RMS below this = silence -> bars fall to ~0
+AUTOGAIN_RELEASE = 0.99      # per-frame decaying-max release (~1-2s adaptation @ ~43fps)
+AUTOGAIN_RANGE_DB = 42.0     # dynamic range (dB below the running peak) shown as 0..MAX_BAR
+REF_FLOOR = 1e-2             # min reference; bounds the re-entry jump after silence
+
+
+def signal_rms(samples) -> float:
+    """RMS of a sample chunk (the silence-floor metric). numpy-friendly."""
+    n = len(samples)
+    if not n:
+        return 0.0
+    return float((sum(float(x) * float(x) for x in samples) / n) ** 0.5)
+
+
+def update_ref(ref, peak, release: float = AUTOGAIN_RELEASE,
+               ref_floor: float = REF_FLOOR) -> float:
+    """Advance the auto-gain reference: a decaying maximum of the band peak.
+
+    ``ref = max(peak, ref*release, ref_floor)`` — it snaps UP to a new loud peak
+    instantly and RELEASES slowly toward ``ref_floor`` so it adapts over ~1-2s.
+    Pass ``peak=0`` on silence so it releases (never ratchets up on noise)."""
+    return max(float(peak), float(ref) * release, ref_floor)
+
+
+def normalize_levels(bands, ref, sensitivity: float = 1.0,
+                     max_bar: int = MAX_BAR, range_db: float = AUTOGAIN_RANGE_DB) -> list[int]:
+    """Map band magnitudes to bar heights NORMALIZED against ``ref``.
+
+    Each band is divided by ``ref`` (so the recent loudest band ≈ the top),
+    biased by ``sensitivity`` (1.0 = neutral; >1 fuller, <1 dimmer), then dB-mapped:
+    0 dB (at ref) → ``max_bar``, ``-range_db`` → 0. Volume-independent because
+    ``ref`` tracks the recent peak — absolute level cancels.
+    """
+    ref = max(float(ref), REF_FLOOR)
+    s = max(float(sensitivity), 1e-6)
+    out: list[int] = []
+    for v in bands:
+        norm = (float(v) / ref) * s
+        db = 20.0 * math.log10(max(norm, 1e-9))
+        level = (db + range_db) / range_db * max_bar
+        out.append(int(round(max(0.0, min(float(max_bar), level)))))
     return out
 
 
