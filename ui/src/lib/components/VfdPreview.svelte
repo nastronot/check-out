@@ -7,6 +7,7 @@
     lineToCells,
   } from '../font5x7';
   import { GLASS_BG, paintCell } from '../dotrender';
+  import { barsToCells, type Cell } from '../spectrumbars';
   import type { GlyphMap, Status } from '../types';
 
   export let status: Status | null = null;
@@ -54,6 +55,13 @@
   const LEVEL_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
   $: levelLabel = LEVEL_LABELS[Math.max(0, Math.min(3, Math.round(level)))];
 
+  // SPECTRUM: draw the analyzer bars directly from status.bars (the preview
+  // can't read the hardware's bar glyphs), bypassing the text/glyph path.
+  $: spectrumBars =
+    status?.mode === 'spectrum' && Array.isArray(status?.bars) && !blank
+      ? (status.bars as number[])
+      : null;
+
   onMount(() => {
     // Init order: get the 2D context, size the buffer, THEN draw. Drawing into
     // an unsized (0x0) canvas paints nothing — size first.
@@ -65,8 +73,9 @@
     return () => ro?.disconnect();
   });
 
-  // Redraw whenever the mirrored data changes (every poll / glyph edit).
-  $: if (ctx) drawFrame(top, bottom, level, glyphs);
+  // Redraw whenever the mirrored data changes (every poll / glyph edit). Deps are
+  // passed explicitly so Svelte tracks them (a bare `redraw()` could be stripped).
+  $: if (ctx) redraw(spectrumBars, top, bottom, level, glyphs);
 
   /** Size the drawing buffer to the rendered width (×dpr), then draw. */
   function sizeAndDraw(): void {
@@ -85,25 +94,39 @@
       const s = (cssW / W) * dpr;
       ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    drawFrame(top, bottom, level, glyphs);
+    redraw(spectrumBars, top, bottom, level, glyphs);
   }
 
-  function drawFrame(
+  /** Branch: the analyzer bars (spectrum mode) or the normal text/glyph frame. */
+  function redraw(
+    bars: number[] | null,
     topLine: string,
     bottomLine: string,
     brightnessLevel: number,
     glyphMap: GlyphMap,
   ): void {
-    if (!ctx) return;
+    if (bars) {
+      const { top: t, bottom: b } = barsToCells(bars);
+      drawCells(t, b, brightnessLevel);
+    } else {
+      drawFrame(topLine, bottomLine, brightnessLevel, glyphMap);
+    }
+  }
 
+  /** Paint a glass-cleared 2×20 grid of pre-decoded cells; returns lit-dot count. */
+  function drawCells(
+    topCells: Cell[],
+    bottomCells: Cell[],
+    brightnessLevel: number,
+  ): number {
+    if (!ctx) return 0;
     // Glass backdrop (logical coords; the transform maps them to the buffer).
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = GLASS_BG;
     ctx.fillRect(0, 0, W, H);
 
-    const lines = [topLine, bottomLine].map((l) => lineToCells(l, glyphMap));
+    const lines = [topCells, bottomCells];
     let litDots = 0;
-
     for (let li = 0; li < 2; li++) {
       const cells = lines[li];
       for (let ci = 0; ci < LINE_LEN; ci++) {
@@ -117,14 +140,25 @@
             const lit = cell[r][c];
             if (lit) litDots++;
             // Same shared square-dot render as the glyph editor.
-            paintCell(ctx, x, y, lit, {
-              dotSize: DOT_SIZE,
-              level: brightnessLevel,
-            });
+            paintCell(ctx, x, y, lit, { dotSize: DOT_SIZE, level: brightnessLevel });
           }
         }
       }
     }
+    return litDots;
+  }
+
+  function drawFrame(
+    topLine: string,
+    bottomLine: string,
+    brightnessLevel: number,
+    glyphMap: GlyphMap,
+  ): void {
+    if (!ctx) return;
+    const [topCells, bottomCells] = [topLine, bottomLine].map((l) =>
+      lineToCells(l, glyphMap),
+    );
+    const litDots = drawCells(topCells, bottomCells, brightnessLevel);
 
     // First-frame diagnostic — UN-GATED for v0.4.3 (runs in the prod build too,
     // so it reports whatever uvicorn serves). Re-gate to DEV once confirmed.
