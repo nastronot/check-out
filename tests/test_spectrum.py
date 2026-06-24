@@ -165,3 +165,176 @@ def test_audioviz_process_finds_a_tone_band():
     assert len(heights) == spectrum.NUM_BARS
     assert max(heights) > 0                # the tone lit some band
     eng.close()
+
+
+# --- v0.9.1: hardened restart + PipeWire monitor detection ------------------
+class _FakeStream:
+    def __init__(self, raise_on=None):
+        self.stopped = self.closed = False
+        self.raise_on = raise_on
+
+    def stop(self):
+        if self.raise_on == "stop":
+            raise RuntimeError("boom")
+        self.stopped = True
+
+    def close(self):
+        if self.raise_on == "close":
+            raise RuntimeError("boom")
+        self.closed = True
+
+
+def test_sounddevice_stop_fully_tears_down_and_nulls_handle():
+    cap = audioviz.SoundDeviceCapture(0, 44100, lambda s, r: None)
+    st = _FakeStream()
+    cap._stream = st
+    cap.stop()
+    assert st.stopped and st.closed       # stop() THEN close()
+    assert cap._stream is None            # handle released
+
+
+def test_sounddevice_stop_survives_a_teardown_error():
+    cap = audioviz.SoundDeviceCapture(0, 44100, lambda s, r: None)
+    cap._stream = _FakeStream(raise_on="stop")
+    cap.stop()                            # must NOT raise (PortAudio would segfault)
+    assert cap._stream is None
+
+
+class _FailCapture:
+    def __init__(self):
+        self.stopped = False
+
+    def start(self):
+        raise RuntimeError("device busy")
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_restart_capture_catches_failed_open_and_emits_zeros(monkeypatch):
+    fail = _FailCapture()
+    monkeypatch.setattr(audioviz, "make_capture", lambda key, on, devs: fail)
+    out = audioviz._restart_capture(None, ("portaudio", 0), lambda s, r: None, [])
+    assert out is None                    # fell back, no raise
+    assert fail.stopped                   # the partially-started capture torn down
+
+
+def test_restart_capture_stops_the_old_capture():
+    old = _FailCapture()
+    out = audioviz._restart_capture(old, None, lambda s, r: None, [])
+    assert old.stopped and out is None
+
+
+def test_change_debouncer_coalesces_rapid_changes():
+    d = audioviz.ChangeDebouncer(window_ms=400)
+    d.observe(("pulse", "a"), 0)
+    assert not d.due(100)
+    d.observe(("pulse", "b"), 100)        # changed -> timer resets
+    assert not d.due(400)                 # only 300ms stable at "b"
+    assert d.due(500)                     # 400ms stable
+    assert d.take() == ("pulse", "b")     # newest value wins
+
+
+def test_change_debouncer_fires_after_stable_window():
+    d = audioviz.ChangeDebouncer(window_ms=300)
+    d.observe("x", 0)
+    assert d.peek() == "x"
+    assert d.due(300)
+
+
+_SOURCES_SHORT = (
+    "3194\talsa_output.creative.analog-stereo-output.monitor\tPipeWire\ts24le\tRUNNING\n"
+    "3195\talsa_input.creative.analog-stereo-input\tPipeWire\ts24le\tSUSPENDED\n"
+    "31159\talsa_output.hdmi-stereo.monitor\tPipeWire\ts32le\tSUSPENDED"
+)
+
+
+def test_parse_pulse_sources_flags_monitors():
+    srcs = {s["name"]: s["is_monitor"] for s in audioviz.parse_pulse_sources(_SOURCES_SHORT)}
+    assert srcs["alsa_output.creative.analog-stereo-output.monitor"] is True
+    assert srcs["alsa_input.creative.analog-stereo-input"] is False
+    assert srcs["alsa_output.hdmi-stereo.monitor"] is True
+
+
+def test_parse_source_descriptions():
+    long_text = (
+        "Source #1\n\tName: alsa_output.x.monitor\n\tDescription: Monitor of Speakers\n"
+        "Source #2\n\tName: alsa_input.y\n\tDescription: Built-in Mic\n"
+    )
+    d = audioviz.parse_source_descriptions(long_text)
+    assert d["alsa_output.x.monitor"] == "Monitor of Speakers"
+    assert d["alsa_input.y"] == "Built-in Mic"
+
+
+def test_default_sink_monitor(monkeypatch):
+    monkeypatch.setattr(audioviz, "_run_cmd", lambda args, timeout=2.0: "my_sink\n")
+    assert audioviz.default_sink_monitor() == "my_sink.monitor"
+    monkeypatch.setattr(audioviz, "_run_cmd", lambda *a, **k: None)
+    assert audioviz.default_sink_monitor() is None
+
+
+def test_build_device_list_labels_monitors_vs_inputs():
+    pulse = [
+        {"name": "sink.monitor", "is_monitor": True},
+        {"name": "mic.src", "is_monitor": False},   # non-monitor pulse src -> NOT listed
+    ]
+    desc = {"sink.monitor": "Monitor of Speakers"}
+    inputs = [{"index": 3, "name": "Built-in Mic", "is_monitor": False, "default_samplerate": 44100}]
+    devs = {d["id"]: d for d in audioviz.build_device_list(pulse, desc, inputs)}
+    assert devs["sink.monitor"]["kind"] == "monitor"
+    assert devs["sink.monitor"]["is_monitor"] is True
+    assert devs["sink.monitor"]["label"] == "[monitor] Monitor of Speakers"
+    assert devs["3"]["kind"] == "input" and devs["3"]["is_monitor"] is False
+    assert "mic.src" not in devs                # monitors from pulse, inputs from portaudio
+
+
+_DEVS = [
+    {"id": "sink.monitor", "label": "[monitor] Monitor of Speakers", "kind": "monitor", "is_monitor": True},
+    {"id": "hdmi.monitor", "label": "[monitor] HDMI", "kind": "monitor", "is_monitor": True},
+    {"id": "3", "label": "Built-in Mic", "kind": "input", "is_monitor": False, "index": 3},
+]
+
+
+def test_select_capture_system_defaults_to_default_sink_monitor():
+    assert audioviz.select_capture("system", None, _DEVS, "sink.monitor") == ("pulse", "sink.monitor")
+
+
+def test_select_capture_system_honors_device_override():
+    assert audioviz.select_capture("system", "hdmi.monitor", _DEVS, "sink.monitor") == ("pulse", "hdmi.monitor")
+
+
+def test_select_capture_system_without_monitor_is_none_not_mic():
+    inputs_only = [d for d in _DEVS if not d["is_monitor"]]
+    assert audioviz.select_capture("system", None, inputs_only, None) is None
+
+
+def test_select_capture_mic_uses_portaudio():
+    assert audioviz.select_capture("mic", None, _DEVS, "sink.monitor") == ("portaudio", None)
+    assert audioviz.select_capture("mic", "3", _DEVS, "sink.monitor") == ("portaudio", 3)
+
+
+class _FakePipe:
+    def __init__(self, data, chunk):
+        self.data, self.chunk, self.pos = data, chunk, 0
+
+    def read(self, n):
+        out = self.data[self.pos:self.pos + min(n, self.chunk)]
+        self.pos += len(out)
+        return out
+
+
+def test_read_exact_accumulates_partial_pipe_reads():
+    data = bytes(range(10)) * 5          # 50 bytes
+    pipe = _FakePipe(data, chunk=7)      # returns <=7 bytes per read
+    got = audioviz._read_exact(pipe, 20, lambda: False)
+    assert got == data[:20] and len(got) == 20
+
+
+def test_read_exact_returns_none_at_eof():
+    pipe = _FakePipe(b"abc", chunk=10)   # only 3 bytes then EOF
+    assert audioviz._read_exact(pipe, 20, lambda: False) is None
+
+
+def test_read_exact_returns_none_when_stopped():
+    pipe = _FakePipe(bytes(100), chunk=4)
+    assert audioviz._read_exact(pipe, 20, lambda: True) is None  # stop flag set

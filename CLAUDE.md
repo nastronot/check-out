@@ -443,15 +443,34 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
    ^ reads audio_* from state.json                          ^ writes status.bars
 ```
 
-- **`checkout.audioviz`** (separate process, never opens the port). Captures with
-  `sounddevice`/PortAudio, Hann-windows → numpy rFFT → 20 LOG-spaced bands →
-  dB-scaled heights 0..14, with **attack-fast/release-slow** smoothing
-  (`out = max(new, prev*decay)`). SETTINGS via `state.json`: `audio_source`
-  (`mic` | `system` — a PipeWire/Pulse **monitor** source = loopback of playback),
-  `audio_device`, `audio_gain`, `audio_decay` (re-read live on mtime change;
-  source/device change restarts the stream). Enumerates inputs to `devices.json`
-  (web-readable, `--list`). Missing PortAudio / device / monitor → log once,
-  stream zeros, retry — never crash.
+- **`checkout.audioviz`** (separate process, never opens the port). Hann-windows
+  → numpy rFFT → 20 LOG-spaced bands → dB-scaled heights 0..14, with
+  **attack-fast/release-slow** smoothing (`out = max(new, prev*decay)`). SETTINGS
+  via `state.json`: `audio_source` (`mic` | `system`), `audio_device`,
+  `audio_gain`, `audio_decay` (re-read live; a source/device change restarts the
+  capture). Capture only runs while mode is `spectrum`.
+  - **Two capture backends (v0.9.1).** PortAudio's ALSA backend does NOT expose
+    PipeWire/Pulse `.monitor` sources, so **system audio** is captured NATIVELY
+    via a `pw-record` (preferred) / `parec` subprocess reading raw s16le PCM
+    (`ParecCapture` + reader thread; `_read_exact` accumulates partial pipe
+    reads). **mic** uses `sounddevice` (`SoundDeviceCapture`). Monitors are
+    enumerated with `pactl` (`pactl list sources short` + descriptions); the
+    default is `pactl get-default-sink` + `.monitor`. `select_capture`: system →
+    that monitor (device override → default-sink monitor → first monitor), else
+    None = emit zeros (NEVER silently fall back to the mic); mic → PortAudio.
+  - **Hardened restart (v0.9.1).** Switching devices used to segfault PortAudio.
+    Now `SoundDeviceCapture.stop()` nulls the handle then `stop()` THEN `close()`
+    (guarded); a `ChangeDebouncer` coalesces rapid switches (~400ms → one
+    restart); `_restart_capture` tears down the old capture and wraps `start()` in
+    try/except (a failed open → zeros, never a crash).
+  - **Labeled device list.** `build_device_list` merges Pulse monitors +
+    PortAudio inputs, each with an `id` (the value for `audio_device` — a monitor
+    NAME or a PortAudio index) and a `label` (`[monitor] <desc>` vs the input
+    name), written to `devices.json` (web `/api/devices`, `--list`). The UI
+    filters by source (monitors for system, inputs for mic). Missing
+    PortAudio/`pactl`/monitor → log + zeros, never crash.
+  - **System packages (Arch):** `pipewire-pulse` (`pactl`/`pw-record`),
+    `portaudio` (mic / `sounddevice`).
 - **Socket protocol.** A unix **DATAGRAM** socket (`config.SPECTRUM_SOCKET`,
   default `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Each datagram is a fixed
   **20-byte** frame, one byte per bar (height 0..14). `SOCK_DGRAM` = newest-frame-
@@ -640,6 +659,16 @@ sudo usermod -aG uucp "$USER"   # then re-login
   decays on stale, and restores the user's glyph slots on exit; the preview draws
   the bars from `status.bars`. UI gains a SPECTRUM mode with source/device/gain/
   decay controls (`/api/devices` ← `devices.json`).
+- **v0.9.1:** two real-machine (Arch/PipeWire) audioviz fixes. (a) **segfault on
+  device switch** — the PortAudio (mic) restart now fully tears down (null handle
+  → `stop()` THEN `close()`, guarded), debounces rapid switches (~400ms → one
+  restart), and catches a failed open (→ zeros, no crash). (b) **system monitor
+  not found** — PortAudio can't see PipeWire `.monitor` sources, so system audio
+  is now captured natively via `pw-record`/`parec` on the monitor (enumerated via
+  `pactl`; default = default-sink `.monitor`); `select_capture` never silently
+  uses the mic for `system`. The device list is labeled (monitors vs inputs) and
+  the UI filters it by source. Bench-validated: system + monitor + playback →
+  non-zero bars; cycling devices no longer crashes.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

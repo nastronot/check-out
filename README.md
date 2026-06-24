@@ -50,14 +50,25 @@ over a unix datagram socket (the daemon stays the sole serial owner).
 
 ```bash
 pip install -r requirements-audio.txt          # numpy + sounddevice (PortAudio)
-python -m checkout.audioviz --list             # enumerate input devices
+python -m checkout.audioviz --list             # enumerate devices -> devices.json
 python -m checkout.audioviz                     # capture + stream to the daemon
 ```
 
-Then set mode `spectrum` (UI or `state.json`). Pick the **source** in the UI:
-`system` captures playback via a PipeWire/PulseAudio monitor source; `mic`
-captures the default input. Gain/decay tune sensitivity + smoothing. Spectrum
-borrows the 9 glyph slots for the bars and restores your custom glyphs on exit.
+Then set mode `spectrum` (UI or `state.json`) and pick the **source**:
+
+- **`system`** — captures what's playing via a PipeWire/PulseAudio **monitor**
+  source. PortAudio can't see `.monitor` sources, so this path captures natively
+  with **`pw-record`** (preferred) or `parec` reading the monitor; monitors are
+  enumerated with `pactl`. By default it uses the monitor of the current default
+  sink (`pactl get-default-sink` + `.monitor`); override via the Device dropdown.
+- **`mic`** — captures the default (or chosen) input via `sounddevice`.
+
+Gain/decay tune sensitivity + smoothing. The Device dropdown labels monitors
+(`[monitor] …`) vs inputs. Spectrum borrows the 9 glyph slots for the bars and
+restores your custom glyphs on exit.
+
+**System packages** (Arch): `pipewire-pulse` (for `pactl`/`pw-record`) and
+`portaudio` (for the mic path / `sounddevice`).
 
 ## Configuration (env vars)
 
