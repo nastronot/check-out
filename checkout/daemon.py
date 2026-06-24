@@ -1,20 +1,28 @@
 """check-out daemon — the sole owner of the serial port.
 
-Each tick it reads ``state.json`` (written by the web UI), drives the display to
-match, and writes ``status.json`` (a mirror of what is on the glass plus daemon
+It runs ONE fast loop (~LOOP_HZ, ~30Hz). Each iteration reads ``state.json``
+(only re-parsing when its mtime advanced), drives the display to match, and
+writes ``status.json`` (a throttled mirror of what is on the glass plus daemon
 health). The daemon is the ONLY writer of the serial port and of status.json;
 the web UI is the only writer of state.json. That one-directional ownership is
 what keeps the two from racing.
 
-A tick:
-  1. load_state()
-  2. process a one-shot command (self_test / reset / redefine_glyphs) if its
+Why one fast loop: EMIT-DIFFING already decouples the loop rate from the
+serial-write rate, so looping fast costs nothing for normal modes (clock /
+message / scroll / marquee only touch the port when their content changes) while
+giving the spectrum analyzer its frame rate — one code path, no mode-transition
+timing seam. Per-mode timing is driven off elapsed wall-clock (now_ms), not the
+loop period.
+
+A tick (``tick_once``):
+  1. process a one-shot command (self_test / reset / redefine_glyphs) if its
      nonce id is new (idempotent, so re-running once on restart is safe)
-  3. (re)define user glyphs if they changed
-  4. apply brightness / scroll-mode / code-page if changed (no redundant writes)
-  5. render the active frame (mode), or blank
-  6. apply the animation (none / flash / blink)
-  7. write status.json (on change)
+  2. (re)define user glyphs if they changed
+  3. apply brightness / scroll-mode / code-page if changed (no redundant writes)
+  4. render the active frame (mode), or blank
+  5. apply the animation (none / flash / blink / pulse)
+  6. EMIT-DIFF: push to the serial port only when the frame changed
+  7. write status.json (throttled to ~STATUS_HZ)
 
 The display is initialized once on open (extended mode + scroll off), so a full
 40-cell frame holds with no scroll. The daemon reconnects with backoff if the
@@ -29,6 +37,7 @@ Entrypoint::
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -53,6 +62,15 @@ from .state import load_state, save_status
 # Software scroll: each step redraws ~40 bytes at 9600 baud (~40ms on the wire),
 # so a step faster than this floor can't keep up — clamp scroll_speed_ms to it.
 SCROLL_FLOOR_MS = 60
+
+# status.json write throttle (ms between writes) derived from config.STATUS_HZ:
+# the fast loop runs ~30Hz but the status mirror is refreshed at most this often.
+STATUS_THROTTLE_MS = int(1000 / max(1.0, config.STATUS_HZ))
+
+# Marquee preview window step (the software approximation of the unreadable
+# hardware ticker speed). Time-based so the preview advances at a steady rate
+# independent of the fast loop's iteration count.
+MARQUEE_PREVIEW_STEP_MS = 150
 
 # Static frames, keyed by name. "scroll" + "marquee" are handled specially in
 # the tick (they need per-row offsets / the hardware ticker), not via a Frame.
@@ -92,6 +110,16 @@ def _handle_signal(signum, frame) -> None:
     _stop = True
 
 
+def _state_mtime() -> float | None:
+    """mtime of state.json (ns precision), or None if absent — the cheap change
+    check that gates a full re-parse in the fast loop. ``os.stat`` is a single
+    syscall, far cheaper than reading + JSON-parsing the file every iteration."""
+    try:
+        return os.stat(config.STATE_PATH).st_mtime_ns
+    except OSError:
+        return None
+
+
 # --- per-run mutable context -------------------------------------------------
 def _new_ctx() -> dict:
     """In-memory state carried across ticks (never persisted)."""
@@ -104,9 +132,9 @@ def _new_ctx() -> dict:
         "last_emit": None,         # last thing shown to the DISPLAY (gates serial writes)
         "last_marquee_text": None,  # last text kicked into the hardware ticker
         "last_marquee_bottom": None,  # last bottom row written in marquee mode
-        "marquee_preview_offset": 0,  # software-scroll offset for the status preview
         "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
+        "last_status_ms": None,    # wall-clock ms of the last status write (throttle)
     }
 
 
@@ -232,16 +260,30 @@ def _apply_emit(driver: VFDDriver, emit: tuple) -> None:
 
 
 # --- the tick ----------------------------------------------------------------
-def _write_status(state: dict, top: str, bottom: str, ctx: dict) -> None:
-    """Mirror the current display state to status.json — a HEARTBEAT every tick.
+def _write_status(
+    state: dict,
+    top: str,
+    bottom: str,
+    ctx: dict,
+    now_ms: int,
+    bars: list | None = None,
+) -> None:
+    """Mirror the current display state to status.json — a throttled HEARTBEAT.
 
-    Written unconditionally (with a fresh ``updated_at`` and a monotonic
-    ``heartbeat``) even when top/bottom are unchanged, so the UI's liveness check
-    (status freshness < 5s) reads ALIVE in static modes like a fixed message.
-    This is independent of the serial-port emit-diffing — the DISPLAY is only
-    re-written when the frame actually changes (see ``last_emit``); only this
-    small status file is refreshed each tick.
+    The fast loop calls this every iteration (~30Hz), but the status mirror is
+    only rewritten at most every ``STATUS_THROTTLE_MS`` (config.STATUS_HZ, ~6Hz)
+    so the file isn't churned — still far inside the UI's 5s liveness window. The
+    first call always writes (``last_status_ms`` is None). This is independent of
+    the serial-port emit-diffing: the DISPLAY is re-written only when the frame
+    changes (see ``last_emit``); this small file is refreshed on the throttle.
+
+    ``bars`` carries the spectrum analyzer's 20 heights so the preview can render
+    the bars at the status cadence (None for non-spectrum modes).
     """
+    last = ctx["last_status_ms"]
+    if last is not None and (now_ms - last) < STATUS_THROTTLE_MS:
+        return
+    ctx["last_status_ms"] = now_ms
     ctx["heartbeat"] += 1
     save_status(
         {
@@ -254,6 +296,7 @@ def _write_status(state: dict, top: str, bottom: str, ctx: dict) -> None:
             "brightness": ctx["last_brightness"],
             "blank": bool(state.get("blank")),
             "scroll": bool(state.get("scroll")),
+            "bars": bars,
             "last_command_id": ctx["last_command_id"],
             "heartbeat": ctx["heartbeat"],
         }
@@ -389,14 +432,14 @@ def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -
         driver.show_bottom(bottom)
         ctx["last_marquee_bottom"] = bottom
 
-    # Preview approximation: advance a per-tick offset so the windowed top scrolls
-    # in the UI regardless of wall-clock timing (it won't match the hardware
-    # speed — it just has to MOVE). Uses the SUBSTITUTED text so the preview
-    # (which decodes glyph codes via state.glyphs) shows the glyph, not "{gN}".
-    ctx["marquee_preview_offset"] += 1
-    offset = ctx["marquee_preview_offset"]
+    # Preview approximation: a TIME-BASED offset so the windowed top scrolls in
+    # the UI at a steady rate (it won't match the hardware speed — it just has to
+    # MOVE), independent of the fast loop's iteration count. Uses the SUBSTITUTED
+    # text so the preview (which decodes glyph codes via state.glyphs) shows the
+    # glyph, not "{gN}".
+    offset = now_ms // MARQUEE_PREVIEW_STEP_MS
     disp_top = ticker_window(marquee_text, offset) if marquee_text else _BLANK_LINE
-    _write_status(state, disp_top, bottom, ctx)
+    _write_status(state, disp_top, bottom, ctx, now_ms)
 
 
 def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = None) -> None:
@@ -479,7 +522,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         disp_top, disp_bottom = _BLANK_LINE, _BLANK_LINE
     else:
         disp_top, disp_bottom = emit[1], emit[2]
-    _write_status(state, disp_top, disp_bottom, ctx)
+    _write_status(state, disp_top, disp_bottom, ctx, now_ms)
 
 
 def open_driver(dry_run: bool) -> VFDDriver | None:
@@ -530,13 +573,25 @@ def run(dry_run: bool = False, once: bool = False) -> int:
             driver.close()
         return 0
 
-    tick = config.TICK_MS / 1000.0
+    # SINGLE FAST LOOP (~LOOP_HZ). Each iteration: cheaply re-read state.json only
+    # if its mtime advanced (settings change rarely — don't parse every iteration),
+    # compute the frame, and EMIT-DIFF to the serial port (so normal modes still
+    # touch the port only on change). Spectrum slots in as drain-socket → render →
+    # emit every iteration (~21fps, paced by the 9600-baud write itself).
+    loop_dt = 1.0 / max(1.0, config.LOOP_HZ)
+    state = load_state()
+    last_mtime = _state_mtime()
 
     try:
         show_banner(driver)
-        log("entering loop")
+        log(f"entering loop @ {config.LOOP_HZ:.0f}Hz")
         while not _stop:
-            state = load_state()
+            start = time.monotonic()
+            # 1. mtime-gated reload — only re-parse state.json when it changed.
+            mtime = _state_mtime()
+            if mtime != last_mtime:
+                last_mtime = mtime
+                state = load_state()
             try:
                 tick_once(driver, state, ctx)
             except VFDError as exc:
@@ -550,7 +605,9 @@ def run(dry_run: bool = False, once: bool = False) -> int:
                 # settings AND glyphs — on the next tick.
                 _invalidate_caches(ctx)
                 continue
-            time.sleep(tick)
+            # Pace the loop, accounting for time already spent this iteration (a
+            # slow serial write during spectrum naturally paces it below LOOP_HZ).
+            time.sleep(max(0.0, loop_dt - (time.monotonic() - start)))
     finally:
         log("shutting down: blanking display")
         try:

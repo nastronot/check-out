@@ -242,20 +242,22 @@ def test_marquee_clock_bottom_request_is_static_only(monkeypatch):
     assert ":" not in written[-1]["bottom"]
 
 
-def test_marquee_preview_top_advances_each_tick(monkeypatch):
-    """status.top is a software preview window that MOVES every tick even with a
-    fixed `now` (it advances a per-tick offset, not wall-clock)."""
+def test_marquee_preview_top_advances_over_time(monkeypatch):
+    """status.top is a software preview window that MOVES as wall-clock advances
+    (a TIME-based offset now, so the fast loop's iteration count doesn't matter)."""
     written = []
     monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
     drv = VFDDriver(dry_run=True)
     ctx = daemon._new_ctx()
     state = {"mode": "marquee",
              "marquee_text": "A LONG MARQUEE MESSAGE THAT SCROLLS ON THE TOP ROW"}
-    daemon.tick_once(drv, state, ctx, now=NOW)
-    daemon.tick_once(drv, state, ctx, now=NOW)  # SAME now
-    daemon.tick_once(drv, state, ctx, now=NOW)
+    # Advance ~300ms between ticks: past both the status throttle and the preview
+    # step, so each write lands a distinct window.
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0, 0))
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0, 300000))
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0, 600000))
     tops = [w["top"] for w in written]
-    assert len(set(tops)) == 3  # advances tick to tick despite a fixed clock
+    assert len(set(tops)) == 3  # advances as time passes
 
 
 def test_marquee_ignores_animation_regardless_of_state(monkeypatch, capsys):
@@ -347,6 +349,48 @@ def test_marquee_static_bottom_only_updates_on_change(monkeypatch, capsys):
     # Same static bottom + same marquee text -> nothing re-sent next tick.
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 5))
     assert _all_tx_bytes(capsys.readouterr().out) == []
+
+
+# --- single fast loop (emit-diff + status throttle + per-mode elapsed timing) --
+def test_fast_loop_clock_emits_once_per_second_and_throttles_status(monkeypatch):
+    """Many fast iterations within a second emit the clock ONCE (emit-diff) and
+    write status only on its throttle — not once per iteration."""
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock"}
+
+    base = datetime(2026, 6, 19, 12, 0, 0)
+    # 30 iterations across one second (~33ms apart) — the clock frame is constant.
+    for i in range(30):
+        daemon.tick_once(
+            drv, state, ctx, now=base.replace(microsecond=i * 33_000)
+        )
+    # Display drawn once (the second's frame never changed).
+    assert drv.shows == 1
+    # Status throttled well below 30 writes (≈ STATUS_HZ over ~1s).
+    assert 1 <= len(written) <= 12
+    # Next second -> the clock frame changes -> exactly one more draw.
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    assert drv.shows == 2
+
+
+def test_fast_loop_scroll_steps_on_elapsed_time(monkeypatch):
+    """Scroll advances by ELAPSED time (now_ms // speed), independent of how many
+    fast iterations happen — so it steps at scroll_speed_ms, not the loop rate."""
+    state = {
+        "mode": "scroll",
+        "message": "A LONG SCROLLING MESSAGE ACROSS THE TOP ROW OF THE DISPLAY",
+        "scroll_top": True, "scroll_dir_top": "left", "scroll_speed_ms": 200,
+    }
+    # Two instants in the SAME 200ms window render identically; crossing the
+    # window boundary advances the window.
+    a = daemon.render_scroll(state, 0)[0]
+    b = daemon.render_scroll(state, 199)[0]
+    c = daemon.render_scroll(state, 200)[0]
+    assert a == b      # same step window
+    assert a != c      # advanced after speed_ms elapsed
 
 
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
@@ -519,22 +563,24 @@ def test_blank_state_blanks_once_then_latches(monkeypatch):
 def test_status_heartbeat_advances_without_re_pushing_display(monkeypatch):
     """Liveness (status heartbeat) is separate from content change (serial writes).
 
-    With identical content across ticks, status.json is still rewritten each tick
-    (heartbeat advances, so the UI stays ALIVE), but the display is drawn only
-    once — emit-diffing to the serial port is preserved.
+    With identical content across ticks, status.json is rewritten on its THROTTLE
+    (heartbeat advances over time, so the UI stays ALIVE), but the display is
+    drawn only once — emit-diffing to the serial port is preserved.
     """
     written = []
     monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
     drv = _CountingDriver()
     ctx = daemon._new_ctx()
     state = {"mode": "clock"}
-    t = datetime(2026, 6, 19, 12, 0, 0)  # same instant -> identical top/bottom
+    # Same SECOND (identical clock frame), but advance past the status throttle
+    # each call so the heartbeat ticks while the frame stays constant.
+    for i in range(3):
+        daemon.tick_once(
+            drv, state, ctx,
+            now=datetime(2026, 6, 19, 12, 0, 0, i * 250_000),  # +250ms each
+        )
 
-    daemon.tick_once(drv, state, ctx, now=t)
-    daemon.tick_once(drv, state, ctx, now=t)
-    daemon.tick_once(drv, state, ctx, now=t)
-
-    # Status written EVERY tick with a monotonically increasing heartbeat...
+    # Status written each throttle window with a monotonically increasing heartbeat...
     assert [s["heartbeat"] for s in written] == [1, 2, 3]
     assert all(s["alive"] is True for s in written)
     # ...while the display was pushed only ONCE (unchanged frame not re-sent).

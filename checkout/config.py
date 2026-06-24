@@ -25,7 +25,32 @@ COLS: int = 20
 ROWS: int = 2
 
 # --- Daemon timing -----------------------------------------------------------
+# Legacy per-tick sleep (kept for --once / back-compat). The main loop now runs
+# at a single FAST rate (LOOP_HZ) and emit-diffs to the serial port, so looping
+# fast is free for static modes and gives spectrum its frame rate (see daemon).
 TICK_MS: int = int(os.environ.get("CHECKOUT_TICK_MS", "250"))
+
+# Single fast loop rate. ~30Hz (target ~33ms/iter): emit-diffing decouples loop
+# rate from serial-write rate, so normal modes only touch the port on change
+# while spectrum can render ~21fps (the 9600-baud full-frame ceiling).
+LOOP_HZ: float = float(os.environ.get("CHECKOUT_LOOP_HZ", "30"))
+
+# status.json is THROTTLED to this rate (not every loop iteration) so the mirror
+# file isn't churned 30x/s — still well under the 5s liveness staleness window.
+STATUS_HZ: float = float(os.environ.get("CHECKOUT_STATUS_HZ", "6"))
+
+# The unix datagram socket the audioviz process streams bar heights to. The
+# daemon binds/receives; audioviz connects/sends (newest-frame-wins). Defaults
+# under $XDG_RUNTIME_DIR when set, else /tmp.
+SPECTRUM_SOCKET: str = os.environ.get(
+    "CHECKOUT_SPECTRUM_SOCK",
+    os.path.join(
+        os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "checkout-spectrum.sock"
+    ),
+)
+
+# Where audioviz writes the enumerated capture devices for the UI selector.
+DEVICES_PATH: str = os.environ.get("CHECKOUT_DEVICES_PATH", "./devices.json")
 
 # Reconnect backoff (seconds): start small, grow to a cap.
 RECONNECT_BACKOFF_START: float = 1.0
