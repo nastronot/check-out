@@ -280,12 +280,24 @@ class VFDDriver:
 
     # --- low-level write -----------------------------------------------------
     def _write(self, data: bytes) -> None:
-        """Send raw bytes as a single write.
+        """Send raw bytes as a single write, then DRAIN to the wire.
 
         Logs the outgoing bytes as hex when in dry-run, or when
         ``CHECKOUT_DEBUG_TX=1`` on a live run (so the real on-the-wire stream can
         be checked against the known-good frame). ``flush=True`` so the hexdump
         is captured even when stdout is piped to a file.
+
+        After a successful write we call ``self._serial.flush()`` — on POSIX
+        pyserial this is ``termios.tcdrain(fd)``, which BLOCKS until every byte
+        has actually left on the wire. The port is opened non-blocking
+        (``timeout=0``), so ``write()`` alone just dumps the frame into the OS TX
+        buffer and returns immediately; at 9600 baud the buffer drains only
+        ~21fps, so the daemon's ~30fps spectrum renders would pile frames into
+        that buffer until it filled (~1-1.5s) and the glass always showed stale
+        frames. Draining after each write paces the daemon to the real serial
+        speed, so the buffer can never accumulate a backlog — zero latency drift
+        by construction. Normal modes emit-diff and write rarely, so the drain
+        cost there is negligible; one consistent backlog-free path for all modes.
         """
         if self.dry_run or config.DEBUG_TX:
             print("TX " + " ".join(f"{b:02X}" for b in data), flush=True)
@@ -297,6 +309,7 @@ class VFDDriver:
 
         try:
             self._serial.write(data)
+            self._serial.flush()  # tcdrain: block until on the wire — paces writes
         except (serial.SerialException, OSError) as exc:
             raise VFDError(f"write to {self.port} failed: {exc}") from exc
 
