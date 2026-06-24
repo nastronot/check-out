@@ -292,6 +292,12 @@ chars); `scroll` and `marquee` (the two scrolling systems, below).
   when the text changes / after a reset. status.json's `top` is a SOFTWARE `ticker_window`
   approximation that ADVANCES every tick (a per-tick offset counter) so the preview scrolls
   (it won't match the fixed/unreadable hardware speed — it just MOVES).
+  **`{gN}` glyphs (v0.8.2):** the hardware ticker renders user glyphs (codes `0x15`–`0x1E`)
+  in its buffer (bench-confirmed), so the daemon substitutes `{gN}`→glyph-code on both
+  `marquee_text` (before `start_ticker`) and `marquee_bottom_text` (before `show_bottom`),
+  exactly like message/scroll. The 45-char buffer is counted POST-substitution (one cell per
+  `{gN}`); glyphs are defined first so the codes resolve, and `status.top` substitutes so the
+  preview shows the glyph.
 
 **Per-line justify.** `align_top` / `align_bottom` (`left`/`center`/`right`, default
 `center`) independently justify line 1 / line 2 at the `render_lines` fit step, on RENDERED
@@ -367,7 +373,9 @@ ui/ (Svelte)  ──HTTP /api──▶  web/ (FastAPI)  ──writes state.json�
 - **Preview mirrors status, not the controls.** `VfdPreview` renders a pixel-accurate
   2×20 of 5×7 phosphor dots from `/api/status` (so it shows real clock ticks, ticker
   motion, brightness, blank). A built-in 5×7 font covers ASCII `0x20–0x7E`; the 9 user
-  glyph codes render from `state.glyphs` using the shared low-5-bit convention (§4.5).
+  glyph codes render from `state.glyphs` using the shared low-5-bit convention (§4.5). The
+  preview box has a **fixed 2×20 aspect** so it never resizes on status/mode changes; the
+  two layout columns are independent flex stacks, so no dead space appears under it (v0.8.2).
 - **Aesthetic:** blue-green VFD phosphor (`#3df0c8`) on black, POS/rack-gear faceplate —
   thin rules, monospaced labels, subtle bevels, tactile switches, a faint scanline/bloom
   on the preview only. Plain hand-tuned CSS.

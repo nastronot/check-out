@@ -188,6 +188,14 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
   **static text only**:
   - Top = `start_ticker(marquee_text)` (`0x05` + text≤45 + `0x0D`), (re)kicked
     only when the text changes / after a reset/reconnect (re-init, then re-start).
+  - **`{gN}` glyphs (v0.8.2):** the hardware ticker renders user glyphs (codes
+    `0x15`–`0x1E`) in its buffer (bench-confirmed), so the daemon substitutes
+    `{gN}` → glyph-code byte (`apply_glyph_placeholders`) on BOTH `marquee_text`
+    (before `start_ticker`) and `marquee_bottom_text` (before `show_bottom`),
+    same as message/scroll. The 45-char buffer limit is counted POST-substitution
+    (each `{gN}` is one cell — consistent with v0.5.3). Glyphs are defined first
+    (tick section 3, and a glyph change re-kicks the ticker) so the codes resolve;
+    `status.top` substitutes too so the preview shows the glyph.
   - Bottom = `marquee_bottom_text`, written via `show_bottom` (`0x10 0x14` + 20 +
     `0x14`) once on change, WITHOUT re-sending the ticker.
   - **Clock/news bottom is IMPOSSIBLE by hardware limit (v0.8.0):** a bottom write
@@ -285,13 +293,18 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
 - **Preview mirrors status, not controls.** `VfdPreview` renders a pixel-accurate
   2×20 of 5×7 phosphor dots from `/api/status`, so it shows real clock ticks /
   ticker motion / brightness / blank. Built-in 5×7 font for ASCII; the 9 user
-  glyph codes render from `state.glyphs` via the shared low-5-bit convention.
+  glyph codes render from `state.glyphs` via the shared low-5-bit convention. The
+  preview box is a **fixed 2×20 aspect** (locked on the canvas), so it never
+  resizes as status updates or modes switch — no layout jump (v0.8.2).
 - **Controls** (`PUT /api/state` on change): mode, message (+`{gN}` hint),
   brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker
   speed. `CommandBar` fires self_test/reset; `StatusReadout` shows daemon health.
-- **Layout (v0.8.0, panels v0.8.1):** two columns. LEFT = header/preview, Glyph
-  Editor, Glyph Library. RIGHT = Control, Display, Saved Messages, Commands,
-  Daemon. The masthead's meta text is baseline-aligned to the logo.
+- **Layout (v0.8.0, panels v0.8.1):** two columns, each its OWN flex stack so they
+  size INDEPENDENTLY (v0.8.2 fix: a prior 2-row grid let the tall right column span
+  both left rows and inject dead space under the fixed-size preview). LEFT
+  (`layout__left`) = header/preview, Glyph Editor, Glyph Library. RIGHT = Control,
+  Display, Saved Messages, Commands, Daemon. The masthead's meta text is
+  baseline-aligned to the logo.
   - **Control** = PER-MODE only: mode selector, the per-mode inputs (message /
     marquee text+tip / scroll per-row source+scroll+dir+speed), Justify (where
     applicable), and Animation (hidden in marquee).
@@ -502,6 +515,14 @@ sudo usermod -aG uucp "$USER"   # then re-login
   is now per-mode only. Animation is hidden in marquee mode and the daemon forces
   `"none"` there so a leftover animation can't affect the ticker. UI-only relocation
   (no state/daemon schema change beyond the marquee animation guard).
+- **v0.8.2:** two fixes. (a) **marquee `{gN}` glyphs** — the hardware ticker renders
+  user glyphs, but marquee sent the raw text so `{gN}` scrolled literally; the daemon
+  now substitutes `{gN}`→glyph-code on `marquee_text` (before `start_ticker`) and
+  `marquee_bottom_text`, with the 45-char limit counted post-substitution, and
+  `status.top` substitutes so the preview shows the glyph. (b) **preview layout
+  stability** — the two columns are now independent flex stacks (`layout__left`),
+  removing the dead gap the old row-spanning grid injected under the fixed-size
+  preview; the preview keeps a constant 2×20 aspect across mode/status changes.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
