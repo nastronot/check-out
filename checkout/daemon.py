@@ -58,6 +58,7 @@ from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
 from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
 from .state import load_state, save_status
+from . import spectrum
 
 # Software scroll: each step redraws ~40 bytes at 9600 baud (~40ms on the wire),
 # so a step faster than this floor can't keep up — clamp scroll_speed_ms to it.
@@ -71,6 +72,10 @@ STATUS_THROTTLE_MS = int(1000 / max(1.0, config.STATUS_HZ))
 # hardware ticker speed). Time-based so the preview advances at a steady rate
 # independent of the fast loop's iteration count.
 MARQUEE_PREVIEW_STEP_MS = 150
+
+# Spectrum: if no audio datagram arrives within this window the bars are stale,
+# so they decay toward 0 each tick (don't freeze on the last frame).
+SPECTRUM_STALE_MS = 200
 
 # Static frames, keyed by name. "scroll" + "marquee" are handled specially in
 # the tick (they need per-row offsets / the hardware ticker), not via a Frame.
@@ -135,6 +140,12 @@ def _new_ctx() -> dict:
         "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
         "last_status_ms": None,    # wall-clock ms of the last status write (throttle)
+        # --- spectrum analyzer ---
+        "spectrum_active": False,  # are the bar height-glyphs currently defined?
+        "spectrum_heights": [0] * spectrum.NUM_BARS,  # latest 20 bar heights
+        "spectrum_recv_ms": None,  # wall-clock ms of the last audio datagram
+        "spectrum_rx": None,       # the SpectrumReceiver (lazy-bound on first entry)
+        "spectrum_rx_failed": False,  # bind failed once -> don't retry every tick
     }
 
 
@@ -442,6 +453,73 @@ def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -
     _write_status(state, disp_top, bottom, ctx, now_ms)
 
 
+# --- spectrum analyzer -------------------------------------------------------
+def _ensure_spectrum_rx(ctx: dict) -> None:
+    """Lazily bind the unix datagram socket the audio process streams to.
+
+    Bound only the first time spectrum mode is entered (so non-spectrum users
+    never create a socket file). A bind failure is logged once and disables
+    further attempts — the bars then just read zero.
+    """
+    if ctx.get("spectrum_rx") is not None or ctx.get("spectrum_rx_failed"):
+        return
+    try:
+        rx = spectrum.SpectrumReceiver()
+        rx.open()
+        ctx["spectrum_rx"] = rx
+        log(f"spectrum socket listening on {rx.path}")
+    except OSError as exc:
+        log(f"spectrum socket bind failed ({exc}); bars read zero")
+        ctx["spectrum_rx_failed"] = True
+
+
+def _enter_spectrum(driver: VFDDriver, ctx: dict) -> None:
+    """Define the 7 bar height-glyphs and start listening for audio frames.
+
+    This OVERWRITES user-glyph slots 0..6; the daemon re-applies ``state.glyphs``
+    when spectrum is left (see :func:`tick_once`). Defining characters can reset
+    the display's extended-mode/scroll state, so re-init + invalidate the setting
+    caches afterward.
+    """
+    log("entering spectrum: defining bar glyphs (user glyphs restored on exit)")
+    for slot, rows in spectrum.bar_glyphs().items():
+        driver.define_character(slot, rows)
+    driver.initialize()
+    _invalidate_caches(ctx)
+    ctx["spectrum_active"] = True
+    _ensure_spectrum_rx(ctx)
+
+
+def _tick_spectrum(
+    driver: VFDDriver, state: dict, ctx: dict, now_ms: int, params: dict
+) -> None:
+    """Drain the socket to the latest bar heights and render double-height bars.
+
+    The frame changes basically every iteration, so this emit-diffs to a serial
+    write ~21fps (the 9600-baud ceiling) — intended. If no fresh audio arrives
+    within ``SPECTRUM_STALE_MS`` the bars decay toward 0 (don't freeze)."""
+    _apply_settings(driver, state, ctx, now_ms, "none", params)  # animation N/A
+
+    rx = ctx.get("spectrum_rx")
+    latest = rx.drain() if rx is not None else None
+    if latest is not None:
+        ctx["spectrum_heights"] = latest
+        ctx["spectrum_recv_ms"] = now_ms
+    else:
+        last_recv = ctx.get("spectrum_recv_ms")
+        if last_recv is None or (now_ms - last_recv) >= SPECTRUM_STALE_MS:
+            ctx["spectrum_heights"] = spectrum.decay_heights(ctx["spectrum_heights"])
+
+    heights = ctx["spectrum_heights"]
+    top, bottom = spectrum.render_spectrum(heights)
+    emit = ("show", top, bottom)
+    if emit != ctx["last_emit"]:
+        driver.show(top, bottom)
+        ctx["last_emit"] = emit
+    # status carries the heights so the preview renders the analyzer (throttled).
+    _write_status(state, top, bottom, ctx, now_ms, bars=list(heights))
+
+
 def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = None) -> None:
     """Drive the display one step toward ``state`` and mirror status.json."""
     now = now or datetime.now()
@@ -460,23 +538,41 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
             # brightness, code-page, glyphs and the marquee ticker from state.json.
             return
 
+    mode = _norm_mode(state.get("mode"))
+
+    # LEAVING spectrum: the bar height-glyphs overwrote user-glyph slots 0..6, so
+    # force section 3 below to re-define state.glyphs (restore the user's glyphs).
+    if ctx["spectrum_active"] and mode != "spectrum":
+        ctx["spectrum_active"] = False
+        ctx["last_glyphs"] = None
+        ctx["last_emit"] = None
+
     # 3. user glyphs (re-define on change; defining may reset the display, so
     # re-init + re-apply afterward — but only when there are glyphs to define).
-    glyphs = state.get("glyphs") or {}
-    if glyphs != ctx["last_glyphs"]:
-        if glyphs:
-            _apply_glyphs(driver, glyphs)
-            driver.initialize()
-            _invalidate_caches(ctx)
-        ctx["last_glyphs"] = dict(glyphs)
+    # SKIPPED in spectrum mode: the bar glyphs own slots 0..6 there, and a stray
+    # user-glyph re-apply would clobber them.
+    if mode != "spectrum":
+        glyphs = state.get("glyphs") or {}
+        if glyphs != ctx["last_glyphs"]:
+            if glyphs:
+                _apply_glyphs(driver, glyphs)
+                driver.initialize()
+                _invalidate_caches(ctx)
+            ctx["last_glyphs"] = dict(glyphs)
 
-    mode = _norm_mode(state.get("mode"))
-    # Animation is N/A in marquee: the hardware ticker owns the top row, so
-    # flash/blink/pulse don't apply meaningfully. Force "none" here so a leftover
-    # animation setting carried over from another mode can't affect marquee — one
-    # clean behavior, not a special-case scattered through the marquee path.
-    animation = "none" if mode == "marquee" else state.get("animation", "none")
+    # Animation is N/A in marquee/spectrum: the ticker / the bars own the rows, so
+    # flash/blink/pulse don't apply meaningfully. Force "none" so a leftover
+    # animation setting carried over from another mode can't affect them.
+    animation = "none" if mode in ("marquee", "spectrum") else state.get("animation", "none")
     params = state.get("animation_params") or {}
+
+    # SPECTRUM: socket-fed double-height bars — its own fast path.
+    # (When blank, fall through to the normal blank handling below.)
+    if mode == "spectrum" and not state.get("blank"):
+        if not ctx["spectrum_active"]:
+            _enter_spectrum(driver, ctx)
+        _tick_spectrum(driver, state, ctx, now_ms, params)
+        return
 
     # MARQUEE: hardware ticker on the top + independent bottom — its own path.
     # (When blank, fall through to the normal blank handling below.)
@@ -617,6 +713,9 @@ def run(dry_run: bool = False, once: bool = False) -> int:
         except VFDError:
             pass
         driver.close()
+        rx = ctx.get("spectrum_rx")
+        if rx is not None:
+            rx.close()
     return 0
 
 
