@@ -5,14 +5,17 @@ an FFT, buckets into 20 log-spaced bands, maps each to a height 0..14 with
 attack-fast/release-slow smoothing, and STREAMS the heights to the daemon over
 the unix datagram socket (:mod:`checkout.spectrum`).
 
-Capture (v0.9.1/.2): PortAudio's ALSA backend does NOT reliably expose PipeWire
-``.monitor`` sources, so BOTH **system** (a sink ``.monitor``) and **mic** (an
-input source) are captured NATIVELY with ``pw-record``/``parec`` (a subprocess
-reading raw PCM); ``sounddevice`` (PortAudio) is a FALLBACK only when Pulse is
-absent. The capture lifecycle is HARDENED (full stop+close, debounced restarts,
-try/except open) so cycling devices can't segfault. Sources are enumerated with
-``pactl``; defaults are ``pactl get-default-sink`` + ``.monitor`` (system) and
-``pactl get-default-source`` (mic).
+Capture (v0.9.1/.2, tool priority fixed v0.9.5): PortAudio's ALSA backend does
+NOT reliably expose PipeWire ``.monitor`` sources, so BOTH **system** (a sink
+``.monitor``) and **mic** (an input source) are captured NATIVELY with **parec**
+(preferred) / ``pw-record`` (fallback) — a subprocess reading raw s16le PCM.
+parec is bench-proven to deliver SUSTAINED audio from a monitor; pw-record/pw-cat
+piped deliver one buffer then STARVE to near-silence (the real cause of the
+spectrum "fills then dies"). ``sounddevice`` (PortAudio) is a FALLBACK only when
+Pulse is absent. The capture lifecycle is HARDENED (full stop+close, debounced
+restarts, try/except open) so cycling devices can't segfault. Sources are
+enumerated with ``pactl``; defaults are ``pactl get-default-sink`` + ``.monitor``
+(system) and ``pactl get-default-source`` (mic).
 
 The display is **auto-gained** (v0.9.2): bars normalize against a decaying-max
 reference of recent loudness, so they're volume-INDEPENDENT (content-driven), and
@@ -361,21 +364,28 @@ class ChangeDebouncer:
 
 # --- capture backends --------------------------------------------------------
 def _capture_tool() -> str | None:
-    # Prefer pw-record: on PipeWire it reliably captures a node's `.monitor`,
-    # whereas parec (via pipewire-pulse) was observed to emit nothing for some
-    # monitor sources on this setup. Fall back to parec if pw-record is absent.
-    for tool in ("pw-record", "parec"):
+    # Prefer parec: bench-proven (v0.9.5) to deliver SUSTAINED continuous audio
+    # from a `.monitor` source (RMS ~0.2 for the whole stream). pw-record /
+    # pw-cat, piped, deliver ONE good buffer then STARVE to near-silence (RMS
+    # ~0.00003) — that was the real cause of the spectrum "fills then dies", not
+    # the DSP. (This reverses the v0.9.1 guess; that earlier "parec emits nothing"
+    # was a bad invocation — `parec --device=<src> --format=s16le ...` works.)
+    # pw-record is kept only as a fallback when parec is unavailable.
+    for tool in ("parec", "pw-record"):
         if shutil.which(tool):
             return tool
     return None
 
 
 def parec_command(tool: str, source: str, rate: int, channels: int) -> list[str]:
-    """Build the raw-PCM (s16le) capture command for a Pulse monitor source."""
+    """Build the raw-PCM (s16le) capture command for a Pulse source.
+
+    parec is the PRIMARY tool (bench-confirmed to sustain). pw-record is a
+    deprioritized fallback (it starves a piped reader after one buffer here)."""
     if tool == "pw-record":
         return ["pw-record", "--target", source, "--rate", str(rate),
                 "--channels", str(channels), "--format", "s16", "-"]
-    # parec (pacat --record): raw s16le PCM to stdout
+    # parec (pacat --record): raw s16le PCM to stdout — bench-confirmed sustaining.
     return ["parec", f"--device={source}", "--format=s16le",
             f"--rate={rate}", f"--channels={channels}"]
 
