@@ -1,0 +1,7 @@
+# check-out audioviz (SPECTRUM mode) dependencies — OPTIONAL.
+# Only needed to run `python -m checkout.audioviz` (the audio capture + FFT
+# process that streams bar heights to the daemon). The daemon and web UI do not
+# need these. Requires a working PortAudio (and, for "system" audio capture, a
+# PipeWire/PulseAudio monitor source).
+numpy>=1.24
+sounddevice>=0.4
