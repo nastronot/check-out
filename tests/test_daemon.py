@@ -258,6 +258,32 @@ def test_marquee_preview_top_advances_each_tick(monkeypatch):
     assert len(set(tops)) == 3  # advances tick to tick despite a fixed clock
 
 
+def test_marquee_ignores_animation_regardless_of_state(monkeypatch, capsys):
+    """Marquee forces animation "none": a leftover flash/blink/pulse from another
+    mode must NOT blank the frame or pulse brightness on the marquee path."""
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    # A blink/pulse base would pulse brightness; flash would blank on the off
+    # phase. None of that should happen in marquee.
+    off_now = datetime(2026, 6, 19, 12, 0, 0, 600000)  # flash/blink OFF phase
+    for anim in ("flash", "blink", "pulse"):
+        ctx = daemon._new_ctx()
+        state = {
+            "mode": "marquee", "marquee_text": "NEWS", "marquee_bottom_text": "X",
+            "brightness": 3, "animation": anim,
+            "animation_params": {"on_ms": 500, "off_ms": 500, "step_ms": 100},
+        }
+        capsys.readouterr()
+        daemon.tick_once(drv, state, ctx, now=off_now)
+        tx = _all_tx_bytes(capsys.readouterr().out)
+        assert 0x1F not in tx, f"{anim}: marquee must not blank/reset (flash)"
+        # Brightness, if emitted, is the static MAX (0xFF) — never a pulsed level.
+        if 0x04 in tx:
+            assert tx[tx.index(0x04) + 1] == 0xFF, f"{anim}: brightness not pulsed"
+        assert 0x05 in tx  # the ticker still runs
+
+
 def test_marquee_re_kicks_ticker_after_reset(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)

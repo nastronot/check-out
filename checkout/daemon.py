@@ -420,13 +420,17 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         ctx["last_glyphs"] = dict(glyphs)
 
     mode = _norm_mode(state.get("mode"))
-    animation = state.get("animation", "none")
+    # Animation is N/A in marquee: the hardware ticker owns the top row, so
+    # flash/blink/pulse don't apply meaningfully. Force "none" here so a leftover
+    # animation setting carried over from another mode can't affect marquee — one
+    # clean behavior, not a special-case scattered through the marquee path.
+    animation = "none" if mode == "marquee" else state.get("animation", "none")
     params = state.get("animation_params") or {}
 
     # MARQUEE: hardware ticker on the top + independent bottom — its own path.
     # (When blank, fall through to the normal blank handling below.)
     if mode == "marquee" and not state.get("blank"):
-        _apply_settings(driver, state, ctx, now_ms, "none", params)  # no anim here
+        _apply_settings(driver, state, ctx, now_ms, animation, params)  # forced none
         _tick_marquee(driver, state, ctx, now, now_ms)
         return
 
