@@ -121,11 +121,13 @@ port owner). The web UI is just a writer of this file.
   "message": "text for message/scroll mode",
   "align_top": "left" | "center" | "right",     // line 1 justification (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justification (default center)
-  // marquee (hardware ticker): top autonomous + FIXED speed; bottom independent
+  // marquee (hardware ticker): top autonomous + FIXED speed; bottom STATIC-only
   "marquee_text": "scrolls on the top row (hardware, 45-char buffer)",
-  "marquee_bottom": "static" | "clock",         // bottom row source
-  "marquee_bottom_text": "shown when marquee_bottom == static",
-  // software scroll (mode "scroll"): per-row scroll + direction
+  "marquee_bottom": "static",                   // static-only; legacy "clock" normalized to "static"
+  "marquee_bottom_text": "the static bottom row text",
+  // software scroll (mode "scroll"): per-row source + scroll + direction
+  "scroll_top_source": "message" | "clock",     // per-row content source (news-ready)
+  "scroll_bottom_source": "message" | "clock",
   "scroll_top": true, "scroll_bottom": false,
   "scroll_dir_top": "left" | "right", "scroll_dir_bottom": "left" | "right",
   "brightness": 0 | 1 | 2 | 3,            // level index (0 Min .. 3 Max); legacy "dim"/"bright" migrate to 0/3
@@ -165,30 +167,46 @@ restart is safe): `self_test`, `reset` (both re-initialize the display after),
   `05 JUN 2026` / `08:47:03 PM`; locale-independent), `message` (static; newline
   splits the two lines, else word-wrapped, ≤40 chars), `scroll` (software
   horizontal scroll — see below), `marquee` (hardware ticker — see below).
-- **`scroll` (software, flexible).** The `message`'s two lines (newline-split);
-  each row INDEPENDENTLY scrolls or sits static: `scroll_top`/`scroll_bottom`
-  (which rows scroll), `scroll_dir_top`/`scroll_dir_bottom` (`left`/`right`).
-  Advances per `scroll_speed_ms`, **clamped to a ~60ms floor** (each step redraws
-  ~40 bytes at 9600 baud ≈ 40ms on the wire, so faster can't keep up). A
-  non-scrolling row uses normal fit/align; glyph cells count as one (v0.5.3).
-  Legacy mode `"ticker"` migrates to `"scroll"`.
+- **`scroll` (software, flexible — the news-ready home).** The `message`'s two
+  lines (newline-split). Each row INDEPENDENTLY picks a CONTENT SOURCE
+  (`scroll_top_source` / `scroll_bottom_source` = `message` | `clock`, default
+  `message`) and, for a `message` row, whether/how it scrolls:
+  - `clock` source → the live TIME line (`HH:MM:SS AM/PM`), refreshed each second,
+    statically aligned (date-vs-time is a future sub-choice; defaults to time).
+  - `message` source → that row's text, which scrolls (`scroll_top`/`scroll_bottom`)
+    in a direction (`scroll_dir_top`/`scroll_dir_bottom` = `left`/`right`) or sits
+    fit/aligned. Advances per `scroll_speed_ms`, **clamped to a ~60ms floor** (each
+    step redraws ~40 bytes at 9600 baud ≈ 40ms on the wire, so faster can't keep
+    up). Glyph cells count as one (v0.5.3).
+  - **News-ready (v0.8.0):** the `*_source` enum + per-row UI selector have room
+    for a third `"news"` source — `_SCROLL_SOURCES` in `state.py` and
+    `_scroll_row` in the daemon are the extension points (no schema reshape).
+  - Legacy mode `"ticker"` migrates to `"scroll"`.
 - **`marquee` (hardware ticker, `0x05`).** Bench: the hardware ticker scrolls the
   TOP row autonomously at a FIXED medium speed (NO speed control — the SNMetamorph
-  ticker API takes no speed arg, and bench probes found none); the BOTTOM row is
-  fully independent (writing it does NOT disturb a running top scroll). So:
+  ticker API takes no speed arg, and bench probes found none). The BOTTOM row is
+  **static text only**:
   - Top = `start_ticker(marquee_text)` (`0x05` + text≤45 + `0x0D`), (re)kicked
     only when the text changes / after a reset/reconnect (re-init, then re-start).
-  - Bottom = `marquee_bottom` (`static` → `marquee_bottom_text`, or `clock` →
-    `HH:MM:SS AM/PM` updated each second), written via `show_bottom` (`0x10 0x14`
-    + 20 + `0x14`) WITHOUT re-sending the ticker.
-  - status.json's `top` is a SOFTWARE `ticker_window` of the marquee text (a
-    preview approximation of the unreadable hardware speed); `bottom` is the
-    rendered bottom. The preview animates with no preview-side change.
+  - Bottom = `marquee_bottom_text`, written via `show_bottom` (`0x10 0x14` + 20 +
+    `0x14`) once on change, WITHOUT re-sending the ticker.
+  - **Clock/news bottom is IMPOSSIBLE by hardware limit (v0.8.0):** a bottom write
+    that lands after the scroll resumes STOPS the top scroll — a single static
+    write keeps position, but two quick writes (a per-second clock) halt it. So
+    `marquee_bottom="clock"` was removed; the field is tolerated for back-compat
+    but **normalized to `static`** (`state.py`). For a live clock/news ticker, use
+    `scroll` with a `clock` source on a row.
+  - status.json's `top` is a SOFTWARE `ticker_window` of the marquee text that
+    ADVANCES every tick (a per-tick offset counter in `ctx`), so the preview
+    scrolls (a coarse approximation of the unreadable hardware speed — it just
+    MOVES); `bottom` is the rendered static bottom.
 - **Per-line justify:** `align_top` / `align_bottom` (`left`/`center`/`right`,
   default `center`) independently justify line 1 / line 2. Applied at the
   `render_lines` fit step on RENDERED cells (a `{gN}` glyph counts as one cell);
   the daemon coerces an invalid value to `center`. A scrolling row ignores its
-  align (the window is already 20 cells wide).
+  align (the window is already 20 cells wide). In **marquee** mode the top row is
+  the hardware ticker (it controls its own layout), so the UI HIDES the Line 1
+  justify control; Line 2 justify still applies to the static bottom.
 - **Animations** (4): `none` (show when changed); `flash` (alternate frame /
   real `blank()` — display goes fully DARK); `blink` (2-state brightness snap —
   the frame stays up but dims to MIN on the off-phase); `pulse` (a stepped
@@ -268,6 +286,10 @@ ui/ (Svelte)  --HTTP-->  web/ (FastAPI)  --writes state.json-->  daemon --> VFD
 - **Controls** (`PUT /api/state` on change): mode, message (+`{gN}` hint),
   brightness, blank, hardware scroll, code page, animation (+on/off ms), ticker
   speed. `CommandBar` fires self_test/reset; `StatusReadout` shows daemon health.
+- **Layout (v0.8.0):** two columns. LEFT = header/preview, Glyph Editor, Glyph
+  Library. RIGHT = Control, Saved Messages, Commands, Daemon (the daemon status
+  panel sits at the bottom of the right column, under Commands). The masthead's
+  meta text is baseline-aligned to the logo.
 - **Config:** `CHECKOUT_STATE_PATH` / `CHECKOUT_STATUS_PATH` (shared with daemon)
   via `checkout.config`; `CHECKOUT_UI_DIST` for the built UI. Docker is Phase 3.
 
@@ -454,6 +476,16 @@ sudo usermod -aG uucp "$USER"   # then re-login
   `scroll` (software, 2-line per-row direction + speed with a ~60ms floor;
   renamed from `ticker`, legacy migrates). Driver `start_ticker`/`show_bottom`;
   bench-confirmed fixed ticker speed + independent bottom row.
+- **v0.8.0:** marquee/scroll UX honesty pass. **marquee** bottom is now STATIC
+  TEXT ONLY — a live clock/news bottom is impossible (a per-second bottom write
+  stops the hardware scroll), so `marquee_bottom="clock"` was removed (tolerated +
+  normalized to `static`); added a constraints tip, hid the top-line justify, and
+  the preview top now ADVANCES every tick (per-tick offset) so it scrolls.
+  **scroll** is the flexible, news-ready home: per-row content source
+  (`scroll_{top,bottom}_source` = `message`|`clock`, with a clear `news` extension
+  point), per-row scroll/dir/speed kept, and the over-budget char warning removed
+  in SCROLL (MESSAGE still warns). Layout: daemon status moved to the right column
+  under Commands; masthead meta baseline-aligned to the logo.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

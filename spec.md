@@ -226,7 +226,9 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   "message": "text for message/scroll mode",
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
-  "marquee_text": "...", "marquee_bottom": "static" | "clock", "marquee_bottom_text": "...",
+  "marquee_text": "...", "marquee_bottom": "static", "marquee_bottom_text": "...",  // bottom is static-only
+  "scroll_top_source": "message" | "clock",      // per-row content source (news-ready)
+  "scroll_bottom_source": "message" | "clock",
   "scroll_top": true, "scroll_bottom": false,
   "scroll_dir_top": "left" | "right", "scroll_dir_bottom": "left" | "right",
   "brightness": 0 | 1 | 2 | 3,  // level index (0 Min .. 3 Max); legacy "dim"/"bright" -> 0/3
@@ -265,22 +267,31 @@ ignored. All actions are idempotent — safe to re-run once on restart: `self_te
 `message` (static — a newline splits the two lines, else greedy word-wrap, ≤40
 chars); `scroll` and `marquee` (the two scrolling systems, below).
 
-**Two scrolling systems (v0.7.3, bench-validated).**
-- **`scroll` — software, flexible.** The `message`'s two lines (newline-split); each
-  row independently scrolls (`scroll_top`/`scroll_bottom`) in either direction
+**Two scrolling systems (v0.7.3, bench-validated; refined v0.8.0).**
+- **`scroll` — software, flexible (the news-ready home).** The `message`'s two lines
+  (newline-split). Each row INDEPENDENTLY picks a **content source**
+  (`scroll_top_source` / `scroll_bottom_source` = `message` | `clock`, default `message`;
+  **news-ready** — a third `news` source slots into the enum + per-row selector without
+  reshaping the schema). A `clock` row shows the live TIME line (`HH:MM:SS AM/PM`, refreshed
+  each second, statically aligned; date-vs-time is a future sub-choice, defaults to time).
+  A `message` row scrolls (`scroll_top`/`scroll_bottom`) in either direction
   (`scroll_dir_top`/`scroll_dir_bottom` = `left`/`right`) via `renderer.ticker_window`,
   advancing per `scroll_speed_ms` **clamped to a ~60ms floor** (a step redraws ~40 bytes
-  at 9600 baud ≈ 40ms on the wire, so faster can't keep up). Non-scrolling rows fit/align
-  normally; glyph cells count as one. Legacy mode `"ticker"` migrates to `"scroll"`.
+  at 9600 baud ≈ 40ms on the wire, so faster can't keep up), or sits fit/aligned; glyph
+  cells count as one. Legacy mode `"ticker"` migrates to `"scroll"`.
 - **`marquee` — hardware ticker (`0x05`).** Bench ground truth: the hardware ticker scrolls
   the TOP row autonomously at a FIXED medium speed (**no speed control** — the SNMetamorph
-  ticker API takes no speed arg and bench probes found none); the BOTTOM row is fully
-  independent (writing it does NOT disturb a running top scroll). The daemon
-  `start_ticker(marquee_text)` (`0x05` + text≤45 + `0x0D`) only when the text changes /
-  after a reset; the bottom (`marquee_bottom` = `static`→`marquee_bottom_text` or
-  `clock`→`HH:MM:SS AM/PM` each second) is refreshed via `show_bottom` (`0x10 0x14` + 20 +
-  `0x14`) without re-kicking the ticker. status.json's `top` is a SOFTWARE `ticker_window`
-  approximation so the preview looks right (the real hardware speed is fixed/unreadable).
+  ticker API takes no speed arg and bench probes found none). The BOTTOM row is **static
+  text only** (`marquee_bottom_text`), written via `show_bottom` (`0x10 0x14` + 20 + `0x14`)
+  once on change without re-kicking the ticker. **A live clock/news bottom is impossible by
+  hardware limit** (v0.8.0): a bottom write that arrives after the scroll resumes STOPS the
+  top scroll — one static write keeps position, but two quick writes (a per-second clock)
+  halt it. So `marquee_bottom="clock"` was removed; the field is tolerated for back-compat
+  but **normalized to `static`**. For a live clock/news ticker, use `scroll` (a `clock`
+  source on a row). The daemon `start_ticker(marquee_text)` (`0x05` + text≤45 + `0x0D`) only
+  when the text changes / after a reset. status.json's `top` is a SOFTWARE `ticker_window`
+  approximation that ADVANCES every tick (a per-tick offset counter) so the preview scrolls
+  (it won't match the fixed/unreadable hardware speed — it just MOVES).
 
 **Per-line justify.** `align_top` / `align_bottom` (`left`/`center`/`right`, default
 `center`) independently justify line 1 / line 2 at the `render_lines` fit step, on RENDERED
