@@ -473,22 +473,24 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   **attack-fast/release-slow** decay (`out = max(new, prev*decay)`). Source via
   `state.json`: `system` / `mic`; `audio_device`/`audio_gain` (sensitivity)/
   `audio_decay` re-read live (capture runs only while mode = spectrum).
-  - **auto-gain (v0.9.2, envelope reworked v0.9.3):** bars normalize against a
-    running reference so the display is volume-INDEPENDENT (content-driven, not
-    affected by system volume). The reference is an ENVELOPE FOLLOWER (`update_ref`):
-    it rises toward a new peak by `(peak-ref)*AUTOGAIN_ATTACK` (smooth, not an
-    instant snap — so transients don't pump the display) and releases slowly; its
-    target is `percentile_peak` (~85th percentile of the bands, not the single
-    loudest — so the spectrum fills instead of one bass band pinning the top).
-    `normalize_levels` maps each band relative to the reference over
-    `AUTOGAIN_RANGE_DB` (~28). Volume-independence REQUIRES `REF_FLOOR` (1e-4)
-    below quiet-music levels — a high floor pins the reference at low volume and
-    the bars shrink; the SILENCE GATE (`signal_rms` < `SILENCE_FLOOR_RMS`), not the
-    floor, stops noise being amplified. Bar heights are smoothed by `decay_levels`
-    (attack-fast/release-slow, prev persists — the anti-flash). `audio_gain` is now
-    **sensitivity** (biases auto-gain). Constants in `spectrum.py` carry a tuning
-    guide (bars short → lower range/percentile; flashing → lower attack / raise
-    decay; volume leaks → lower `REF_FLOOR`; silence noise → raise `SILENCE_FLOOR_RMS`).
+  - **auto-gain (v0.9.2, reworked v0.9.3/.4):** bars normalize against a running
+    reference so the display is volume-INDEPENDENT (content-driven). The reference
+    is an ENVELOPE FOLLOWER (`update_ref`) of BROADBAND loudness — its target is
+    `band_mean` (the mean band magnitude, "how loud overall now"), NOT a per-band
+    percentile/max (which equals the loudest bands, so "at ref → top" collapsed the
+    rest and the bars "filled then sank", v0.9.4). It rises by
+    `(peak-ref)*AUTOGAIN_ATTACK` (smooth, no pump) and releases by `*AUTOGAIN_RELEASE`
+    (0.95). `normalize_levels` is CENTERED with headroom: `20*log10(band/ref)` maps
+    over `[-AUTOGAIN_RANGE_DB(24), +AUTOGAIN_HEADROOM_DB(9)]` → `[0, MAX]`, so a
+    band at ref → mid-high, louder → top, quieter → down — the spectrum SPREADS.
+    Volume-independence REQUIRES `REF_FLOOR` (1e-4) below quiet-music levels; the
+    SILENCE GATE (`signal_rms` < `SILENCE_FLOOR_RMS`), not the floor, stops noise
+    amplification. Bar heights are smoothed by `decay_levels` (attack-fast/
+    release-slow, prev persists — anti-flash). `audio_gain` is now **sensitivity**.
+    Constants in `spectrum.py` carry a tuning guide (bars sink → ref = band_mean +
+    faster release; short → lower range / raise headroom; clip → raise range /
+    lower headroom; flashing → lower attack / raise decay; volume leaks → lower
+    `REF_FLOOR`).
   - **capture (v0.9.1):** PortAudio can't see PipeWire `.monitor` sources, so BOTH
     system (a sink `.monitor`) and mic (an input source) are captured NATIVELY via
     `pw-record`/`parec` (enumerated with `pactl`; defaults = default-sink

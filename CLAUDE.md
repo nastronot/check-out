@@ -449,26 +449,29 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
   via `state.json`: `audio_source` (`mic` | `system`), `audio_device`,
   `audio_gain` (now **sensitivity**), `audio_decay` (re-read live; a source/device
   change restarts the capture). Capture only runs while mode is `spectrum`.
-  - **Auto-gain (v0.9.2, envelope reworked v0.9.3) — volume-independent.** The
-    monitor is captured POST-volume, so the display must not track absolute level.
-    `update_ref` is an ENVELOPE FOLLOWER of recent loudness: it RISES toward a new
-    peak by `(peak-ref)*AUTOGAIN_ATTACK` (smooth, ~0.4 — not an instant snap, which
-    pumped) and RELEASES by `*AUTOGAIN_RELEASE` (~0.99) when the signal drops. Its
-    target is `percentile_peak` (the `AUTOGAIN_PERCENTILE` ≈ 85th percentile of the
-    bands — a *typical loud* band, NOT the single max, which let one bass band pin
-    the top and crush the rest). `normalize_levels` maps each band relative to the
-    reference (dB over `AUTOGAIN_RANGE_DB` ≈ 28), biased by `sensitivity`; bar
-    heights are then smoothed by `decay_levels` (attack-fast/release-slow, prev
-    persists across frames — the anti-flash mechanism). Lowering system volume does
-    NOT shrink the bars: `ref` tracks the signal, so absolute level cancels — which
-    REQUIRES `REF_FLOOR` (1e-4) BELOW quiet-music levels (a high floor pins `ref`
-    at low volume and the bars shrink). The SILENCE GATE (`signal_rms` <
-    `SILENCE_FLOOR_RMS`), NOT the floor, is what stops noise being amplified:
-    below it the frame outputs 0 and `ref` releases (never ratchets up on hiss).
-    All constants live in `spectrum.py` with a tuning guide — bars too short →
-    lower `AUTOGAIN_RANGE_DB`/percentile; flashing → lower `AUTOGAIN_ATTACK` /
-    raise the decay factor; volume leaks → lower `REF_FLOOR`; silence noise → raise
-    `SILENCE_FLOOR_RMS`.
+  - **Auto-gain (v0.9.2, reworked v0.9.3/.4) — volume-independent.** The monitor
+    is captured POST-volume, so the display must not track absolute level. The
+    reference is an ENVELOPE FOLLOWER (`update_ref`) of **broadband loudness**:
+    its target is `band_mean` (the MEAN band magnitude — "how loud overall now"),
+    NOT a per-band percentile/max (which equals the loudest bands, so "at ref →
+    top" then dumped the median-and-below to the floor — bars "filled then sank",
+    v0.9.4). It RISES toward the level by `(peak-ref)*AUTOGAIN_ATTACK` (smooth,
+    ~0.4 — not an instant snap, which pumped) and RELEASES by `*AUTOGAIN_RELEASE`
+    (0.95 — fast enough to recover). `normalize_levels` is **centered with
+    headroom**: `db_rel = 20*log10(band/ref)` maps over `[-AUTOGAIN_RANGE_DB(24),
+    +AUTOGAIN_HEADROOM_DB(9)]` → `[0, MAX_BAR]`, so a band AT ref lands mid-high
+    (~range/(range+headroom)·MAX ≈ 10/14), louder bands have headroom to the top,
+    quieter bands spread DOWN — typical music fills ACROSS the display instead of
+    collapsing. `sensitivity` biases it; bar heights are then smoothed by
+    `decay_levels` (attack-fast/release-slow, prev persists across frames — the
+    anti-flash). Lowering system volume does NOT shrink the bars: `ref` tracks the
+    signal, so level cancels — which REQUIRES `REF_FLOOR` (1e-4) BELOW quiet-music
+    levels. The SILENCE GATE (`signal_rms` < `SILENCE_FLOOR_RMS`), NOT the floor,
+    is what stops noise amplification (below it → 0 + `ref` releases). Constants in
+    `spectrum.py` with a tuning guide — bars SINK → ref must be `band_mean` +
+    release fast enough; too short → lower `RANGE_DB` / raise `HEADROOM_DB`; clip
+    at top → raise `RANGE_DB` / lower `HEADROOM_DB`; flashing → lower
+    `AUTOGAIN_ATTACK` / raise decay; volume leaks → lower `REF_FLOOR`.
   - **Two capture backends (v0.9.1).** PortAudio's ALSA backend does NOT expose
     PipeWire/Pulse `.monitor` sources, so audio is captured NATIVELY via a
     `pw-record` (preferred) / `parec` subprocess reading raw s16le PCM
@@ -710,6 +713,16 @@ sudo usermod -aG uucp "$USER"   # then re-login
   `AUTOGAIN_ATTACK` rise, not an instant snap) so transients don't pump the whole
   display; the bar-height `decay_levels` smoothing is confirmed wired (prev
   persists). Constants carry a tuning guide.
+- **v0.9.4:** auto-gain "fills then sinks" fix. v0.9.3's reference tracked an
+  85th-percentile of the frame's bands (= the loudest ~15%), and `normalize_levels`
+  mapped "at ref → top", so only the loudest bands could reach the top and the
+  median-and-below collapsed (and on init `ref` starts tiny, so all clamp to top
+  then sink as it rises). Now the reference is `band_mean` (broadband MEAN
+  loudness, not a per-band percentile), and `normalize_levels` is **centered with
+  headroom** (a band at ref → mid-high, louder → top, quieter → down), so typical
+  music SPREADS across the display and is stable. `AUTOGAIN_RELEASE` 0.99 → **0.95**
+  (recovers in ~0.5-1s). Sim: pink-ish broadband → max 14 / median ~9 / all 20
+  bands lit, stable (no sink), volume-independent.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
