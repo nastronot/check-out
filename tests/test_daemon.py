@@ -284,6 +284,42 @@ def test_marquee_ignores_animation_regardless_of_state(monkeypatch, capsys):
         assert 0x05 in tx  # the ticker still runs
 
 
+def test_marquee_substitutes_glyph_placeholders(monkeypatch, capsys):
+    """The hardware ticker renders user glyphs, so {gN} in marquee_text must be
+    substituted to the glyph CODE byte before start_ticker — not sent literally."""
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {"mode": "marquee", "marquee_text": "TEMP {g0}C",
+             "marquee_bottom_text": "HI {g2}"}
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    tx = _all_tx_bytes(capsys.readouterr().out)
+    # Ticker payload starts at 0x05; the glyph code 0x15 (slot 0) is in it, and the
+    # literal token bytes '{','g','0','}' are NOT.
+    assert 0x05 in tx
+    assert 0x15 in tx                       # {g0} -> 0x15
+    assert ord("{") not in tx and ord("}") not in tx
+    # Bottom (0x10 0x14 ...) carries slot 2's code 0x17 ({g2}).
+    assert 0x17 in tx
+
+
+def test_marquee_glyph_limit_counted_post_substitution(monkeypatch, capsys):
+    """45-char buffer limit counts RENDERED cells: a {g0} after 44 chars (raw token
+    pushes past 45, but the glyph is cell 45) must survive as its code byte."""
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    # 44 'A' + "{g0}" -> raw 48 chars, substituted 45 cells (44 A's + glyph).
+    state = {"mode": "marquee", "marquee_text": "A" * 44 + "{g0}"}
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    tx = _all_tx_bytes(capsys.readouterr().out)
+    # Post-substitution truncation keeps the 45th cell (the glyph code); raw-token
+    # truncation would have cut mid-"{g0}" and lost it.
+    assert 0x15 in tx
+
+
 def test_marquee_re_kicks_ticker_after_reset(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)

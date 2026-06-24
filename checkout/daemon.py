@@ -370,7 +370,14 @@ def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -
     tick (via a per-tick offset counter), so the preview animates even though the
     real hardware speed is fixed and unreadable.
     """
-    marquee_text = state.get("marquee_text") or ""
+    # Substitute {gN} -> glyph-code byte BEFORE kicking the ticker: the hardware
+    # ticker renders user glyphs (codes 0x15-0x1E) in its buffer (bench-confirmed),
+    # so the substituted code must reach start_ticker, not the literal "{gN}". The
+    # glyphs are already defined this tick (section 3 of tick_once runs first, and
+    # a glyph change invalidates last_marquee_text so the ticker re-kicks). The
+    # 45-char buffer limit is counted post-substitution (start_ticker truncates
+    # after _sanitize, where each glyph code is one byte) — consistent with v0.5.3.
+    marquee_text = apply_glyph_placeholders(state.get("marquee_text") or "")
     if marquee_text != ctx["last_marquee_text"]:
         driver.start_ticker(marquee_text)
         ctx["last_marquee_text"] = marquee_text
@@ -384,7 +391,8 @@ def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -
 
     # Preview approximation: advance a per-tick offset so the windowed top scrolls
     # in the UI regardless of wall-clock timing (it won't match the hardware
-    # speed — it just has to MOVE).
+    # speed — it just has to MOVE). Uses the SUBSTITUTED text so the preview
+    # (which decodes glyph codes via state.glyphs) shows the glyph, not "{gN}".
     ctx["marquee_preview_offset"] += 1
     offset = ctx["marquee_preview_offset"]
     disp_top = ticker_window(marquee_text, offset) if marquee_text else _BLANK_LINE
