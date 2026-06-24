@@ -45,15 +45,19 @@ In deployment both processes share these files via a mounted volume.
 
 ## Run
 
+`--no-access-log` is the recommended default: the UI polls `/api/status` ~2×/s, so
+per-request `200 OK` lines would otherwise flood the console. Startup, errors, and
+warnings still print.
+
 ```bash
 pip install -r web/requirements.txt
 
 # Dev: API with reload (run the UI separately with `npm run dev`, which proxies /api here)
-uvicorn web.app:app --reload --port 8000
+uvicorn web.app:app --reload --port 8000 --no-access-log
 
 # Prod: build the UI first, then serve everything from uvicorn
 ( cd ui && npm install && npm run build )
-uvicorn web.app:app --host 0.0.0.0 --port 8000
+uvicorn web.app:app --host 0.0.0.0 --port 8000 --no-access-log
 ```
 
 Tests: `pytest tests/test_web.py` (uses FastAPI's `TestClient`).

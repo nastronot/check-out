@@ -1,22 +1,22 @@
 // Svelte stores for live data.
 //
-// - `status` + `health` are POLLED (~500ms) so the preview is a true mirror of
-//   what the daemon actually rendered (clock ticks, ticker motion, blank...).
+// - `status` is POLLED (~500ms) so the preview is a true mirror of what the
+//   daemon actually rendered (clock ticks, ticker motion, blank...). `health`
+//   (daemon_alive) is DERIVED from that same status's freshness — no separate
+//   /api/health hot poll (the endpoint still exists for external checks; the UI
+//   just doesn't hammer it every cycle).
 // - `appState` is the desired state: fetched once on load, then replaced by the
 //   response of every PUT/command (optimistic edits reconcile against the API's
 //   canonical, backfilled result).
 
 import { get, writable } from 'svelte/store';
-import {
-  getHealth,
-  getLibrary,
-  getState,
-  getStatus,
-  putState,
-  reorderGlyphs,
-} from './api';
+import { getLibrary, getState, getStatus, putState, reorderGlyphs } from './api';
 import { normGlyph } from './glyphedit';
 import type { AppState, Health, Library, Status } from './types';
+
+// Mirror of the backend's STALE_SECONDS: a status older than this (or absent)
+// means the daemon isn't writing, so it's treated as offline.
+const STALE_MS = 5000;
 
 export const status = writable<Status | null>(null);
 export const health = writable<Health>({ ok: false, daemon_alive: false });
@@ -38,15 +38,24 @@ export const glyphSync = writable<Record<number, GlyphSync>>({});
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
+/** Daemon liveness from the status mirror: it must be marked alive AND fresh
+ *  (< STALE_MS old). Matches the backend's /api/health freshness check, so the
+ *  UI needs no separate health poll. */
+export function aliveFromStatus(s: Status | null, now = Date.now()): boolean {
+  if (!s || !s.alive || !s.updated_at) return false;
+  const t = Date.parse(s.updated_at);
+  if (Number.isNaN(t)) return false;
+  return now - t < STALE_MS;
+}
+
 async function pollOnce(): Promise<void> {
   try {
-    status.set(await getStatus());
+    const s = await getStatus();
+    status.set(s);
+    // Derive liveness from the same payload — no extra /api/health request.
+    health.set({ ok: true, daemon_alive: aliveFromStatus(s) });
   } catch {
-    /* transient — keep last good value */
-  }
-  try {
-    health.set(await getHealth());
-  } catch {
+    // Web API unreachable: keep the last good status, but report offline.
     health.set({ ok: false, daemon_alive: false });
   }
 }
