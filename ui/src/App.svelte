@@ -43,13 +43,13 @@
   <main class="layout">
     <div class="layout__preview">
       <VfdPreview status={$status} {glyphs} />
-      <StatusReadout status={$status} health={$health} />
     </div>
 
     <div class="layout__controls">
       <ControlPanel state={$appState} patch={patchState} />
       <SavedMessages />
       <CommandBar />
+      <StatusReadout status={$status} health={$health} />
     </div>
 
     <div class="layout__glyphs">
@@ -74,7 +74,8 @@
   .masthead {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
+    /* Sit the meta text on the logo's baseline (its bottom edge), not the top. */
+    align-items: baseline;
     padding-bottom: 14px;
     margin-bottom: 22px;
   }
