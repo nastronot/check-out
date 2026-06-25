@@ -7,7 +7,7 @@
     lineToCells,
   } from '../font5x7';
   import { GLASS_BG, paintCell } from '../dotrender';
-  import { barsToCells, type Cell } from '../spectrumbars';
+  import { spectrumCells, type Cell } from '../spectrumbars';
   import type { GlyphMap, Status } from '../types';
 
   export let status: Status | null = null;
@@ -61,6 +61,8 @@
     status?.mode === 'spectrum' && Array.isArray(status?.bars) && !blank
       ? (status.bars as number[])
       : null;
+  // The render style mirrored from status, so the preview matches bars vs line.
+  $: spectrumStyle = status?.spectrum_style ?? 'bars';
 
   onMount(() => {
     // Init order: get the 2D context, size the buffer, THEN draw. Drawing into
@@ -75,7 +77,7 @@
 
   // Redraw whenever the mirrored data changes (every poll / glyph edit). Deps are
   // passed explicitly so Svelte tracks them (a bare `redraw()` could be stripped).
-  $: if (ctx) redraw(spectrumBars, top, bottom, level, glyphs);
+  $: if (ctx) redraw(spectrumBars, spectrumStyle, top, bottom, level, glyphs);
 
   /** Size the drawing buffer to the rendered width (×dpr), then draw. */
   function sizeAndDraw(): void {
@@ -94,19 +96,20 @@
       const s = (cssW / W) * dpr;
       ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    redraw(spectrumBars, top, bottom, level, glyphs);
+    redraw(spectrumBars, spectrumStyle, top, bottom, level, glyphs);
   }
 
   /** Branch: the analyzer bars (spectrum mode) or the normal text/glyph frame. */
   function redraw(
     bars: number[] | null,
+    style: string,
     topLine: string,
     bottomLine: string,
     brightnessLevel: number,
     glyphMap: GlyphMap,
   ): void {
     if (bars) {
-      const { top: t, bottom: b } = barsToCells(bars);
+      const { top: t, bottom: b } = spectrumCells(bars, style);
       drawCells(t, b, brightnessLevel);
     } else {
       drawFrame(topLine, bottomLine, brightnessLevel, glyphMap);

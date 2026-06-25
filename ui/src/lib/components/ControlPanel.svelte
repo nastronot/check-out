@@ -9,6 +9,7 @@
     Mode,
     ScrollDir,
     ScrollSource,
+    SpectrumStyle,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -104,6 +105,11 @@
   }
   const setAudioGain = (e: Event) => patch({ audio_gain: num(e) });
   const setAudioDecay = (e: Event) => patch({ audio_decay: num(e) });
+  const STYLES: { value: SpectrumStyle; label: string }[] = [
+    { value: 'bars', label: 'BARS' },
+    { value: 'line', label: 'LINE' },
+  ];
+  const setSpectrumStyle = (s: SpectrumStyle) => patch({ spectrum_style: s });
 
   const DIRS: ScrollDir[] = ['left', 'right'];
   // Merge one animation_params field, keeping the siblings (full object so the
@@ -227,6 +233,23 @@
           <strong>Mic</strong> captures the default input. Bars are
           <strong>volume-independent</strong> (auto-gain) and fall to flat on
           silence.
+        </span>
+      </div>
+
+      <div class="field">
+        <span class="field__label">Style</span>
+        <div class="seg">
+          {#each STYLES as s}
+            <button
+              type="button"
+              aria-pressed={state.spectrum_style === s.value}
+              on:click={() => setSpectrumStyle(s.value)}>{s.label}</button
+            >
+          {/each}
+        </div>
+        <span class="field__hint">
+          <strong>Bars</strong> = filled columns; <strong>Line</strong> = a single
+          lit row per band (the peak) that rides up and down.
         </span>
       </div>
 

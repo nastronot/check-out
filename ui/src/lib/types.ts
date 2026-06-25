@@ -3,6 +3,8 @@
 export type Mode = 'clock' | 'message' | 'scroll' | 'marquee' | 'spectrum';
 /** Spectrum audio source: the mic, or a PipeWire/Pulse monitor of playback. */
 export type AudioSource = 'mic' | 'system';
+/** Spectrum render style: filled bars, or a single-row line per band (the peak). */
+export type SpectrumStyle = 'bars' | 'line';
 /** Brightness is a discrete level index 0..3 (0 Min, 1 Med, 2 Med+, 3 Max). */
 export type Brightness = 0 | 1 | 2 | 3;
 export type Animation = 'none' | 'flash' | 'blink' | 'pulse';
@@ -55,6 +57,7 @@ export interface AppState {
   audio_device: string | number | null;
   audio_gain: number;
   audio_decay: number;
+  spectrum_style: SpectrumStyle;
   command: CommandRef;
   updated_at?: string;
 }
@@ -82,6 +85,8 @@ export interface Status {
   scroll: boolean;
   /** Spectrum mode: the 20 bar heights (0..14) the daemon last rendered, else null. */
   bars: number[] | null;
+  /** Spectrum render style mirrored from state, so the preview matches bars vs line. */
+  spectrum_style?: SpectrumStyle;
   last_command_id: string | null;
   updated_at: string | null;
 }
