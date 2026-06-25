@@ -141,9 +141,15 @@ def _new_ctx() -> dict:
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
         "last_status_ms": None,    # wall-clock ms of the last status write (throttle)
         # --- spectrum analyzer ---
-        "spectrum_active": False,  # are the bar height-glyphs currently defined?
-        "spectrum_style": None,    # which glyph set is defined ("bars"|"line"|None)
-        "spectrum_heights": [0] * spectrum.NUM_BARS,  # latest 20 bar heights
+        "spectrum_active": False,  # are the spectrum glyphs currently defined?
+        "spectrum_style": None,    # applied render style ("bars"|"line"|None)
+        "spectrum_layout": None,   # applied layout ("full"|"stereo_v"|"stereo_h"|None)
+        "spectrum_glyphs_key": None,  # (layout, style) of the defined glyph set
+        "spectrum_heights": [0] * spectrum.NUM_BARS,  # full layout: latest 20 heights
+        "spectrum_left": [0] * spectrum.STEREO_BANDS,   # stereo_v: left 19 heights
+        "spectrum_right": [0] * spectrum.STEREO_BANDS,  # stereo_v: right 19 heights
+        "spectrum_level_l": 0,     # stereo_h: left level 0..95
+        "spectrum_level_r": 0,     # stereo_h: right level 0..95
         "spectrum_recv_ms": None,  # wall-clock ms of the last audio datagram
         "spectrum_rx": None,       # the SpectrumReceiver (lazy-bound on first entry)
         "spectrum_rx_failed": False,  # bind failed once -> don't retry every tick
@@ -279,6 +285,7 @@ def _write_status(
     ctx: dict,
     now_ms: int,
     bars: list | None = None,
+    stereo: dict | None = None,
 ) -> None:
     """Mirror the current display state to status.json — a throttled HEARTBEAT.
 
@@ -309,8 +316,14 @@ def _write_status(
             "blank": bool(state.get("blank")),
             "scroll": bool(state.get("scroll")),
             "bars": bars,
-            # The spectrum render style, so the preview mirrors bars vs line.
+            # Spectrum style + layout (+ per-channel data) so the preview mirrors
+            # bars vs line AND full vs stereo_v vs stereo_h exactly.
             "spectrum_style": state.get("spectrum_style", "bars"),
+            "spectrum_layout": state.get("spectrum_layout", "full"),
+            "spectrum_left": (stereo or {}).get("left"),
+            "spectrum_right": (stereo or {}).get("right"),
+            "spectrum_level_l": (stereo or {}).get("level_l"),
+            "spectrum_level_r": (stereo or {}).get("level_r"),
             "last_command_id": ctx["last_command_id"],
             "heartbeat": ctx["heartbeat"],
         }
@@ -482,69 +495,126 @@ def _norm_spectrum_style(state: dict) -> str:
     return style if style in spectrum.SPECTRUM_STYLES else "bars"
 
 
-def _define_spectrum_glyphs(driver: VFDDriver, ctx: dict, style: str) -> None:
-    """Define the 7 height-glyphs for ``style`` into slots 0..6, then re-init.
+def _norm_spectrum_layout(state: dict) -> str:
+    """The active spectrum layout (full|stereo_v|stereo_h), coerced to a known one."""
+    layout = state.get("spectrum_layout")
+    return layout if layout in spectrum.LAYOUTS else "full"
 
-    Used on spectrum ENTER and whenever the style changes mid-mode. Defining
-    characters can reset extended-mode/scroll, so re-init + invalidate the
-    setting caches afterward; records the applied style so the next tick only
-    redefines on an actual change.
+
+def _define_spectrum_glyphs(driver: VFDDriver, ctx: dict, layout: str, style: str) -> None:
+    """Define the glyph set for ``(layout, style)`` into its slots, then re-init.
+
+    Used on spectrum ENTER and whenever the layout OR style changes mid-mode.
+    Defining characters can reset extended-mode/scroll, so re-init + invalidate
+    the setting caches afterward; records the applied (layout, style) so the next
+    tick only redefines on an actual change.
     """
-    for slot, rows in spectrum.style_glyphs(style).items():
+    for slot, rows in spectrum.layout_glyphs(layout, style).items():
         driver.define_character(slot, rows)
     driver.initialize()
     _invalidate_caches(ctx)
+    ctx["spectrum_glyphs_key"] = (layout, style)
     ctx["spectrum_style"] = style
+    ctx["spectrum_layout"] = layout
 
 
 def _enter_spectrum(driver: VFDDriver, state: dict, ctx: dict) -> None:
-    """Define the height-glyphs for the active style and start listening.
+    """Define the glyph set for the active (layout, style) and start listening.
 
-    This OVERWRITES user-glyph slots 0..6; the daemon re-applies ``state.glyphs``
+    This OVERWRITES the user-glyph slots; the daemon re-applies ``state.glyphs``
     when spectrum is left (see :func:`tick_once`).
     """
+    layout = _norm_spectrum_layout(state)
     style = _norm_spectrum_style(state)
-    log(f"entering spectrum ({style}): defining glyphs (user glyphs restored on exit)")
-    _define_spectrum_glyphs(driver, ctx, style)
+    log(f"entering spectrum ({layout}/{style}): defining glyphs (user glyphs restored on exit)")
+    _define_spectrum_glyphs(driver, ctx, layout, style)
     ctx["spectrum_active"] = True
     _ensure_spectrum_rx(ctx)
+
+
+def _store_spectrum_frame(ctx: dict, frame: dict) -> None:
+    """Stash a freshly received frame's channel data into ctx (per layout)."""
+    layout = frame.get("layout")
+    if layout == "stereo_v":
+        ctx["spectrum_left"] = frame["left"]
+        ctx["spectrum_right"] = frame["right"]
+    elif layout == "stereo_h":
+        ctx["spectrum_level_l"] = frame["level_l"]
+        ctx["spectrum_level_r"] = frame["level_r"]
+    else:
+        ctx["spectrum_heights"] = frame["heights"]
+
+
+def _decay_spectrum(ctx: dict, layout: str) -> None:
+    """Drain the active layout's values toward 0 when the audio feed is stale."""
+    if layout == "stereo_v":
+        ctx["spectrum_left"] = spectrum.decay_heights(ctx["spectrum_left"])
+        ctx["spectrum_right"] = spectrum.decay_heights(ctx["spectrum_right"])
+    elif layout == "stereo_h":
+        ctx["spectrum_level_l"] = max(0, ctx["spectrum_level_l"] - spectrum.STEREO_H_CELL_COLS)
+        ctx["spectrum_level_r"] = max(0, ctx["spectrum_level_r"] - spectrum.STEREO_H_CELL_COLS)
+    else:
+        ctx["spectrum_heights"] = spectrum.decay_heights(ctx["spectrum_heights"])
+
+
+def _render_spectrum(layout: str, style: str, ctx: dict) -> tuple[str, str]:
+    """Render the active layout's stored values to the (top, bottom) line pair."""
+    if layout == "stereo_v":
+        return spectrum.render_stereo_v(ctx["spectrum_left"], ctx["spectrum_right"], style)
+    if layout == "stereo_h":
+        return spectrum.render_stereo_h(ctx["spectrum_level_l"], ctx["spectrum_level_r"], style)
+    return spectrum.render_spectrum(ctx["spectrum_heights"], style)
+
+
+def _spectrum_status(layout: str, ctx: dict) -> tuple[list | None, dict]:
+    """Build the (bars, stereo) status fields the preview needs for ``layout``."""
+    if layout == "stereo_v":
+        return None, {"left": list(ctx["spectrum_left"]), "right": list(ctx["spectrum_right"])}
+    if layout == "stereo_h":
+        return None, {"level_l": ctx["spectrum_level_l"], "level_r": ctx["spectrum_level_r"]}
+    return list(ctx["spectrum_heights"]), {}
 
 
 def _tick_spectrum(
     driver: VFDDriver, state: dict, ctx: dict, now_ms: int, params: dict
 ) -> None:
-    """Drain the socket to the latest bar heights and render double-height bars.
+    """Drain the socket to the latest frame and render the active layout.
 
     The frame changes basically every iteration, so this emit-diffs to a serial
-    write ~21fps (the 9600-baud ceiling) — intended. If no fresh audio arrives
-    within ``SPECTRUM_STALE_MS`` the bars decay toward 0 (don't freeze)."""
+    write ~21fps (the 9600-baud ceiling) — intended. If no fresh matching frame
+    arrives within ``SPECTRUM_STALE_MS`` the layout's values decay toward 0
+    (don't freeze)."""
     _apply_settings(driver, state, ctx, now_ms, "none", params)  # animation N/A
 
-    # A live STYLE change swaps the 7 glyph slots (bars <-> single-row line)
-    # before rendering, so the cell mapping and the on-glass glyphs stay in sync.
+    # A live LAYOUT or STYLE change swaps the glyph slots before rendering, so the
+    # cell mapping and the on-glass glyphs stay in sync (same invalidate-on-change
+    # pattern as v1.1.0, now keyed on (layout, style)).
+    layout = _norm_spectrum_layout(state)
     style = _norm_spectrum_style(state)
-    if style != ctx.get("spectrum_style"):
-        log(f"spectrum style -> {style}: redefining glyphs")
-        _define_spectrum_glyphs(driver, ctx, style)
+    if (layout, style) != ctx.get("spectrum_glyphs_key"):
+        log(f"spectrum -> {layout}/{style}: redefining glyphs")
+        _define_spectrum_glyphs(driver, ctx, layout, style)
 
     rx = ctx.get("spectrum_rx")
-    latest = rx.drain() if rx is not None else None
-    if latest is not None:
-        ctx["spectrum_heights"] = latest
+    frame = rx.drain() if rx is not None else None
+    # Only consume a frame whose layout matches the active one (a mid-switch frame
+    # from the old layout is ignored — decode already drops malformed ones).
+    if frame is not None and frame.get("layout") == layout:
+        _store_spectrum_frame(ctx, frame)
         ctx["spectrum_recv_ms"] = now_ms
     else:
         last_recv = ctx.get("spectrum_recv_ms")
         if last_recv is None or (now_ms - last_recv) >= SPECTRUM_STALE_MS:
-            ctx["spectrum_heights"] = spectrum.decay_heights(ctx["spectrum_heights"])
+            _decay_spectrum(ctx, layout)
 
-    heights = ctx["spectrum_heights"]
-    top, bottom = spectrum.render_spectrum(heights, style)
+    top, bottom = _render_spectrum(layout, style, ctx)
     emit = ("show", top, bottom)
     if emit != ctx["last_emit"]:
         driver.show(top, bottom)
         ctx["last_emit"] = emit
-    # status carries the heights so the preview renders the analyzer (throttled).
-    _write_status(state, top, bottom, ctx, now_ms, bars=list(heights))
+    # status carries the layout's channel data so the preview renders it (throttled).
+    bars, stereo = _spectrum_status(layout, ctx)
+    _write_status(state, top, bottom, ctx, now_ms, bars=bars, stereo=stereo)
 
 
 def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = None) -> None:
@@ -571,7 +641,9 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     # force section 3 below to re-define state.glyphs (restore the user's glyphs).
     if ctx["spectrum_active"] and mode != "spectrum":
         ctx["spectrum_active"] = False
-        ctx["spectrum_style"] = None   # re-define the glyph set on re-entry
+        ctx["spectrum_glyphs_key"] = None  # re-define the glyph set on re-entry
+        ctx["spectrum_style"] = None
+        ctx["spectrum_layout"] = None
         ctx["last_glyphs"] = None
         ctx["last_emit"] = None
 

@@ -252,6 +252,141 @@ def decay_heights(heights, step: int = 1) -> list[int]:
     return [max(0, int(h) - step) for h in heights]
 
 
+# --- stereo glyphs (labels + horizontal columns) + renderers (v1.2.0) --------
+# 5x7 letter bitmaps (editor-natural: low 5 bits = columns 1..5, bit0 = col 1).
+# The label glyphs are these INVERTED (lit field, dark letter), so cell 0 reads
+# as a channel label, not a bar. Kept here as the single source so the daemon
+# glyph and the preview (spectrumbars.ts) render the same L/R.
+_LETTER_BITMAPS = {
+    "L": [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1F],
+    "R": [0x0F, 0x11, 0x11, 0x0F, 0x05, 0x09, 0x11],
+}
+
+
+def label_glyph(letter: str, invert: bool = True) -> list[int]:
+    """A 5x7 channel-label glyph (``"L"``/``"R"``), INVERTED by default.
+
+    Inverting (each row XOR ``0x1F`` over the 5 columns) lights the field and
+    leaves the letter dark, so cell 0 reads as a solid label block, not a bar.
+    """
+    rows = _LETTER_BITMAPS[letter]
+    return [(r ^ 0x1F) & 0x1F if invert else (r & 0x1F) for r in rows]
+
+
+def col_glyph(n: int) -> list[int]:
+    """A horizontal-fill cell: the LEFTMOST ``n`` columns (1..5) lit, all 7 rows.
+
+    Used by stereo_h BARS — a partial leading cell fills 1..4 columns, a full cell
+    5. Column ``c`` is bit ``c-1`` (col 1 = leftmost = bit 0), so leftmost ``n`` =
+    bits ``0..n-1`` = ``(1<<n)-1``.
+    """
+    n = max(0, min(STEREO_H_CELL_COLS, int(n)))
+    mask = (1 << n) - 1
+    return [mask] * GLYPH_ROWS
+
+
+def vline_glyph(col: int) -> list[int]:
+    """A single-column cell: ONLY column ``col`` (1..5) lit, all 7 rows.
+
+    Used by stereo_h LINE — the single leading-edge dot column. Column ``c`` is
+    bit ``c-1``.
+    """
+    c = max(1, min(STEREO_H_CELL_COLS, int(col)))
+    return [1 << (c - 1)] * GLYPH_ROWS
+
+
+# Glyph-slot layout per (layout, style). The 9 slots are budgeted as:
+#   full     -> 7 height glyphs (slots 0..6).
+#   stereo_v -> 7 height glyphs (0..6) + L label (7) + R label (8) = 9 (exact).
+#   stereo_h -> 5 column glyphs (0..4) + L label (5) + R label (6) = 7.
+STEREO_V_LABEL_L_SLOT = 7
+STEREO_V_LABEL_R_SLOT = 8
+STEREO_H_COL_SLOTS = (0, 1, 2, 3, 4)   # slot i -> n=i+1 columns (col_glyph or vline)
+STEREO_H_LABEL_L_SLOT = 5
+STEREO_H_LABEL_R_SLOT = 6
+
+
+def layout_glyphs(layout: str, style: str) -> dict[int, list[int]]:
+    """The glyph set (slot -> editor rows) to define for a (layout, style) pair.
+
+    full/stereo_v reuse the v1.1.0 height glyphs (bars or line) in slots 0..6;
+    stereo_v adds inverted L/R labels (slots 7,8). stereo_h uses 5 column glyphs
+    (col-fill for bars, single-column for line) in slots 0..4 + L/R labels (5,6).
+    """
+    if layout == "stereo_v":
+        g = dict(style_glyphs(style))
+        g[STEREO_V_LABEL_L_SLOT] = label_glyph("L")
+        g[STEREO_V_LABEL_R_SLOT] = label_glyph("R")
+        return g
+    if layout == "stereo_h":
+        col = vline_glyph if style == "line" else col_glyph
+        g = {slot: col(slot + 1) for slot in STEREO_H_COL_SLOTS}
+        g[STEREO_H_LABEL_L_SLOT] = label_glyph("L")
+        g[STEREO_H_LABEL_R_SLOT] = label_glyph("R")
+        return g
+    return style_glyphs(style)
+
+
+def _fit20(line: str) -> str:
+    """Pad/truncate a rendered row to exactly the 20-cell display width."""
+    return line[:NUM_BARS].ljust(NUM_BARS)
+
+
+def _v_cell(height: int) -> str:
+    """A stereo_v data cell for ``height`` 0..7 — the slot's styled glyph (or space).
+
+    The slot (height-1) holds bar_glyph or line_glyph per the active style, so this
+    cell mapping is style-agnostic: the glyph pixels carry bars-vs-line.
+    """
+    h = max(0, min(STEREO_V_MAX, int(height)))
+    return _SPACE if h == 0 else chr(GLYPH_CODES[h - 1])
+
+
+def render_stereo_v(left, right, style: str = "bars") -> tuple[str, str]:
+    """Render LEFT (top) / RIGHT (bottom) 19-band single-cell spectra + L/R labels.
+
+    ``style`` is carried for API symmetry but the cell codes are the same for bars
+    and line (the defined glyph pixels differ); the daemon defines the right set.
+    """
+    lcode = chr(GLYPH_CODES[STEREO_V_LABEL_L_SLOT])
+    rcode = chr(GLYPH_CODES[STEREO_V_LABEL_R_SLOT])
+    top = lcode + "".join(_v_cell(h) for h in list(left)[:STEREO_BANDS])
+    bottom = rcode + "".join(_v_cell(h) for h in list(right)[:STEREO_BANDS])
+    return _fit20(top), _fit20(bottom)
+
+
+def _h_row(level: int, style: str) -> str:
+    """The 19 data cells of one stereo_h channel row for ``level`` 0..95.
+
+    BARS: cells fully fill (5 cols) below the level with one partial leading cell
+    (1..4 cols) to the exact column, empty beyond. LINE: only the single
+    leading-edge COLUMN is lit (a dot), every other cell/column empty.
+    """
+    level = max(0, min(STEREO_H_MAX, int(level)))
+    cells = []
+    for i in range(STEREO_BANDS):
+        lo = i * STEREO_H_CELL_COLS
+        if style == "line":
+            # The lit column is the `level`-th column (1-based, global). It falls
+            # in this cell iff lo < level <= lo+5; the in-cell column is level-lo.
+            if level and lo < level <= lo + STEREO_H_CELL_COLS:
+                cells.append(chr(GLYPH_CODES[STEREO_H_COL_SLOTS[level - lo - 1]]))
+            else:
+                cells.append(_SPACE)
+        else:
+            n = max(0, min(STEREO_H_CELL_COLS, level - lo))   # cols lit in this cell
+            cells.append(_SPACE if n == 0 else chr(GLYPH_CODES[STEREO_H_COL_SLOTS[n - 1]]))
+    return "".join(cells)
+
+
+def render_stereo_h(level_l, level_r, style: str = "bars") -> tuple[str, str]:
+    """Render LEFT (top) / RIGHT (bottom) horizontal level meters + L/R labels."""
+    lcode = chr(GLYPH_CODES[STEREO_H_LABEL_L_SLOT])
+    rcode = chr(GLYPH_CODES[STEREO_H_LABEL_R_SLOT])
+    return (_fit20(lcode + _h_row(level_l, style)),
+            _fit20(rcode + _h_row(level_r, style)))
+
+
 # --- DSP helpers (audioviz; pure, numpy-free so they unit-test anywhere) ------
 def log_band_edges(
     num_bands: int, sample_rate: float, n_fft: int,
