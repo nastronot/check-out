@@ -55,7 +55,7 @@ from .state import atomic_write_json, load_state
 # resolution. 256 @ 44.1kHz ~= 172 frames/s — well above the daemon's ~21fps
 # render (newest-frame-wins), bench-tuned for snappy bars with acceptable bass.
 # Tunable: raise (512/1024) for finer bass, lower for tighter timing.
-BLOCK = 256
+BLOCK = 512
 DEFAULT_RATE = 44100
 ZERO_FRAME = [0] * spectrum.NUM_BARS
 
