@@ -41,26 +41,101 @@ MAX_BAR = 2 * LEVELS_PER_CELL  # 14 — double-height (bottom cell then top cell
 # mode; the daemon re-applies state.glyphs on exit.
 BAR_GLYPH_SLOTS = tuple(range(LEVELS_PER_CELL))  # 0..6
 
+# --- stereo layouts (v1.2.0) -------------------------------------------------
+# Three layouts share the spectrum mode, picked by state ``spectrum_layout``:
+#   full     — 20 bands, double-height, both rows = ONE mono spectrum (original).
+#   stereo_v — top row = LEFT, bottom = RIGHT; each a 19-band spectrum ONE cell
+#              tall (7 row-levels). Cell 0 of each row is an inverted L/R label.
+#   stereo_h — top = LEFT, bottom = RIGHT; cell 0 = label, cells 1..19 = a single
+#              horizontal LEVEL meter per channel at FINE resolution: 19 cells x 5
+#              dot-columns = 95 horizontal steps (level 0..95).
+# The Bars/Line STYLE applies across all layouts. Columns (the 5-per-cell h-res)
+# apply only to stereo_h; stereo_v is inherently 7 vertical row-levels per cell.
+LAYOUTS = ("full", "stereo_v", "stereo_h")
+LAYOUT_FULL = 0          # frame tag: 20 heights 0..MAX_BAR (mono, double-height)
+LAYOUT_STEREO_V = 1      # frame tag: 19 left + 19 right heights 0..7
+LAYOUT_STEREO_H = 2      # frame tag: 2 levels (left, right), each 0..95
+_LAYOUT_TAG = {"full": LAYOUT_FULL, "stereo_v": LAYOUT_STEREO_V, "stereo_h": LAYOUT_STEREO_H}
+_TAG_LAYOUT = {tag: name for name, tag in _LAYOUT_TAG.items()}
+
+STEREO_BANDS = 19                # data cells per channel row (cell 0 is the label)
+STEREO_V_MAX = LEVELS_PER_CELL   # 7 — a stereo_v cell is one character tall
+STEREO_H_CELL_COLS = 5           # 5 dot-columns per character cell
+STEREO_H_MAX = STEREO_BANDS * STEREO_H_CELL_COLS  # 95 — the fine horizontal range
+
 # --- socket / message protocol ----------------------------------------------
-# A frame is exactly NUM_BARS bytes, each a height 0..MAX_BAR (one per bar). Tiny
-# + fixed, so a single datagram is one whole frame and "newest wins" is natural
-# (no sequence number needed — the daemon drains to the last datagram per loop).
+# Every frame is TAGGED: byte 0 = the layout tag, then a payload whose shape
+# depends on the tag (full -> 20 bytes; stereo_v -> 19+19; stereo_h -> 2). Tiny +
+# self-describing, so a single datagram is one whole frame and "newest wins" is
+# natural (the daemon drains to the last datagram per loop). decode_frame returns
+# a dict {"layout", ...channel data}; a wrong-length payload returns None (the
+# daemon ignores it — never crashes on a malformed / mid-switch frame).
 SOCKET_PATH = config.SPECTRUM_SOCKET
 _RECV_BUF = 256
 
 
-def encode_frame(heights) -> bytes:
-    """Pack bar heights into the NUM_BARS-byte wire frame (clamped 0..MAX_BAR)."""
-    vals = [max(0, min(MAX_BAR, int(h))) for h in list(heights)[:NUM_BARS]]
+def _clampi(v, hi: int, lo: int = 0) -> int:
+    return max(lo, min(hi, int(v)))
+
+
+def encode_full(heights) -> bytes:
+    """Tag 0: 20 heights (0..MAX_BAR) — the mono double-height frame."""
+    vals = [_clampi(h, MAX_BAR) for h in list(heights)[:NUM_BARS]]
     vals += [0] * (NUM_BARS - len(vals))
-    return bytes(vals)
+    return bytes([LAYOUT_FULL, *vals])
 
 
-def decode_frame(data) -> list[int] | None:
-    """Decode a wire frame to NUM_BARS heights, or None if it's too short/empty."""
-    if not data or len(data) < NUM_BARS:
+def encode_stereo_v(left, right) -> bytes:
+    """Tag 1: 19 LEFT + 19 RIGHT heights (0..STEREO_V_MAX)."""
+    def chan(xs):
+        vals = [_clampi(h, STEREO_V_MAX) for h in list(xs)[:STEREO_BANDS]]
+        return vals + [0] * (STEREO_BANDS - len(vals))
+    return bytes([LAYOUT_STEREO_V, *chan(left), *chan(right)])
+
+
+def encode_stereo_h(level_l, level_r) -> bytes:
+    """Tag 2: two overall levels (0..STEREO_H_MAX), left then right."""
+    return bytes([LAYOUT_STEREO_H, _clampi(level_l, STEREO_H_MAX),
+                  _clampi(level_r, STEREO_H_MAX)])
+
+
+def encode_frame(layout="full", **data) -> bytes:
+    """Encode the frame for ``layout`` (dispatches to the encode_* above)."""
+    if layout == "stereo_v":
+        return encode_stereo_v(data.get("left", []), data.get("right", []))
+    if layout == "stereo_h":
+        return encode_stereo_h(data.get("level_l", 0), data.get("level_r", 0))
+    return encode_full(data.get("heights", []))
+
+
+def decode_frame(data) -> dict | None:
+    """Decode a tagged frame to ``{"layout", ...}``, or None if malformed.
+
+    Returns None on an empty buffer, an unknown tag, or a payload shorter than
+    the tag requires — so the daemon safely ignores a torn / mid-layout-switch
+    datagram instead of crashing or rendering garbage.
+    """
+    if not data:
         return None
-    return [max(0, min(MAX_BAR, b)) for b in data[:NUM_BARS]]
+    tag, body = data[0], data[1:]
+    if tag == LAYOUT_FULL:
+        if len(body) < NUM_BARS:
+            return None
+        return {"layout": "full",
+                "heights": [_clampi(b, MAX_BAR) for b in body[:NUM_BARS]]}
+    if tag == LAYOUT_STEREO_V:
+        if len(body) < 2 * STEREO_BANDS:
+            return None
+        left = [_clampi(b, STEREO_V_MAX) for b in body[:STEREO_BANDS]]
+        right = [_clampi(b, STEREO_V_MAX) for b in body[STEREO_BANDS:2 * STEREO_BANDS]]
+        return {"layout": "stereo_v", "left": left, "right": right}
+    if tag == LAYOUT_STEREO_H:
+        if len(body) < 2:
+            return None
+        return {"layout": "stereo_h",
+                "level_l": _clampi(body[0], STEREO_H_MAX),
+                "level_r": _clampi(body[1], STEREO_H_MAX)}
+    return None
 
 
 # --- bar glyphs + cell mapping ----------------------------------------------
@@ -434,9 +509,11 @@ class SpectrumSender:
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self._sock.setblocking(False)
 
-    def send(self, heights) -> None:
+    def send(self, frame: bytes) -> None:
+        """Send a pre-encoded tagged frame (bytes). The caller builds it with the
+        ``encode_*`` helpers for the active layout; we just push the datagram."""
         try:
-            self._sock.sendto(encode_frame(heights), self.path)
+            self._sock.sendto(frame, self.path)
         except OSError:
             pass  # no listener / buffer full — newest-wins, just drop it
 
