@@ -1,7 +1,7 @@
 """Runtime configuration for check-out.
 
 All values default to bench-verified hardware settings and can be overridden via
-environment variables so the dev machine and the deployment host (arda) can
+environment variables so the dev machine and the deployment host can
 differ without code changes.
 
 Env overrides:

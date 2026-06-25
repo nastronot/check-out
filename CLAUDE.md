@@ -675,7 +675,7 @@ sudo usermod -aG uucp "$USER"   # then re-login
   + column glyphs, two stereo renderers, UI toggle + preview. (done)
 - **v1.2.1:** custom inverted L/R label bitmaps; audio sliders share the
   Brightness slider styling (global `.phosphor-slider`). (done)
-- **Phase 3:** more frames + rotation + Docker for arda.
+- **Phase 3:** more frames + rotation.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
 - **v0.2.0:** adopted the authoritative Futaba M202MD10C command set + extended-mode

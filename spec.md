@@ -67,7 +67,7 @@ Build is the "injector box": cable-side breakout and adapter-side breakout, with
 All grounds (barrel −, cable pin 5, adapter pin 5) common. Cable pin 1 left open.
 
 ### 1.6 Enclosure ("tidy dongle")
-One sealed box. Outside: a USB cable to the host (`arda`) and a 12 V barrel-jack input.
+One sealed box. Outside: a USB cable to the host and a 12 V barrel-jack input.
 Inside: the USB-RS232 adapter (or FTDI+MAX3232 if the fallback is needed) wired to a
 panel DB9, with 12 V routed to the display power pin and all grounds common. No exposed
 boards or loose wires.
@@ -192,10 +192,12 @@ there is negligible — one consistent backlog-free path for all modes.
 ## 4. Software
 
 ### 4.1 Stack & placement
-- Interface developed/tested on **local dev machine** first (display on `/dev/ttyUSB0`),
-  then deployed to **`arda`** (Synology NAS).
+- Interface developed/tested on the **local dev machine** first (display on
+  `/dev/ttyUSB0`), then deployed to the **deployment host** (any Linux machine with
+  the serial adapter attached — audio capture must be local).
 - Talks to `/dev/ttyUSB*` (serial), 9600 8N1, write-only.
-- Containerized (Docker) for the `arda` deployment.
+- Runs directly on the host (e.g. a systemd user service); containerization is an
+  option for deployment if preferred.
 - Serial port access: dev user must be in the device's group (Arch: `uucp`) or use sudo.
 
 ### 4.2 Architecture

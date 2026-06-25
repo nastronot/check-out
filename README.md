@@ -104,9 +104,7 @@ other; inside, a USB-RS-232 adapter and the power-injection wiring.
 - **Adapter:** an **OIKWAN USB-to-RS-232 (DB9 male, FTDI)** adapter → `/dev/ttyUSB0`.
   The display takes **true RS-232 directly** — *no MAX3232 / level shifter / inversion
   needed* (bench-confirmed: normal polarity, inversion OFF).
-  <!-- TODO(matt): confirm the exact FTDI chip + USB id. The build notes mention
-       FT231X (0403:6015), but the repo only records "OIKWAN FTDI" — verify with
-       `lsusb` / `udevadm info /dev/ttyUSB0`. -->
+  (FTDI **FT232R**, USB id `0403:6001` — confirmed via `udevadm info /dev/ttyUSB0`.)
 - **Power:** a 12 V 1 A regulated supply (5.5×2.1 mm center-positive barrel jack),
   fused with an inline 1 A fuse on the +12 V line.
 - **Breakouts/enclosure:** 2× panel-mount DB9-female screw-terminal breakouts
@@ -445,12 +443,11 @@ errors and no a11y warnings before commit.
   likely needs an **active user session** (the monitor source lives in the user's
   PipeWire graph), so a fully headless box may run everything *except* system-audio
   spectrum without a session workaround.
-  <!-- TODO(matt): confirm the headless PipeWire/spectrum capture story on arda. -->
+  <!-- TODO: confirm headless PipeWire/spectrum capture under a systemd user service. -->
 - **News feed into SCROLL.** The per-row content-source enum is already news-ready
   (`message` | `clock`, with a documented `news` extension point in `state.py` and
   the daemon's `_scroll_row`) — wiring a live news source is a drop-in.
-- **More frames + rotation + Docker** for the deployment host (`arda`).
-
+- **Additional display frames + rotation** between modes.
 ---
 
 ## Credits

@@ -32,7 +32,7 @@ def test_save_list_delete_message(client, paths):
         "/api/library/messages",
         json={
             "name": "Greeting",
-            "message": "HELLO\nARDA",
+            "message": "HELLO\nWORLD",
             "mode": "message",
             "align_top": "right",
             "align_bottom": "left",
