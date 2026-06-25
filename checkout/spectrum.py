@@ -79,6 +79,39 @@ def bar_glyphs() -> dict[int, list[int]]:
     return {slot: bar_glyph(slot + 1) for slot in BAR_GLYPH_SLOTS}
 
 
+def line_glyph(height: int) -> list[int]:
+    """Editor-natural rows for a single-row LINE at ``height`` (the peak only).
+
+    Unlike :func:`bar_glyph` (which fills the bottom ``height`` rows), this lights
+    EXACTLY one row — the peak row at that height — full width (``0x1F``), every
+    other row dark. The lit row mirrors bar_glyph's anchoring: row ``r`` is lit
+    iff ``r == GLYPH_ROWS - height`` (so height 1 lights only the bottom row,
+    height 7 only the top row). Heights therefore line up between the two styles.
+    """
+    h = max(0, min(GLYPH_ROWS, int(height)))
+    if h == 0:
+        return [0x00] * GLYPH_ROWS
+    lit = GLYPH_ROWS - h
+    return [0x1F if r == lit else 0x00 for r in range(GLYPH_ROWS)]
+
+
+def line_glyphs() -> dict[int, list[int]]:
+    """The 7 LINE glyphs keyed by slot (slot i -> a single line at height i+1)."""
+    return {slot: line_glyph(slot + 1) for slot in BAR_GLYPH_SLOTS}
+
+
+# The two swappable spectrum glyph sets (both occupy slots 0..6). The style
+# toggle (state ``spectrum_style``) picks one; the daemon redefines the slots
+# when it changes. This style/glyph-swap seam is what the stereo modes reuse.
+SPECTRUM_STYLES = ("bars", "line")
+_DEFAULT_STYLE = "bars"
+
+
+def style_glyphs(style: str) -> dict[int, list[int]]:
+    """The 7 height glyphs for ``style`` ("bars" filled / "line" single-row)."""
+    return line_glyphs() if style == "line" else bar_glyphs()
+
+
 _SPACE = " "
 
 
@@ -101,9 +134,39 @@ def bar_to_cells(height: int) -> tuple[str, str]:
     return (chr(top_code), chr(bottom_code))
 
 
-def render_spectrum(heights) -> tuple[str, str]:
-    """Render 20 bar heights to the (top, bottom) 20-char display line pair."""
-    cells = [bar_to_cells(h) for h in list(heights)[:NUM_BARS]]
+def line_to_cells(height: int) -> tuple[str, str]:
+    """Map a height 0..14 to ``(top_char, bottom_char)`` for the LINE style.
+
+    Only the single PEAK row is lit (the slot holds a ``line_glyph``), and NOTHING
+    below it — so unlike :func:`bar_to_cells`, once the peak moves up into the top
+    cell the BOTTOM cell goes EMPTY:
+
+    - height 1..7  → bottom cell = line glyph for that height, top empty.
+    - height 8..14 → top cell = line glyph for ``height-7``, bottom EMPTY.
+    - height 0     → both empty.
+
+    The chars are the same glyph CODE bytes (slots 0..6) — but in LINE style those
+    slots are defined as single-row line glyphs, so the same code renders a line.
+    """
+    h = max(0, min(MAX_BAR, int(height)))
+    if h == 0:
+        return (_SPACE, _SPACE)
+    if h <= LEVELS_PER_CELL:                       # 1..7: line in bottom cell
+        return (_SPACE, chr(GLYPH_CODES[h - 1]))
+    # 8..14: the line is now in the TOP cell, bottom empties (nothing lit below).
+    top_code = GLYPH_CODES[h - 1 - LEVELS_PER_CELL]
+    return (chr(top_code), _SPACE)
+
+
+def render_spectrum(heights, style: str = "bars") -> tuple[str, str]:
+    """Render 20 bar heights to the (top, bottom) 20-char display line pair.
+
+    ``style`` selects the cell mapping: ``"bars"`` (filled, bottom-anchored) or
+    ``"line"`` (a single lit row per band). Both assume the matching glyph set is
+    defined in slots 0..6 (the daemon swaps them when the style changes).
+    """
+    to_cells = line_to_cells if style == "line" else bar_to_cells
+    cells = [to_cells(h) for h in list(heights)[:NUM_BARS]]
     cells += [(_SPACE, _SPACE)] * (NUM_BARS - len(cells))
     return "".join(c[0] for c in cells), "".join(c[1] for c in cells)
 
