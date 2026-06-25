@@ -561,7 +561,9 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   `stereo_h`, a UI toggle on top of the Bars/Line style (style applies across all
   layouts; the 5-column h-resolution applies only to stereo_h — stereo_v is 7
   vertical row-levels per cell). **stereo_v** = top row LEFT, bottom RIGHT, each a
-  19-band spectrum one cell tall + an inverted L/R label in cell 0. **stereo_h** =
+  19-band spectrum one cell tall + a custom inverted L/R label glyph (`LABEL_L`/
+  `LABEL_R` — lit frame, dark letter; the preview keeps a matching copy) in cell 0.
+  **stereo_h** =
   one horizontal level meter per channel (cell 0 = label, cells 1..19 = 95-column
   (19×5) fine meter; bars fill column-by-column with a partial leading cell, line =
   a single gliding column). **Stereo capture:** parec is `--channels=2`,

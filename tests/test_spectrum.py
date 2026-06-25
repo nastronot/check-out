@@ -142,16 +142,13 @@ def test_decay_heights_drains_toward_zero():
 
 
 # --- stereo glyphs ----------------------------------------------------------
-def test_label_glyph_is_inverted():
-    # The label INVERTS the letter: a lit field with the letter dark.
-    plain_l = spectrum.label_glyph("L", invert=False)
-    inv_l = spectrum.label_glyph("L")
-    assert plain_l == [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1F]
-    assert inv_l == [(r ^ 0x1F) & 0x1F for r in plain_l]
-    assert inv_l[0] == 0x1E and inv_l[6] == 0x00   # bottom row (was full) now dark
-    assert spectrum.label_glyph("R") == [
-        (r ^ 0x1F) & 0x1F for r in [0x0F, 0x11, 0x11, 0x0F, 0x05, 0x09, 0x11]
-    ]
+def test_label_glyph_uses_custom_inverted_bitmaps():
+    # The L/R labels are the user's hand-designed inverted bitmaps (lit frame,
+    # dark letter) — exact contents.
+    assert spectrum.LABEL_L == [31, 29, 29, 29, 29, 17, 31]
+    assert spectrum.LABEL_R == [31, 17, 21, 25, 21, 21, 31]
+    assert spectrum.label_glyph("L") == [31, 29, 29, 29, 29, 17, 31]
+    assert spectrum.label_glyph("R") == [31, 17, 21, 25, 21, 21, 31]
 
 
 def test_col_glyph_lights_leftmost_n_columns():

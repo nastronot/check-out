@@ -80,20 +80,20 @@ export function spectrumCells(
 const STEREO_BANDS = 19; // data cells per row (cell 0 is the L/R label)
 export const STEREO_H_MAX = STEREO_BANDS * CELL_COLS; // 95 fine horizontal steps
 
-// 5x7 L/R letter bitmaps (low 5 bits = columns 1..5, bit0 = col 1) — must match
-// spectrum.py's _LETTER_BITMAPS. The LABEL renders these INVERTED (lit field).
-const LETTER: Record<string, number[]> = {
-  L: [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1f],
-  R: [0x0f, 0x11, 0x11, 0x0f, 0x05, 0x09, 0x11],
+// The user's hand-designed INVERTED L/R label bitmaps (lit frame, dark letter) —
+// must match spectrum.py's LABEL_L / LABEL_R exactly. 5x7, low 5 bits = columns
+// 1..5 (bit0 = col 1). Already inverted, so labelCell renders them as-is.
+const LABEL: Record<string, number[]> = {
+  L: [31, 29, 29, 29, 29, 17, 31],
+  R: [31, 17, 21, 25, 21, 21, 31],
 };
 
-/** An inverted L/R label cell: lit field, dark letter (matches label_glyph). */
+/** An L/R label cell: the custom inverted design (lit field, dark letter). */
 export function labelCell(letter: 'L' | 'R'): Cell {
-  const rows = LETTER[letter];
+  const rows = LABEL[letter];
   return rows.map((row) => {
-    const inv = ~row & 0x1f; // invert the 5 columns
     const out: boolean[] = [];
-    for (let c = 0; c < CELL_COLS; c++) out.push((inv & (1 << c)) !== 0);
+    for (let c = 0; c < CELL_COLS; c++) out.push((row & (1 << c)) !== 0);
     return out;
   });
 }

@@ -596,8 +596,10 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
     on entry and redefined on a layout OR style change (same invalidate-on-change
     pattern, keyed `ctx["spectrum_glyphs_key"]`): `full` = 7 height glyphs (0..6);
     `stereo_v` = 7 height + L + R labels = **9 (exact fit)**; `stereo_h` = 5 column
-    glyphs (col-fill for bars / single-column for line) + L + R = 7. Inverted label
-    glyphs (`label_glyph`, lit field / dark letter) keep cell 0 reading as a label.
+    glyphs (col-fill for bars / single-column for line) + L + R = 7. The L/R label
+    glyphs (`label_glyph` → `LABEL_L`/`LABEL_R`, the user's custom hand-designed
+    INVERTED bitmaps — lit frame, dark letter cut out, v1.2.1) keep cell 0 reading
+    as a label. The preview (`spectrumbars.ts`) keeps a matching copy.
 - **Bench-locked params (do NOT retune):** 9600 baud is the hard cap; ~21fps
   full-frame is the ceiling and looks good; double-height over 7 partial-height
   glyphs reads clean; bar height 0..14 → bottom cell 1..7 then top cell 8..14;

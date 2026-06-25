@@ -94,13 +94,18 @@ describe('spectrum preview line style', () => {
 });
 
 describe('spectrum preview stereo cells', () => {
-  it('labelCell inverts the letter (lit field, dark letter)', () => {
+  it('labelCell renders the custom inverted L/R bitmaps (lit frame, dark letter)', () => {
+    // Must match spectrum.py LABEL_L = [31, 29, 29, 29, 29, 17, 31].
     const l = labelCell('L');
-    // L's bottom row is full (lit) -> inverted it is dark; top-left was lit -> dark.
-    expect(l[6].some(Boolean)).toBe(false); // bottom row (full in L) now dark
-    expect(l[0][0]).toBe(false); // the L stroke column dark
-    expect(l[0][4]).toBe(true); // the field (non-letter) lit
-    expect(anyLit(l)).toBe(true);
+    expect(l[0]).toEqual([true, true, true, true, true]); // 31: full top frame
+    expect(l[1]).toEqual([true, false, true, true, true]); // 29: col 2 dark
+    expect(l[5]).toEqual([true, false, false, false, true]); // 17: only cols 1,5
+    expect(l[6]).toEqual([true, true, true, true, true]); // 31: full bottom frame
+    // R = [31, 17, 21, 25, 21, 21, 31].
+    const r = labelCell('R');
+    expect(r[0]).toEqual([true, true, true, true, true]); // 31
+    expect(r[2]).toEqual([true, false, true, false, true]); // 21 = cols 1,3,5
+    expect(r[3]).toEqual([true, false, false, true, true]); // 25 = cols 1,4,5
   });
 
   it('colCell lights the leftmost n columns; vlineCell a single column', () => {

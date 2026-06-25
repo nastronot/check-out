@@ -253,24 +253,19 @@ def decay_heights(heights, step: int = 1) -> list[int]:
 
 
 # --- stereo glyphs (labels + horizontal columns) + renderers (v1.2.0) --------
-# 5x7 letter bitmaps (editor-natural: low 5 bits = columns 1..5, bit0 = col 1).
-# The label glyphs are these INVERTED (lit field, dark letter), so cell 0 reads
-# as a channel label, not a bar. Kept here as the single source so the daemon
-# glyph and the preview (spectrumbars.ts) render the same L/R.
-_LETTER_BITMAPS = {
-    "L": [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1F],
-    "R": [0x0F, 0x11, 0x11, 0x0F, 0x05, 0x09, 0x11],
-}
+# The L/R channel-label glyphs are the user's hand-designed INVERTED bitmaps (a
+# lit frame with the letter cut out dark), so cell 0 reads as a label, not a bar
+# (v1.2.1). 5x7, editor-natural rows (low 5 bits = columns 1..5, bit0 = col 1) —
+# the same row format as every other glyph. Kept here as the single source so the
+# daemon glyph and the preview (spectrumbars.ts) render the same L/R.
+LABEL_L = [31, 29, 29, 29, 29, 17, 31]
+LABEL_R = [31, 17, 21, 25, 21, 21, 31]
+_LABEL_BITMAPS = {"L": LABEL_L, "R": LABEL_R}
 
 
-def label_glyph(letter: str, invert: bool = True) -> list[int]:
-    """A 5x7 channel-label glyph (``"L"``/``"R"``), INVERTED by default.
-
-    Inverting (each row XOR ``0x1F`` over the 5 columns) lights the field and
-    leaves the letter dark, so cell 0 reads as a solid label block, not a bar.
-    """
-    rows = _LETTER_BITMAPS[letter]
-    return [(r ^ 0x1F) & 0x1F if invert else (r & 0x1F) for r in rows]
+def label_glyph(letter: str) -> list[int]:
+    """The 5x7 channel-label glyph for ``"L"``/``"R"`` (the custom inverted design)."""
+    return list(_LABEL_BITMAPS[letter])
 
 
 def col_glyph(n: int) -> list[int]:
