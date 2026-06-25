@@ -50,7 +50,7 @@
       </span>
       <div class="bright">
         <input
-          class="bright__slider"
+          class="phosphor-slider"
           type="range"
           min="0"
           max="3"
@@ -121,42 +121,9 @@
     letter-spacing: 0.1em;
   }
 
-  .bright__slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    padding: 0;
-    border-radius: 3px;
-    background: linear-gradient(
-      90deg,
-      var(--phosphor-deep),
-      var(--phosphor-dim),
-      var(--phosphor)
-    );
-    box-shadow: var(--shadow-inset);
-    cursor: pointer;
-  }
-
-  .bright__slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 18px;
-    border-radius: 3px;
-    background: var(--phosphor-ink);
-    border: 1px solid var(--phosphor);
-    box-shadow: 0 0 8px var(--phosphor);
-  }
-
-  .bright__slider::-moz-range-thumb {
-    width: 14px;
-    height: 18px;
-    border-radius: 3px;
-    background: var(--phosphor-ink);
-    border: 1px solid var(--phosphor);
-    box-shadow: 0 0 8px var(--phosphor);
-  }
+  /* The brightness slider's track + handle styling now lives globally as
+     `.phosphor-slider` (app.css), shared with the audio Sensitivity / Smoothing
+     sliders so they stay in sync. */
 
   .bright__stops {
     display: flex;

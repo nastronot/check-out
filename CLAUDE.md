@@ -673,6 +673,8 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v1.2.0:** stereo spectrum layouts (`full`|`stereo_v`|`stereo_h`) — stereo
   capture + per-channel DSP (shared auto-gain), tagged socket protocol, L/R label
   + column glyphs, two stereo renderers, UI toggle + preview. (done)
+- **v1.2.1:** custom inverted L/R label bitmaps; audio sliders share the
+  Brightness slider styling (global `.phosphor-slider`). (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
@@ -884,6 +886,13 @@ sudo usermod -aG uucp "$USER"   # then re-login
   a daemon layout branch + status carrying per-channel data; a UI LAYOUT toggle;
   and the preview rendering all three layouts (labels + 95-column h-res). This
   reuses (and generalizes) the v1.1.0 glyph-swap seam.
+- **v1.2.1:** two polish changes. (a) the stereo L/R label glyphs are now the
+  user's hand-designed inverted bitmaps (`LABEL_L`/`LABEL_R` in `spectrum.py`,
+  with a matching copy in `spectrumbars.ts`) instead of the auto-generated ones —
+  same slots/budgets, bitmap contents only. (b) the audio **Sensitivity** and
+  **Smoothing** sliders now share the Brightness slider's track/handle styling: it
+  was extracted to a global `.phosphor-slider` class (`app.css`) used by all three
+  (no tick labels on the audio sliders; ranges/handlers unchanged).
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

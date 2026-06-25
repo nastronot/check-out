@@ -308,6 +308,7 @@
           Sensitivity <span class="bright-readout">{state.audio_gain.toFixed(1)}×</span>
         </span>
         <input
+          class="phosphor-slider"
           type="range" min="0.3" max="3" step="0.1"
           aria-label="sensitivity"
           value={state.audio_gain}
@@ -324,6 +325,7 @@
           Smoothing <span class="bright-readout">{state.audio_decay.toFixed(2)}</span>
         </span>
         <input
+          class="phosphor-slider"
           type="range" min="0" max="0.98" step="0.01"
           aria-label="audio decay"
           value={state.audio_decay}

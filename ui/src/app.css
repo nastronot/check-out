@@ -337,3 +337,44 @@ input[type='number'] {
   border-radius: 3px;
   padding: 2px 6px;
 }
+
+/* --- phosphor range slider (shared) ------------------------------------- */
+/* The custom track + handle used by the Brightness slider AND the audio
+   Sensitivity / Smoothing sliders, so they stay visually in sync. Global (not
+   component-scoped) so all three components reuse one definition. */
+.phosphor-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  padding: 0;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--phosphor-deep),
+    var(--phosphor-dim),
+    var(--phosphor)
+  );
+  box-shadow: var(--shadow-inset);
+  cursor: pointer;
+}
+
+.phosphor-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--phosphor-ink);
+  border: 1px solid var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor);
+}
+
+.phosphor-slider::-moz-range-thumb {
+  width: 14px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--phosphor-ink);
+  border: 1px solid var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor);
+}
