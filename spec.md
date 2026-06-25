@@ -245,6 +245,7 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   "message": "text for message/scroll mode",
   // spectrum (mode "spectrum") SETTINGS only; live bars go over a socket, not here:
   "audio_source": "system" | "mic", "audio_device": null, "audio_gain": 1.0, "audio_decay": 0.85,
+  "spectrum_style": "bars" | "line",            // filled bars (default) or single-row peak line
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
   "marquee_text": "...", "marquee_bottom": "static", "marquee_bottom_text": "...",  // bottom is static-only
@@ -532,12 +533,25 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   frame (one height 0..14 per bar). Newest-frame-wins: the daemon **drains to the
   latest** datagram each loop (stale discarded), so a slow reader can't back up a
   stream. Heavy per-frame data goes here; only settings via `state.json`.
-- **Daemon spectrum path.** On enter: define the **7 bar height-glyphs** (slots
-  0..6; this OVERWRITES those user glyphs) + bind the socket. Each iteration:
-  drain → latest heights (or **decay toward 0** if no datagram within
-  `SPECTRUM_STALE_MS`) → double-height bars → emit-diff a `show()` (~21fps, paced
-  by the serial write). On leave: re-apply `state.glyphs` (RESTORE user glyphs);
-  animation forced `none`. `status.bars` carries the 20 heights for the preview.
+- **Daemon spectrum path.** On enter: define the **7 height-glyphs for the active
+  style** (slots 0..6; this OVERWRITES those user glyphs) + bind the socket. Each
+  iteration: drain → latest heights (or **decay toward 0** if no datagram within
+  `SPECTRUM_STALE_MS`) → render via the style's cell mapping → emit-diff a `show()`
+  (~21fps, paced by the serial write). On leave: re-apply `state.glyphs` (RESTORE
+  user glyphs); animation forced `none`. `status.bars` carries the 20 heights and
+  `status.spectrum_style` the style, so the preview mirrors bars vs line.
+- **Render style (`spectrum_style`, v1.1.0).** `"bars"` (default) | `"line"`,
+  switched live by a UI toggle. **Bars** = the filled double-height columns
+  (`bar_glyph(h)` lights the bottom `h` rows; `bar_to_cells` keeps the bottom cell
+  full as the top fills 8..14). **Line** = only the PEAK row lit per band, nothing
+  below it: `line_glyph(h)` lights EXACTLY one row (`r == GLYPH_ROWS-h`, mirroring
+  the bar anchoring so heights align), and `line_to_cells` puts the line in the
+  bottom cell for 1..7 but **empties the bottom** once the peak rides up into the
+  top cell (8..14). Each style is a 7-glyph set in the SAME slots 0..6; the daemon
+  redefines the slots when the style changes mid-mode (`style_glyphs(style)` →
+  `define_character`×7 → re-init → invalidate). This **style + swappable-glyph-set
+  seam** (`SPECTRUM_STYLES`, `style_glyphs`, `_define_spectrum_glyphs`) is what the
+  stereo modes will reuse.
 - **Bench-locked (do not retune):** 9600 baud cap, ~21fps full-frame ceiling,
   double-height over 7 partial glyphs, height 0..14 → bottom cell 1..7 then top
   8..14, `bar_glyph(h)` lights rows `r ≥ 7-h` full width (`0x1F`). The ~21fps

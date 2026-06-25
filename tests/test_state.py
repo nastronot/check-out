@@ -86,6 +86,20 @@ def test_spectrum_audio_fields_default(state_path):
     assert loaded["audio_decay"] == 0.85
 
 
+def test_spectrum_style_default_is_bars(state_path):
+    assert state.load_state()["spectrum_style"] == "bars"
+
+
+def test_spectrum_style_validates_and_merges(state_path):
+    import json
+
+    # A valid "line" survives; an unknown value coerces back to "bars".
+    state_path.write_text(json.dumps({"mode": "spectrum", "spectrum_style": "line"}))
+    assert state.load_state()["spectrum_style"] == "line"
+    state_path.write_text(json.dumps({"mode": "spectrum", "spectrum_style": "neon"}))
+    assert state.load_state()["spectrum_style"] == "bars"
+
+
 def test_spectrum_audio_fields_validate_and_merge(state_path):
     import json
 

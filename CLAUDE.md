@@ -174,6 +174,7 @@ port owner). The web UI is just a writer of this file.
   "audio_device": null,               // device name/index, or null = source default
   "audio_gain": 1.0,                  // sensitivity (clamped 0.05..20)
   "audio_decay": 0.85,                // Smoothing: bar release factor (clamped 0..0.999; UI slider 0..0.98, 0 = instant snappy fall)
+  "spectrum_style": "bars",           // "bars" (filled) | "line" (single-row peak per band)
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
   "updated_at": "iso"
 }
@@ -187,6 +188,7 @@ daemon.
 { "alive": true, "mode": "...", "top": "....20....", "bottom": "....20....",
   "brightness": "...", "blank": false, "scroll": false,
   "bars": [0..14]×20 | null,        // spectrum bar heights (for the preview), else null
+  "spectrum_style": "bars"|"line",  // mirrored render style, so the preview matches bars vs line
   "last_command_id": "...", "heartbeat": N, "updated_at": "iso" }
 ```
 Written atomically (throttled to ~`STATUS_HZ`). This is how the UI mirrors the
@@ -529,15 +531,30 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
   wins: the daemon **drains to the LATEST** datagram each loop (discards stale),
   so a slow reader can't back up a stream and there's no filesystem churn / tear.
   The HEAVY per-frame data goes here; only settings go via `state.json`.
-- **Daemon spectrum path** (in the fast loop). On ENTER: define the **7 bar
-  height-glyphs** (slots 0..6 via `spectrum.bar_glyph(1..7)`; this OVERWRITES
-  those user-glyph slots), re-init, lazily bind the socket. Each iteration: drain
-  → latest 20 heights (or **decay toward 0** if no datagram within
-  `SPECTRUM_STALE_MS` — don't freeze) → `bar_to_cells` double-height bars →
-  emit-diff a full `show()` (~21fps, paced by the serial write). On LEAVE:
+- **Daemon spectrum path** (in the fast loop). On ENTER: define the **7 height-
+  glyphs for the active style** (slots 0..6 via `spectrum.style_glyphs(style)`;
+  this OVERWRITES those user-glyph slots), re-init, lazily bind the socket. Each
+  iteration: drain → latest 20 heights (or **decay toward 0** if no datagram
+  within `SPECTRUM_STALE_MS` — don't freeze) → render via the style's cell mapping
+  → emit-diff a full `show()` (~21fps, paced by the serial write). On LEAVE:
   re-apply `state.glyphs` (RESTORE the user's glyphs the bars overwrote); glyph
   re-apply is skipped while in spectrum. Animation is forced `none`. `status.bars`
-  carries the 20 heights (throttled) so the preview renders the analyzer.
+  carries the 20 heights and `status.spectrum_style` the style (throttled) so the
+  preview renders the right analyzer style.
+- **Render style (`spectrum_style`, v1.1.0): bars | line.** Two swappable 7-glyph
+  sets in the SAME slots 0..6, picked by `spectrum_style` (UI toggle, default
+  `bars`). **bars** = filled double-height columns (`bar_glyph(h)` lights the
+  bottom `h` rows; `bar_to_cells` keeps the bottom cell full while the top fills
+  8..14). **line** = ONLY the peak row lit per band: `line_glyph(h)` lights
+  exactly one row (`r == GLYPH_ROWS-h`, same anchoring as bars so heights line
+  up), and `line_to_cells` puts the line in the bottom cell for 1..7 then **empties
+  the bottom** once the peak rides into the top cell (8..14) — nothing lit below
+  the line (the contrast with bars). On a live style change mid-spectrum the daemon
+  redefines the 7 slots (`_define_spectrum_glyphs`: `style_glyphs` →
+  `define_character`×7 → re-init → invalidate caches), tracked in
+  `ctx["spectrum_style"]` so it only redefines on an actual change. This **style +
+  swappable-glyph-set seam** (`SPECTRUM_STYLES` / `style_glyphs`) is the pattern
+  the stereo modes will reuse.
 - **Bench-locked params (do NOT retune):** 9600 baud is the hard cap; ~21fps
   full-frame is the ceiling and looks good; double-height over 7 partial-height
   glyphs reads clean; bar height 0..14 → bottom cell 1..7 then top cell 8..14;
@@ -603,6 +620,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v1.0.0:** serial writes drain to the wire (`tcdrain`) — paces the daemon to
   9600 baud so the OS TX buffer can't backlog (the spectrum latency-drift fix);
   tuned spectrum defaults (`PAREC_LATENCY_MS`=10, `BLOCK`=256). (done)
+- **v1.0.1:** Smoothing slider reaches 0 (full snappy↔smooth range). (done)
+- **v1.1.0:** spectrum `bars`|`line` style toggle (swappable 7-glyph sets) — sets
+  up the style/glyph-swap pattern for the upcoming stereo modes. (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
@@ -786,6 +806,20 @@ sudo usermod -aG uucp "$USER"   # then re-login
   and `BLOCK` 1024 → **256** (`LOOP_HZ` stays 30 — 60 felt worse). Confirmed on
   glass: bars track the music with only the minimal fixed pipeline latency, no
   drift; pausing stops the bars within ~one frame.
+- **v1.0.1:** the Smoothing slider (`audio_decay`) now reaches **0** (was floored
+  at 0.5 in the UI), so the bars can do a crisp/snappy instant fall — `decay_levels`
+  and the state clamp already accepted `[0, 0.999]`, only the slider blocked it.
+  Purely a visual feel control, separate from pipeline latency.
+- **v1.1.0:** spectrum **render style** — a `spectrum_style` toggle (`bars` |
+  `line`) with two swappable 7-glyph sets in the same slots 0..6. **bars** = the
+  existing filled double-height columns; **line** = only the PEAK row lit per band
+  (`line_glyph` lights one row, `line_to_cells` empties the bottom cell once the
+  peak rides into the top cell). The daemon redefines the 7 slots on a live style
+  change (`_define_spectrum_glyphs`, tracked in `ctx["spectrum_style"]`), renders
+  via the style's cell mapping, and mirrors `spectrum_style` into status so the
+  preview (`spectrumbars.ts` `spectrumCells`) draws bars vs line. UI: a BARS|LINE
+  segmented toggle in the spectrum controls. This establishes the style +
+  swappable-glyph-set seam that the stereo modes (next release) reuse.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

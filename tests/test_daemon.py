@@ -469,6 +469,59 @@ def test_spectrum_restores_user_glyphs_on_exit(monkeypatch, capsys):
     assert 0x03 in tx                  # user glyph re-defined (restored)
 
 
+def _parse_defines(tx):
+    """Extract {code: [7 wire rows]} from DefineCharacter (0x03 code rows.. 0x00)."""
+    out = {}
+    i = 0
+    while i < len(tx):
+        if tx[i] == 0x03 and i + 9 < len(tx) and tx[i + 9] == 0x00:
+            out[tx[i + 1]] = tx[i + 2 : i + 9]
+            i += 10
+        else:
+            i += 1
+    return out
+
+
+def test_spectrum_enters_with_active_style_default_bars(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([[7] * 20])
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    assert ctx["spectrum_style"] == "bars"   # default style defined on enter
+
+
+def test_spectrum_style_change_redefines_glyph_slots(monkeypatch, capsys):
+    from checkout import spectrum
+
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([[14] * 20])
+    # Enter with the default BARS style.
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    assert ctx["spectrum_style"] == "bars"
+    capsys.readouterr()  # discard the enter TX
+
+    # Flip to LINE mid-spectrum: it must redefine the 7 slots with the LINE set.
+    state = {"mode": "spectrum", "spectrum_style": "line"}
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0, 250_000))
+    tx = _all_tx_bytes(capsys.readouterr().out)
+    assert ctx["spectrum_style"] == "line"
+
+    defines = _parse_defines(tx)
+    assert len(defines) == 7                 # all 7 slots redefined
+    # The defined rows are the LINE set (single lit row each), not the bar set.
+    full_row = (0x1F & 0x1F) << 3            # 0xF8, the driver's wire byte for a lit row
+    for slot, code in zip(spectrum.BAR_GLYPH_SLOTS, [spectrum.GLYPH_CODES[s] for s in spectrum.BAR_GLYPH_SLOTS]):
+        rows = list(defines[code])
+        assert rows.count(full_row) == 1     # exactly ONE lit row (a line, not a bar)
+    # Slot 6 (height 7) differs between the sets: bar = all rows lit, line = one.
+    bar6 = [(r & 0x1F) << 3 for r in spectrum.bar_glyph(7)]
+    line6 = [(r & 0x1F) << 3 for r in spectrum.line_glyph(7)]
+    assert list(defines[spectrum.GLYPH_CODES[6]]) == line6 != bar6
+
+
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)

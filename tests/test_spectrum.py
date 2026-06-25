@@ -61,6 +61,49 @@ def test_render_spectrum_is_two_20_char_lines():
     assert top[2] == chr(GLYPH_CODES[6])               # bar 14 -> full top
 
 
+def test_line_glyph_lights_exactly_one_peak_row():
+    # height 0 -> dark; height h -> exactly ONE lit row at index GLYPH_ROWS-h.
+    assert spectrum.line_glyph(0) == [0, 0, 0, 0, 0, 0, 0]
+    assert spectrum.line_glyph(1) == [0, 0, 0, 0, 0, 0, 0x1F]   # bottom row only
+    assert spectrum.line_glyph(7) == [0x1F, 0, 0, 0, 0, 0, 0]   # top row only
+    assert spectrum.line_glyph(3) == [0, 0, 0, 0, 0x1F, 0, 0]   # single row at 4
+    for h in range(1, 8):
+        g = spectrum.line_glyph(h)
+        assert g.count(0x1F) == 1                       # exactly one lit row
+        assert g.index(0x1F) == spectrum.GLYPH_ROWS - h  # at the peak row
+
+
+def test_line_glyphs_define_first_seven_slots():
+    g = spectrum.line_glyphs()
+    assert sorted(g) == list(spectrum.BAR_GLYPH_SLOTS)  # same slots as bars
+    assert g[0] == spectrum.line_glyph(1)
+    assert g[6] == spectrum.line_glyph(7)
+
+
+def test_line_to_cells_single_row_bottom_empties_into_top():
+    space = " "
+    assert spectrum.line_to_cells(0) == (space, space)
+    # 1..7: the line sits in the BOTTOM cell, top empty.
+    assert spectrum.line_to_cells(1) == (space, chr(GLYPH_CODES[0]))
+    assert spectrum.line_to_cells(7) == (space, chr(GLYPH_CODES[6]))
+    # 8..14: the line is up in the TOP cell and the BOTTOM goes EMPTY (no fill
+    # below it) — the key contrast with bar_to_cells, where the bottom stays full.
+    assert spectrum.line_to_cells(8) == (chr(GLYPH_CODES[0]), space)
+    assert spectrum.line_to_cells(14) == (chr(GLYPH_CODES[6]), space)
+    assert spectrum.line_to_cells(99) == (chr(GLYPH_CODES[6]), space)  # clamped
+    # Distinct from bars: at height 8 bars keep the bottom full, line empties it.
+    assert spectrum.bar_to_cells(8)[1] != spectrum.line_to_cells(8)[1]
+
+
+def test_style_glyphs_and_render_select_by_style():
+    assert spectrum.style_glyphs("bars") == spectrum.bar_glyphs()
+    assert spectrum.style_glyphs("line") == spectrum.line_glyphs()
+    assert spectrum.style_glyphs("junk") == spectrum.bar_glyphs()   # default
+    # render_spectrum picks the matching cell mapping.
+    assert spectrum.render_spectrum([8], "line")[1][0] == " "       # bottom empty
+    assert spectrum.render_spectrum([8], "bars")[1][0] == chr(GLYPH_CODES[6])
+
+
 def test_decay_heights_drains_toward_zero():
     assert spectrum.decay_heights([0, 1, 5]) == [0, 0, 4]
     assert spectrum.decay_heights([3], step=2) == [1]
