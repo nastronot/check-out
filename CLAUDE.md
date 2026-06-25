@@ -173,7 +173,7 @@ port owner). The web UI is just a writer of this file.
   "audio_source": "system" | "mic",   // "system" = PipeWire/Pulse monitor; "mic" = default input
   "audio_device": null,               // device name/index, or null = source default
   "audio_gain": 1.0,                  // sensitivity (clamped 0.05..20)
-  "audio_decay": 0.85,                // bar release factor (clamped 0..0.999)
+  "audio_decay": 0.85,                // Smoothing: bar release factor (clamped 0..0.999; UI slider 0..0.98, 0 = instant snappy fall)
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
   "updated_at": "iso"
 }
@@ -477,7 +477,11 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
     quieter bands spread DOWN — typical music fills ACROSS the display instead of
     collapsing. `sensitivity` biases it; bar heights are then smoothed by
     `decay_levels` (attack-fast/release-slow, prev persists across frames — the
-    anti-flash). Lowering system volume does NOT shrink the bars: `ref` tracks the
+    anti-flash). **Smoothing (`audio_decay`) is a purely VISUAL feel control**
+    (UI slider `0..0.98`: 0 = snappy/instant fall, no smoothing; higher = bars
+    fall more slowly / less twitch) — it is SEPARATE from pipeline latency (the
+    small constant offset is structural FFT-window + monitor-tap delay, left
+    alone). Lowering system volume does NOT shrink the bars: `ref` tracks the
     signal, so level cancels — which REQUIRES `REF_FLOOR` (1e-4) BELOW quiet-music
     levels. The SILENCE GATE (`signal_rms` < `SILENCE_FLOOR_RMS`), NOT the floor,
     is what stops noise amplification (below it → 0 + `ref` releases). Constants in

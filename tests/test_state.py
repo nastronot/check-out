@@ -108,6 +108,14 @@ def test_spectrum_audio_fields_validate_and_merge(state_path):
     assert loaded["audio_device"] == "Monitor of Speakers"
 
 
+def test_audio_decay_zero_passes_through(state_path):
+    """A valid 0.0 (snappy) is accepted as-is — not pinned to a 0.5 floor."""
+    import json
+
+    state_path.write_text(json.dumps({"mode": "spectrum", "audio_decay": 0.0}))
+    assert state.load_state()["audio_decay"] == 0.0
+
+
 def test_legacy_ticker_mode_migrates_to_scroll(state_path):
     import json
 

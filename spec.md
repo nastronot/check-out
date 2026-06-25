@@ -497,7 +497,11 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
     Volume-independence REQUIRES `REF_FLOOR` (1e-4) below quiet-music levels; the
     SILENCE GATE (`signal_rms` < `SILENCE_FLOOR_RMS`), not the floor, stops noise
     amplification. Bar heights are smoothed by `decay_levels` (attack-fast/
-    release-slow, prev persists — anti-flash). `audio_gain` is now **sensitivity**.
+    release-slow, prev persists — anti-flash). Smoothing (`audio_decay`) is a
+    purely VISUAL feel control — UI slider `0..0.98` (0 = instant snappy fall, no
+    smoothing; higher = slower fall / less twitch), SEPARATE from pipeline latency
+    (the small constant offset is structural FFT-window + monitor-tap delay).
+    `audio_gain` is now **sensitivity**.
     Constants in `spectrum.py` carry a tuning guide (bars sink → ref = band_mean +
     faster release; short → lower range / raise headroom; clip → raise range /
     lower headroom; flashing → lower attack / raise decay; volume leaks → lower

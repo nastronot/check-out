@@ -276,12 +276,12 @@
           Smoothing <span class="bright-readout">{state.audio_decay.toFixed(2)}</span>
         </span>
         <input
-          type="range" min="0.5" max="0.98" step="0.01"
+          type="range" min="0" max="0.98" step="0.01"
           aria-label="audio decay"
           value={state.audio_decay}
           on:input={setAudioDecay}
         />
-        <span class="field__hint">Higher = bars fall more slowly (less twitch).</span>
+        <span class="field__hint">0 = snappy (instant fall); higher = bars fall more slowly (less twitch).</span>
       </div>
 
       <p class="tip">

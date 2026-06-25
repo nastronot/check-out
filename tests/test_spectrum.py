@@ -124,6 +124,12 @@ def test_decay_levels_attack_fast_release_slow():
     assert out == [12.0, 5.0]
 
 
+def test_decay_levels_factor_zero_no_tail():
+    # factor 0 = snappy: out = max(new, prev*0) = new — no falling tail at all.
+    out = spectrum.decay_levels([10.0, 5.0], [3.0, 0.0], factor=0.0)
+    assert out == [3.0, 0.0]
+
+
 # --- audioviz device selection (pure) ---------------------------------------
 DEVICES = [
     {"index": 3, "name": "Built-in Microphone", "max_input_channels": 2, "is_monitor": False},
