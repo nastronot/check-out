@@ -175,6 +175,7 @@ port owner). The web UI is just a writer of this file.
   "audio_gain": 1.0,                  // sensitivity (clamped 0.05..20)
   "audio_decay": 0.85,                // Smoothing: bar release factor (clamped 0..0.999; UI slider 0..0.98, 0 = instant snappy fall)
   "spectrum_style": "bars",           // "bars" (filled) | "line" (single-row peak per band)
+  "spectrum_layout": "full",          // "full" (mono) | "stereo_v" (L/R spectra) | "stereo_h" (L/R level meters)
   "command": { "id": "uuid-or-null", "action": "self_test"|"reset"|"redefine_glyphs", "args": {} },
   "updated_at": "iso"
 }
@@ -187,8 +188,11 @@ daemon.
 ```jsonc
 { "alive": true, "mode": "...", "top": "....20....", "bottom": "....20....",
   "brightness": "...", "blank": false, "scroll": false,
-  "bars": [0..14]×20 | null,        // spectrum bar heights (for the preview), else null
-  "spectrum_style": "bars"|"line",  // mirrored render style, so the preview matches bars vs line
+  "bars": [0..14]×20 | null,        // full-layout heights (preview), else null
+  "spectrum_style": "bars"|"line",  // mirrored render style (preview matches bars vs line)
+  "spectrum_layout": "full"|"stereo_v"|"stereo_h",  // mirrored layout (preview matches it)
+  "spectrum_left": [0..7]×19 | null, "spectrum_right": [...] | null,  // stereo_v per-channel
+  "spectrum_level_l": 0..95 | null, "spectrum_level_r": 0..95 | null,  // stereo_h per-channel
   "last_command_id": "...", "heartbeat": N, "updated_at": "iso" }
 ```
 Written atomically (throttled to ~`STATUS_HZ`). This is how the UI mirrors the
@@ -554,14 +558,55 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
   `define_character`×7 → re-init → invalidate caches), tracked in
   `ctx["spectrum_style"]` so it only redefines on an actual change. This **style +
   swappable-glyph-set seam** (`SPECTRUM_STYLES` / `style_glyphs`) is the pattern
-  the stereo modes will reuse.
+  the stereo modes reuse.
+- **Stereo layouts (`spectrum_layout`, v1.2.0): full | stereo_v | stereo_h.** A UI
+  toggle (default `full`). The Bars/Line style applies ACROSS all layouts; columns
+  (the 5-per-cell h-resolution) apply only to stereo_h (stereo_v is inherently 7
+  vertical row-levels per cell).
+  - **`full`** — the original: mono `(L+R)/2` → 20 bands, double-height, both rows
+    one spectrum. Unchanged.
+  - **`stereo_v`** — top row = LEFT, bottom = RIGHT; each a **19-band** spectrum
+    ONE cell tall (7 row-levels). Cell 0 of each row is an **inverted L/R label**
+    glyph. `render_stereo_v` → `[Llabel] + 19 _v_cell` (a `bar_glyph`/`line_glyph`
+    per height in slots 0..6) / `[Rlabel] + 19`.
+  - **`stereo_h`** — top = LEFT, bottom = RIGHT; cell 0 = label, cells 1..19 = ONE
+    horizontal LEVEL meter per channel at **FINE resolution**: 19 cells × 5 dot-
+    columns = **95 steps** (level 0..95), growing column-by-column. **Bars**: full
+    cells (`col_glyph(5)`) below the level + one partial leading cell
+    (`col_glyph(1..4)`), empty beyond. **Line**: only the single leading-edge COLUMN
+    lit (`vline_glyph(c)`) — a dot gliding the 95 columns. `render_stereo_h`.
+  - **Stereo CAPTURE (audioviz):** parec is now ALWAYS `--channels=2`; the reader
+    DEINTERLEAVES s16le (L,R,L,R…) and keeps L/R separate. `full` derives mono =
+    `(L+R)/2` (one capture path); `stereo_v` FFTs each channel → 19 bands;
+    `stereo_h` takes one broadband RMS level per channel scaled to 0..95. The mic
+    (mono) feeds L==R.
+  - **SHARED auto-gain (deliberate):** L and R normalize against ONE reference
+    (the broadband loudness of BOTH channels), NOT independent per-channel gain —
+    so a louder channel reads visibly louder and you can SEE the stereo balance.
+    (Independent gain would hide balance; flip the shared-ref target to change it.)
+  - **Tagged socket protocol:** every datagram is now `byte 0 = layout tag` + a
+    payload whose shape depends on the tag — `full`→20 heights, `stereo_v`→19+19,
+    `stereo_h`→2 levels. `encode_full`/`encode_stereo_v`/`encode_stereo_h` (+ an
+    `encode_frame(layout, **data)` dispatcher); `decode_frame` returns a dict
+    `{"layout", …}` or **None** on a wrong-length / unknown-tag / mid-switch frame
+    (the daemon ignores it — never crashes). audioviz sends the frame for the
+    layout it reads from `state.json`; the daemon only consumes a frame whose
+    layout matches the active one.
+  - **Glyph budget per (layout, style)** — `layout_glyphs(layout, style)`, defined
+    on entry and redefined on a layout OR style change (same invalidate-on-change
+    pattern, keyed `ctx["spectrum_glyphs_key"]`): `full` = 7 height glyphs (0..6);
+    `stereo_v` = 7 height + L + R labels = **9 (exact fit)**; `stereo_h` = 5 column
+    glyphs (col-fill for bars / single-column for line) + L + R = 7. Inverted label
+    glyphs (`label_glyph`, lit field / dark letter) keep cell 0 reading as a label.
 - **Bench-locked params (do NOT retune):** 9600 baud is the hard cap; ~21fps
   full-frame is the ceiling and looks good; double-height over 7 partial-height
   glyphs reads clean; bar height 0..14 → bottom cell 1..7 then top cell 8..14;
   `bar_glyph(h)` lights rows `r >= 7-h` full width (`0x1F`), driver `(row&0x1F)<<3`.
 - **Run:** `pip install -r requirements-audio.txt` then `python -m checkout.audioviz`
-  (and set mode `spectrum`). The 5×7 preview draws the bars directly from
-  `status.bars` (it can't read the hardware bar glyphs) via `spectrumbars.ts`.
+  (and set mode `spectrum`). The 5×7 preview draws every layout directly from
+  status (it can't read the hardware glyphs) via `spectrumbars.ts`
+  (`spectrumStatusCells` → bars/line for full, per-channel cells + inverted L/R
+  labels + 95-column h-res for the stereo layouts).
 
 ## Versioning
 Semver `major.minor.patch` read as **"big.small.bug"**.
@@ -623,6 +668,9 @@ sudo usermod -aG uucp "$USER"   # then re-login
 - **v1.0.1:** Smoothing slider reaches 0 (full snappy↔smooth range). (done)
 - **v1.1.0:** spectrum `bars`|`line` style toggle (swappable 7-glyph sets) — sets
   up the style/glyph-swap pattern for the upcoming stereo modes. (done)
+- **v1.2.0:** stereo spectrum layouts (`full`|`stereo_v`|`stereo_h`) — stereo
+  capture + per-channel DSP (shared auto-gain), tagged socket protocol, L/R label
+  + column glyphs, two stereo renderers, UI toggle + preview. (done)
 - **Phase 3:** more frames + rotation + Docker for arda.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
@@ -820,6 +868,20 @@ sudo usermod -aG uucp "$USER"   # then re-login
   preview (`spectrumbars.ts` `spectrumCells`) draws bars vs line. UI: a BARS|LINE
   segmented toggle in the spectrum controls. This establishes the style +
   swappable-glyph-set seam that the stereo modes (next release) reuse.
+- **v1.2.0:** **stereo spectrum layouts** — a `spectrum_layout` toggle (`full` |
+  `stereo_v` | `stereo_h`) on top of the v1.1.0 Bars/Line style. `stereo_v` = a
+  19-band spectrum per channel (top=L, bottom=R, one cell tall); `stereo_h` = one
+  horizontal level meter per channel at 95-column (19×5) resolution; `full` =
+  the original mono double-height. Needed real changes through the stack: parec
+  capture is now `--channels=2`, deinterleaved (mono = `(L+R)/2`); per-channel DSP
+  (19-band / broadband-level) with a **SHARED** auto-gain reference across L/R so
+  the balance is visible; a **tagged variable socket protocol** (layout byte +
+  per-layout payload, `decode_frame`→dict, malformed-safe); inverted L/R label
+  glyphs + column-fill / single-column glyphs; `layout_glyphs(layout,style)`
+  redefined on a layout OR style change; `render_stereo_v` / `render_stereo_h`;
+  a daemon layout branch + status carrying per-channel data; a UI LAYOUT toggle;
+  and the preview rendering all three layouts (labels + 95-column h-res). This
+  reuses (and generalizes) the v1.1.0 glyph-swap seam.
 
 ## Credits / third-party
 - **Command set:** [SNMetamorph/FutabaVfdM202MD10C](https://github.com/SNMetamorph/FutabaVfdM202MD10C)

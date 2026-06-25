@@ -50,9 +50,19 @@ uvicorn web.app:app --port 8000 --no-access-log   # serves UI + /api
 
 ## Spectrum analyzer (optional) — `python -m checkout.audioviz`
 
-SPECTRUM mode shows a 20-band, double-height (14-level) audio analyzer at ~21fps.
-A SEPARATE process captures audio, FFTs it, and streams bar heights to the daemon
-over a unix datagram socket (the daemon stays the sole serial owner).
+SPECTRUM mode shows a real-time audio analyzer at ~21fps. A SEPARATE process
+captures audio, FFTs it, and streams frames to the daemon over a unix datagram
+socket (the daemon stays the sole serial owner).
+
+**Style** (`BARS` | `LINE`) and **Layout** (`FULL` | `STEREO-V` | `STEREO-H`)
+toggle independently:
+- **Full** — one mono spectrum, 20 bands, double-height (14 levels).
+- **Stereo-V** — top row = LEFT channel, bottom = RIGHT; a 19-band spectrum each.
+- **Stereo-H** — a horizontal level meter per channel (95-column fine resolution).
+- **Bars** fills solidly; **Line** lights only the peak (a single row/column).
+
+Capture is stereo (`parec --channels=2`, deinterleaved); auto-gain is **shared**
+across L/R so a louder channel reads visibly louder — you can see the balance.
 
 ```bash
 pip install -r requirements-audio.txt          # numpy + sounddevice (PortAudio)

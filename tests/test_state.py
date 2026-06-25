@@ -100,6 +100,20 @@ def test_spectrum_style_validates_and_merges(state_path):
     assert state.load_state()["spectrum_style"] == "bars"
 
 
+def test_spectrum_layout_default_is_full(state_path):
+    assert state.load_state()["spectrum_layout"] == "full"
+
+
+def test_spectrum_layout_validates_and_merges(state_path):
+    import json
+
+    for good in ("stereo_v", "stereo_h", "full"):
+        state_path.write_text(json.dumps({"mode": "spectrum", "spectrum_layout": good}))
+        assert state.load_state()["spectrum_layout"] == good
+    state_path.write_text(json.dumps({"mode": "spectrum", "spectrum_layout": "quad"}))
+    assert state.load_state()["spectrum_layout"] == "full"
+
+
 def test_spectrum_audio_fields_validate_and_merge(state_path):
     import json
 

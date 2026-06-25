@@ -8,19 +8,51 @@ from checkout import audioviz, spectrum
 from checkout.driver import GLYPH_CODES
 
 
-# --- protocol ---------------------------------------------------------------
-def test_encode_decode_round_trip_and_clamp():
+# --- protocol (tagged variable frame: full / stereo_v / stereo_h) -----------
+def test_encode_decode_full_round_trip_and_clamp():
     heights = [0, 1, 7, 8, 14, 99, -3]
-    data = spectrum.encode_frame(heights)
-    assert len(data) == spectrum.NUM_BARS          # always full-width
+    data = spectrum.encode_full(heights)
+    assert data[0] == spectrum.LAYOUT_FULL                  # tag byte
+    assert len(data) == 1 + spectrum.NUM_BARS              # tag + 20 heights
     dec = spectrum.decode_frame(data)
-    assert dec[:7] == [0, 1, 7, 8, 14, 14, 0]      # clamped 0..14
-    assert dec[7:] == [0] * (spectrum.NUM_BARS - 7)  # zero-padded
+    assert dec["layout"] == "full"
+    assert dec["heights"][:7] == [0, 1, 7, 8, 14, 14, 0]   # clamped 0..14
+    assert dec["heights"][7:] == [0] * (spectrum.NUM_BARS - 7)  # zero-padded
 
 
-def test_decode_rejects_short_frame():
-    assert spectrum.decode_frame(b"") is None
-    assert spectrum.decode_frame(bytes(spectrum.NUM_BARS - 1)) is None
+def test_encode_decode_stereo_v_round_trip_and_clamp():
+    data = spectrum.encode_stereo_v([0, 7, 9], [3, -1])    # clamp 0..7, pad to 19
+    assert data[0] == spectrum.LAYOUT_STEREO_V
+    assert len(data) == 1 + 2 * spectrum.STEREO_BANDS
+    dec = spectrum.decode_frame(data)
+    assert dec["layout"] == "stereo_v"
+    assert dec["left"][:3] == [0, 7, 7] and len(dec["left"]) == spectrum.STEREO_BANDS
+    assert dec["right"][:2] == [3, 0] and len(dec["right"]) == spectrum.STEREO_BANDS
+
+
+def test_encode_decode_stereo_h_round_trip_and_clamp():
+    data = spectrum.encode_stereo_h(95, 200)               # clamp to 0..95
+    assert data[0] == spectrum.LAYOUT_STEREO_H
+    assert len(data) == 3
+    dec = spectrum.decode_frame(data)
+    assert dec == {"layout": "stereo_h", "level_l": 95, "level_r": 95}
+
+
+def test_encode_frame_dispatches_by_layout():
+    assert spectrum.decode_frame(spectrum.encode_frame("full", heights=[5]))["layout"] == "full"
+    assert spectrum.decode_frame(
+        spectrum.encode_frame("stereo_v", left=[1], right=[2]))["layout"] == "stereo_v"
+    assert spectrum.decode_frame(
+        spectrum.encode_frame("stereo_h", level_l=10, level_r=20))["layout"] == "stereo_h"
+
+
+def test_decode_rejects_malformed_frames_safely():
+    assert spectrum.decode_frame(b"") is None              # empty
+    assert spectrum.decode_frame(bytes([spectrum.LAYOUT_FULL])) is None        # no payload
+    assert spectrum.decode_frame(bytes([spectrum.LAYOUT_FULL, 1, 2])) is None  # short full
+    assert spectrum.decode_frame(bytes([spectrum.LAYOUT_STEREO_V, 1, 2])) is None  # short stereo_v
+    assert spectrum.decode_frame(bytes([spectrum.LAYOUT_STEREO_H, 1])) is None     # short stereo_h
+    assert spectrum.decode_frame(bytes([99, 1, 2, 3])) is None  # unknown tag
 
 
 # --- bar glyphs + cell mapping ----------------------------------------------
@@ -109,6 +141,141 @@ def test_decay_heights_drains_toward_zero():
     assert spectrum.decay_heights([3], step=2) == [1]
 
 
+# --- stereo glyphs ----------------------------------------------------------
+def test_label_glyph_is_inverted():
+    # The label INVERTS the letter: a lit field with the letter dark.
+    plain_l = spectrum.label_glyph("L", invert=False)
+    inv_l = spectrum.label_glyph("L")
+    assert plain_l == [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1F]
+    assert inv_l == [(r ^ 0x1F) & 0x1F for r in plain_l]
+    assert inv_l[0] == 0x1E and inv_l[6] == 0x00   # bottom row (was full) now dark
+    assert spectrum.label_glyph("R") == [
+        (r ^ 0x1F) & 0x1F for r in [0x0F, 0x11, 0x11, 0x0F, 0x05, 0x09, 0x11]
+    ]
+
+
+def test_col_glyph_lights_leftmost_n_columns():
+    assert spectrum.col_glyph(0) == [0x00] * 7
+    assert spectrum.col_glyph(1) == [0x01] * 7    # leftmost column, all rows
+    assert spectrum.col_glyph(3) == [0x07] * 7    # leftmost 3 columns
+    assert spectrum.col_glyph(5) == [0x1F] * 7    # full cell
+    assert spectrum.col_glyph(9) == [0x1F] * 7    # clamped
+
+
+def test_vline_glyph_lights_single_column():
+    assert spectrum.vline_glyph(1) == [0x01] * 7  # leftmost only
+    assert spectrum.vline_glyph(3) == [0x04] * 7  # column 3 only (bit 2)
+    assert spectrum.vline_glyph(5) == [0x10] * 7  # rightmost only
+
+
+def test_layout_glyphs_budget_per_layout_and_style():
+    # full: 7 height glyphs (slots 0..6).
+    assert sorted(spectrum.layout_glyphs("full", "bars")) == list(range(7))
+    # stereo_v: 7 height glyphs + L/R labels = 9 (exact fit).
+    g = spectrum.layout_glyphs("stereo_v", "line")
+    assert sorted(g) == list(range(9))
+    assert g[spectrum.STEREO_V_LABEL_L_SLOT] == spectrum.label_glyph("L")
+    assert g[0] == spectrum.line_glyph(1)      # the line height set lives in 0..6
+    # stereo_h bars: 5 col glyphs + L/R labels = 7.
+    gh = spectrum.layout_glyphs("stereo_h", "bars")
+    assert sorted(gh) == list(range(7))
+    assert gh[0] == spectrum.col_glyph(1) and gh[4] == spectrum.col_glyph(5)
+    assert gh[spectrum.STEREO_H_LABEL_R_SLOT] == spectrum.label_glyph("R")
+    # stereo_h line: the 5 column slots hold single-column glyphs instead.
+    assert spectrum.layout_glyphs("stereo_h", "line")[0] == spectrum.vline_glyph(1)
+
+
+# --- stereo renderers -------------------------------------------------------
+def test_render_stereo_v_labels_and_cells():
+    top, bottom = spectrum.render_stereo_v([0, 7, 4] + [0] * 16, [7] * 19, "bars")
+    assert len(top) == 20 and len(bottom) == 20
+    assert top[0] == chr(GLYPH_CODES[spectrum.STEREO_V_LABEL_L_SLOT])   # L label
+    assert bottom[0] == chr(GLYPH_CODES[spectrum.STEREO_V_LABEL_R_SLOT])  # R label
+    assert top[1] == " "                       # height 0 -> empty
+    assert top[2] == chr(GLYPH_CODES[6])       # height 7 -> slot 6 (full cell)
+    assert top[3] == chr(GLYPH_CODES[3])       # height 4 -> slot 3
+
+
+def test_render_stereo_h_bars_fills_with_partial_leading_cell():
+    # level 7 (0..95): cell0 full (5 cols), cell1 partial (2 cols), rest empty.
+    top, _ = spectrum.render_stereo_h(7, 0, "bars")
+    assert top[0] == chr(GLYPH_CODES[spectrum.STEREO_H_LABEL_L_SLOT])  # label
+    assert top[1] == chr(GLYPH_CODES[spectrum.STEREO_H_COL_SLOTS[4]])  # col_glyph(5) full
+    assert top[2] == chr(GLYPH_CODES[spectrum.STEREO_H_COL_SLOTS[1]])  # col_glyph(2) partial
+    assert top[3] == " "                                              # beyond the level
+    # level 0 -> all data cells empty.
+    t0, _ = spectrum.render_stereo_h(0, 0, "bars")
+    assert t0[1:] == " " * 19
+
+
+def test_render_stereo_h_line_lights_single_leading_column():
+    # level 7 line: the single lit COLUMN is global col 7 = cell1, in-cell col 2.
+    top, _ = spectrum.render_stereo_h(7, 0, "line")
+    assert top[1] == " "                                              # cell 0 empty
+    assert top[2] == chr(GLYPH_CODES[spectrum.STEREO_H_COL_SLOTS[1]])  # vline(2) in cell 1
+    assert top[3] == " "
+    # level 5 line: global col 5 = cell0 in-cell col 5 (the rightmost of cell 0).
+    t5, _ = spectrum.render_stereo_h(5, 0, "line")
+    assert t5[1] == chr(GLYPH_CODES[spectrum.STEREO_H_COL_SLOTS[4]])   # vline(5)
+    assert t5[2] == " "
+
+
+# --- stereo DSP (shared auto-gain makes the balance visible) ----------------
+def test_stereo_v_shared_gain_louder_channel_reads_higher():
+    np = pytest.importorskip("numpy")
+    av = audioviz.AudioViz("/tmp/checkout-test-nosock.sock")
+    av.configure(1.0, 0.0, "stereo_v")
+    rate, n = 44100, 512
+    t = np.arange(n) / rate
+    loud = (np.sin(2 * np.pi * 440 * t) * 0.5).astype("float32")
+    quiet = (np.sin(2 * np.pi * 440 * t) * 0.03).astype("float32")
+    for _ in range(20):
+        frame = av.process_frame(loud, quiet, rate)
+    dec = spectrum.decode_frame(frame)
+    assert max(dec["left"]) > max(dec["right"])   # balance visible
+
+
+def test_stereo_v_silence_in_one_channel_drops_that_row():
+    np = pytest.importorskip("numpy")
+    av = audioviz.AudioViz("/tmp/checkout-test-nosock.sock")
+    av.configure(1.0, 0.5, "stereo_v")
+    rate, n = 44100, 512
+    t = np.arange(n) / rate
+    loud = (np.sin(2 * np.pi * 440 * t) * 0.5).astype("float32")
+    silent = np.zeros(n, dtype="float32")
+    for _ in range(60):
+        frame = av.process_frame(loud, silent, rate)
+    dec = spectrum.decode_frame(frame)
+    assert max(dec["left"]) > 0 and max(dec["right"]) == 0
+
+
+def test_stereo_h_overall_level_scaled_0_95_and_balance():
+    np = pytest.importorskip("numpy")
+    av = audioviz.AudioViz("/tmp/checkout-test-nosock.sock")
+    av.configure(1.0, 0.0, "stereo_h")
+    rate, n = 44100, 512
+    t = np.arange(n) / rate
+    loud = (np.sin(2 * np.pi * 440 * t) * 0.5).astype("float32")
+    quiet = (np.sin(2 * np.pi * 440 * t) * 0.03).astype("float32")
+    for _ in range(30):
+        frame = av.process_frame(loud, quiet, rate)
+    dec = spectrum.decode_frame(frame)
+    assert 0 <= dec["level_l"] <= spectrum.STEREO_H_MAX
+    assert dec["level_l"] > dec["level_r"]        # louder channel = longer meter
+
+
+def test_full_layout_is_mono_sum():
+    np = pytest.importorskip("numpy")
+    av = audioviz.AudioViz("/tmp/checkout-test-nosock.sock")
+    av.configure(1.0, 0.0, "full")
+    rate, n = 44100, 512
+    t = np.arange(n) / rate
+    sig = (np.sin(2 * np.pi * 440 * t) * 0.4).astype("float32")
+    frame = av.process_frame(sig, sig, rate)
+    dec = spectrum.decode_frame(frame)
+    assert dec["layout"] == "full" and len(dec["heights"]) == 20
+
+
 # --- socket round trip (real unix datagram socket) --------------------------
 def test_receiver_drains_to_latest_frame(tmp_path):
     path = str(tmp_path / "spec.sock")
@@ -116,14 +283,30 @@ def test_receiver_drains_to_latest_frame(tmp_path):
     rx.open()
     try:
         tx = spectrum.SpectrumSender(path)
-        tx.send([1] * spectrum.NUM_BARS)
-        tx.send([2] * spectrum.NUM_BARS)
-        tx.send([13] * spectrum.NUM_BARS)   # newest wins
+        tx.send(spectrum.encode_full([1] * spectrum.NUM_BARS))
+        tx.send(spectrum.encode_full([2] * spectrum.NUM_BARS))
+        tx.send(spectrum.encode_full([13] * spectrum.NUM_BARS))   # newest wins
         import time
         time.sleep(0.05)
         latest = rx.drain()
-        assert latest == [13] * spectrum.NUM_BARS
+        assert latest == {"layout": "full", "heights": [13] * spectrum.NUM_BARS}
         assert rx.drain() is None            # queue now empty
+        tx.close()
+    finally:
+        rx.close()
+
+
+def test_receiver_drains_stereo_frames(tmp_path):
+    path = str(tmp_path / "spec_stereo.sock")
+    rx = spectrum.SpectrumReceiver(path)
+    rx.open()
+    try:
+        tx = spectrum.SpectrumSender(path)
+        tx.send(spectrum.encode_stereo_v([7] * 19, [2] * 19))
+        tx.send(spectrum.encode_stereo_h(80, 10))   # newest wins (a different layout)
+        import time
+        time.sleep(0.05)
+        assert rx.drain() == {"layout": "stereo_h", "level_l": 80, "level_r": 10}
         tx.close()
     finally:
         rx.close()
@@ -132,7 +315,7 @@ def test_receiver_drains_to_latest_frame(tmp_path):
 def test_sender_without_listener_does_not_raise(tmp_path):
     # No receiver bound — send must drop silently (newest-wins, never block).
     tx = spectrum.SpectrumSender(str(tmp_path / "nobody.sock"))
-    tx.send([5] * spectrum.NUM_BARS)
+    tx.send(spectrum.encode_full([5] * spectrum.NUM_BARS))
     tx.close()
 
 

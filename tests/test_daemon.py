@@ -412,11 +412,16 @@ def _spectrum_ctx():
     return ctx
 
 
+def _full(heights):
+    """A decoded full-layout frame (what the real SpectrumReceiver.drain returns)."""
+    return {"layout": "full", "heights": list(heights)}
+
+
 def test_spectrum_enter_defines_seven_bar_glyphs(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = _spectrum_ctx()
-    ctx["spectrum_rx"] = _FakeRx([[7] * 20])
+    ctx["spectrum_rx"] = _FakeRx([_full([7] * 20)])
     capsys.readouterr()
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
     tx = _all_tx_bytes(capsys.readouterr().out)
@@ -430,7 +435,7 @@ def test_spectrum_drains_latest_and_renders_bars(monkeypatch):
     drv = _CountingDriver()
     ctx = _spectrum_ctx()
     # A burst of frames in the queue: the newest ([14]*20) wins.
-    ctx["spectrum_rx"] = _FakeRx([[1] * 20, [9] * 20, [14] * 20])
+    ctx["spectrum_rx"] = _FakeRx([_full([1] * 20), _full([9] * 20), _full([14] * 20)])
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
     assert ctx["spectrum_heights"] == [14] * 20
     assert written[-1]["mode"] == "spectrum"
@@ -458,7 +463,7 @@ def test_spectrum_restores_user_glyphs_on_exit(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = _spectrum_ctx()
-    ctx["spectrum_rx"] = _FakeRx([[5] * 20])
+    ctx["spectrum_rx"] = _FakeRx([_full([5] * 20)])
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)   # enter: bar glyphs
     capsys.readouterr()
     # Leave to a mode whose state carries a user glyph -> it must be re-defined.
@@ -486,7 +491,7 @@ def test_spectrum_enters_with_active_style_default_bars(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = _spectrum_ctx()
-    ctx["spectrum_rx"] = _FakeRx([[7] * 20])
+    ctx["spectrum_rx"] = _FakeRx([_full([7] * 20)])
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
     assert ctx["spectrum_style"] == "bars"   # default style defined on enter
 
@@ -497,7 +502,7 @@ def test_spectrum_style_change_redefines_glyph_slots(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = _spectrum_ctx()
-    ctx["spectrum_rx"] = _FakeRx([[14] * 20])
+    ctx["spectrum_rx"] = _FakeRx([_full([14] * 20)])
     # Enter with the default BARS style.
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
     assert ctx["spectrum_style"] == "bars"
@@ -520,6 +525,45 @@ def test_spectrum_style_change_redefines_glyph_slots(monkeypatch, capsys):
     bar6 = [(r & 0x1F) << 3 for r in spectrum.bar_glyph(7)]
     line6 = [(r & 0x1F) << 3 for r in spectrum.line_glyph(7)]
     assert list(defines[spectrum.GLYPH_CODES[6]]) == line6 != bar6
+
+
+def test_spectrum_layout_change_redefines_glyphs_and_renders_stereo(monkeypatch):
+    from checkout import spectrum
+
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    drv = _CountingDriver()
+    ctx = _spectrum_ctx()
+    # Enter FULL (7 height glyphs), then switch to STEREO_V (9 glyphs: 7 + L/R).
+    ctx["spectrum_rx"] = _FakeRx([_full([14] * 20)])
+    daemon.tick_once(drv, {"mode": "spectrum", "spectrum_layout": "full"}, ctx, now=NOW)
+    assert ctx["spectrum_glyphs_key"] == ("full", "bars")
+    base_defines = drv.defines
+
+    ctx["spectrum_rx"] = _FakeRx([
+        {"layout": "stereo_v", "left": [7] * 19, "right": [2] * 19}])
+    daemon.tick_once(drv, {"mode": "spectrum", "spectrum_layout": "stereo_v"}, ctx,
+                     now=datetime(2026, 6, 19, 12, 0, 0, 250_000))
+    assert ctx["spectrum_glyphs_key"] == ("stereo_v", "bars")
+    assert drv.defines - base_defines == 9          # 9 glyphs defined for stereo_v
+    assert ctx["spectrum_left"] == [7] * 19 and ctx["spectrum_right"] == [2] * 19
+    # status mirrors the layout + per-channel data for the preview.
+    assert written[-1]["spectrum_layout"] == "stereo_v"
+    assert written[-1]["spectrum_left"] == [7] * 19
+    assert written[-1]["bars"] is None
+
+
+def test_spectrum_ignores_frame_of_wrong_layout(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = _spectrum_ctx()
+    ctx["spectrum_level_l"] = 40
+    ctx["spectrum_level_r"] = 10
+    ctx["spectrum_recv_ms"] = int(NOW.timestamp() * 1000)  # fresh -> no stale decay
+    # In stereo_h but a FULL frame arrives -> wrong layout, ignored (levels unchanged).
+    ctx["spectrum_rx"] = _FakeRx([_full([14] * 20)])
+    daemon.tick_once(drv, {"mode": "spectrum", "spectrum_layout": "stereo_h"}, ctx, now=NOW)
+    assert ctx["spectrum_level_l"] == 40 and ctx["spectrum_level_r"] == 10
 
 
 def test_flash_animation_toggles_on_clock_in_dry_run(monkeypatch, capsys):
@@ -624,6 +668,7 @@ class _CountingDriver:
     def __init__(self):
         self.shows = 0
         self.blanks = 0
+        self.defines = 0
 
     def initialize(self):
         pass
@@ -638,7 +683,7 @@ class _CountingDriver:
         pass
 
     def define_character(self, index, rows7):
-        pass
+        self.defines += 1
 
     def select_code_page(self, page):
         pass

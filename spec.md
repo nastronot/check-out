@@ -246,6 +246,7 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   // spectrum (mode "spectrum") SETTINGS only; live bars go over a socket, not here:
   "audio_source": "system" | "mic", "audio_device": null, "audio_gain": 1.0, "audio_decay": 0.85,
   "spectrum_style": "bars" | "line",            // filled bars (default) or single-row peak line
+  "spectrum_layout": "full" | "stereo_v" | "stereo_h",  // mono (default) | L/R spectra | L/R level meters
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
   "marquee_text": "...", "marquee_bottom": "static", "marquee_bottom_text": "...",  // bottom is static-only
@@ -528,11 +529,15 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
     monitors/inputs, LABELED — in `devices.json` (`--list`, served at
     `/api/devices`); raw ALSA/hw/plugin nodes excluded; the UI filters by source
     and defaults to Auto. Needs `pipewire-pulse` (+ `portaudio` for the fallback).
-- **Socket protocol.** Unix `SOCK_DGRAM` (`CHECKOUT_SPECTRUM_SOCK`, default
-  `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Each datagram = a fixed **20-byte**
-  frame (one height 0..14 per bar). Newest-frame-wins: the daemon **drains to the
-  latest** datagram each loop (stale discarded), so a slow reader can't back up a
-  stream. Heavy per-frame data goes here; only settings via `state.json`.
+- **Socket protocol (TAGGED, v1.2.0).** Unix `SOCK_DGRAM` (`CHECKOUT_SPECTRUM_SOCK`,
+  default `$XDG_RUNTIME_DIR/checkout-spectrum.sock`). Every datagram is **byte 0 =
+  a layout tag** + a payload whose shape depends on it: `full`→20 heights (0..14),
+  `stereo_v`→19 LEFT + 19 RIGHT (0..7), `stereo_h`→2 levels L,R (0..95).
+  `decode_frame` returns a dict `{"layout", …}`, or **None** on an empty/short/
+  unknown-tag frame (the daemon ignores a torn or mid-switch datagram, never
+  crashes). Newest-frame-wins: the daemon **drains to the latest** datagram each
+  loop (and only consumes one whose layout matches the active one). Heavy per-frame
+  data goes here; only settings via `state.json`.
 - **Daemon spectrum path.** On enter: define the **7 height-glyphs for the active
   style** (slots 0..6; this OVERWRITES those user glyphs) + bind the socket. Each
   iteration: drain → latest heights (or **decay toward 0** if no datagram within
@@ -551,7 +556,23 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   redefines the slots when the style changes mid-mode (`style_glyphs(style)` →
   `define_character`×7 → re-init → invalidate). This **style + swappable-glyph-set
   seam** (`SPECTRUM_STYLES`, `style_glyphs`, `_define_spectrum_glyphs`) is what the
-  stereo modes will reuse.
+  stereo layouts reuse.
+- **Stereo layouts (`spectrum_layout`, v1.2.0).** `full` (default) | `stereo_v` |
+  `stereo_h`, a UI toggle on top of the Bars/Line style (style applies across all
+  layouts; the 5-column h-resolution applies only to stereo_h — stereo_v is 7
+  vertical row-levels per cell). **stereo_v** = top row LEFT, bottom RIGHT, each a
+  19-band spectrum one cell tall + an inverted L/R label in cell 0. **stereo_h** =
+  one horizontal level meter per channel (cell 0 = label, cells 1..19 = 95-column
+  (19×5) fine meter; bars fill column-by-column with a partial leading cell, line =
+  a single gliding column). **Stereo capture:** parec is `--channels=2`,
+  deinterleaved; `full` = mono `(L+R)/2`, `stereo_v` FFTs each channel (19 bands),
+  `stereo_h` takes a broadband RMS level/channel → 0..95. **Auto-gain is SHARED**
+  across L/R (one reference from both channels) so a louder channel reads louder —
+  the balance is visible (deliberate, vs hiding it with independent gain). Glyph
+  budget per (layout, style): full=7, stereo_v=7+L+R=9 (exact), stereo_h=5 cols+L+R
+  =7; `layout_glyphs(layout,style)` is redefined on a layout OR style change
+  (`ctx["spectrum_glyphs_key"]`). Renderers `render_stereo_v` / `render_stereo_h`;
+  `status` carries the per-channel data so the preview mirrors every layout.
 - **Bench-locked (do not retune):** 9600 baud cap, ~21fps full-frame ceiling,
   double-height over 7 partial glyphs, height 0..14 → bottom cell 1..7 then top
   8..14, `bar_glyph(h)` lights rows `r ≥ 7-h` full width (`0x1F`). The ~21fps
