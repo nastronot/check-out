@@ -5,6 +5,9 @@ export type Mode = 'clock' | 'message' | 'scroll' | 'marquee' | 'spectrum';
 export type AudioSource = 'mic' | 'system';
 /** Spectrum render style: filled bars, or a single-row line per band (the peak). */
 export type SpectrumStyle = 'bars' | 'line';
+/** Spectrum layout: one mono spectrum (full), or per-channel L/R stereo (vertical
+ *  = a spectrum per row, horizontal = one level meter per row). */
+export type SpectrumLayout = 'full' | 'stereo_v' | 'stereo_h';
 /** Brightness is a discrete level index 0..3 (0 Min, 1 Med, 2 Med+, 3 Max). */
 export type Brightness = 0 | 1 | 2 | 3;
 export type Animation = 'none' | 'flash' | 'blink' | 'pulse';
@@ -58,6 +61,7 @@ export interface AppState {
   audio_gain: number;
   audio_decay: number;
   spectrum_style: SpectrumStyle;
+  spectrum_layout: SpectrumLayout;
   command: CommandRef;
   updated_at?: string;
 }
@@ -87,6 +91,14 @@ export interface Status {
   bars: number[] | null;
   /** Spectrum render style mirrored from state, so the preview matches bars vs line. */
   spectrum_style?: SpectrumStyle;
+  /** Spectrum layout mirrored from state (full / stereo_v / stereo_h). */
+  spectrum_layout?: SpectrumLayout;
+  /** stereo_v: 19 per-channel heights (0..7); null outside stereo_v. */
+  spectrum_left?: number[] | null;
+  spectrum_right?: number[] | null;
+  /** stereo_h: one overall level per channel (0..95); null outside stereo_h. */
+  spectrum_level_l?: number | null;
+  spectrum_level_r?: number | null;
   last_command_id: string | null;
   updated_at: string | null;
 }

@@ -72,3 +72,112 @@ export function spectrumCells(
 ): { top: Cell[]; bottom: Cell[] } {
   return style === 'line' ? linesToCells(bars) : barsToCells(bars);
 }
+
+// --- stereo layouts (v1.2.0) ------------------------------------------------
+// Mirrors the daemon's spectrum.py stereo renderers + glyphs, but as lit-dot
+// grids (the preview can't read the hardware's defined glyphs).
+
+const STEREO_BANDS = 19; // data cells per row (cell 0 is the L/R label)
+export const STEREO_H_MAX = STEREO_BANDS * CELL_COLS; // 95 fine horizontal steps
+
+// 5x7 L/R letter bitmaps (low 5 bits = columns 1..5, bit0 = col 1) — must match
+// spectrum.py's _LETTER_BITMAPS. The LABEL renders these INVERTED (lit field).
+const LETTER: Record<string, number[]> = {
+  L: [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1f],
+  R: [0x0f, 0x11, 0x11, 0x0f, 0x05, 0x09, 0x11],
+};
+
+/** An inverted L/R label cell: lit field, dark letter (matches label_glyph). */
+export function labelCell(letter: 'L' | 'R'): Cell {
+  const rows = LETTER[letter];
+  return rows.map((row) => {
+    const inv = ~row & 0x1f; // invert the 5 columns
+    const out: boolean[] = [];
+    for (let c = 0; c < CELL_COLS; c++) out.push((inv & (1 << c)) !== 0);
+    return out;
+  });
+}
+
+/** A horizontal-fill cell: the leftmost `n` columns (0..5) lit, all rows. */
+export function colCell(n: number): Cell {
+  const lit = Math.max(0, Math.min(CELL_COLS, n));
+  const rows: Cell = [];
+  for (let r = 0; r < CELL_ROWS; r++) {
+    const row: boolean[] = [];
+    for (let c = 0; c < CELL_COLS; c++) row.push(c < lit);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** A single-column cell: only column `col` (1..5) lit, all rows (0 = empty). */
+export function vlineCell(col: number): Cell {
+  const rows: Cell = [];
+  for (let r = 0; r < CELL_ROWS; r++) {
+    const row: boolean[] = [];
+    for (let c = 0; c < CELL_COLS; c++) row.push(col >= 1 && c === col - 1);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** One stereo_v row: [label] + 19 single-cell bars/lines (height 0..7). */
+function stereoVRow(label: 'L' | 'R', heights: number[], style?: string): Cell[] {
+  const cells: Cell[] = [labelCell(label)];
+  const cell = style === 'line' ? lineCell : barCell;
+  for (let i = 0; i < STEREO_BANDS; i++) {
+    cells.push(cell(Math.max(0, Math.min(CELL_ROWS, Math.round(heights?.[i] ?? 0)))));
+  }
+  return cells;
+}
+
+/** stereo_v: top = LEFT spectrum, bottom = RIGHT, each with its label in cell 0. */
+export function stereoVCells(
+  left: number[],
+  right: number[],
+  style?: string,
+): { top: Cell[]; bottom: Cell[] } {
+  return { top: stereoVRow('L', left, style), bottom: stereoVRow('R', right, style) };
+}
+
+/** One stereo_h row: [label] + 19 cells encoding `level` (0..95) across 95 columns. */
+function stereoHRow(label: 'L' | 'R', level: number, style?: string): Cell[] {
+  const lvl = Math.max(0, Math.min(STEREO_H_MAX, Math.round(level)));
+  const cells: Cell[] = [labelCell(label)];
+  for (let i = 0; i < STEREO_BANDS; i++) {
+    const lo = i * CELL_COLS;
+    if (style === 'line') {
+      // The single lit column is the `lvl`-th (1-based, global): in this cell iff
+      // lo < lvl <= lo+5; the in-cell column is lvl-lo.
+      cells.push(lvl > lo && lvl <= lo + CELL_COLS ? vlineCell(lvl - lo) : vlineCell(0));
+    } else {
+      cells.push(colCell(Math.max(0, Math.min(CELL_COLS, lvl - lo)))); // leftmost n cols
+    }
+  }
+  return cells;
+}
+
+/** stereo_h: top = LEFT meter, bottom = RIGHT meter, each with its label in cell 0. */
+export function stereoHCells(
+  levelL: number,
+  levelR: number,
+  style?: string,
+): { top: Cell[]; bottom: Cell[] } {
+  return { top: stereoHRow('L', levelL, style), bottom: stereoHRow('R', levelR, style) };
+}
+
+/** Build the (top, bottom) preview cells for ANY spectrum layout from status. */
+export function spectrumStatusCells(
+  layout: string | undefined,
+  bars: number[] | null,
+  left: number[] | null | undefined,
+  right: number[] | null | undefined,
+  levelL: number | null | undefined,
+  levelR: number | null | undefined,
+  style?: string,
+): { top: Cell[]; bottom: Cell[] } | null {
+  if (layout === 'stereo_v' && left && right) return stereoVCells(left, right, style);
+  if (layout === 'stereo_h') return stereoHCells(levelL ?? 0, levelR ?? 0, style);
+  if (Array.isArray(bars)) return spectrumCells(bars, style);
+  return null;
+}

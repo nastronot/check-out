@@ -7,7 +7,7 @@
     lineToCells,
   } from '../font5x7';
   import { GLASS_BG, paintCell } from '../dotrender';
-  import { spectrumCells, type Cell } from '../spectrumbars';
+  import { spectrumStatusCells, type Cell } from '../spectrumbars';
   import type { GlyphMap, Status } from '../types';
 
   export let status: Status | null = null;
@@ -55,14 +55,21 @@
   const LEVEL_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
   $: levelLabel = LEVEL_LABELS[Math.max(0, Math.min(3, Math.round(level)))];
 
-  // SPECTRUM: draw the analyzer bars directly from status.bars (the preview
-  // can't read the hardware's bar glyphs), bypassing the text/glyph path.
-  $: spectrumBars =
-    status?.mode === 'spectrum' && Array.isArray(status?.bars) && !blank
-      ? (status.bars as number[])
+  // SPECTRUM: draw the analyzer directly from status (the preview can't read the
+  // hardware's defined glyphs), bypassing the text/glyph path. Handles all three
+  // layouts (full / stereo_v / stereo_h) + the bars/line style from status.
+  $: spectrumPair =
+    status?.mode === 'spectrum' && !blank
+      ? spectrumStatusCells(
+          status?.spectrum_layout,
+          status?.bars ?? null,
+          status?.spectrum_left,
+          status?.spectrum_right,
+          status?.spectrum_level_l,
+          status?.spectrum_level_r,
+          status?.spectrum_style ?? 'bars',
+        )
       : null;
-  // The render style mirrored from status, so the preview matches bars vs line.
-  $: spectrumStyle = status?.spectrum_style ?? 'bars';
 
   onMount(() => {
     // Init order: get the 2D context, size the buffer, THEN draw. Drawing into
@@ -77,7 +84,7 @@
 
   // Redraw whenever the mirrored data changes (every poll / glyph edit). Deps are
   // passed explicitly so Svelte tracks them (a bare `redraw()` could be stripped).
-  $: if (ctx) redraw(spectrumBars, spectrumStyle, top, bottom, level, glyphs);
+  $: if (ctx) redraw(spectrumPair, top, bottom, level, glyphs);
 
   /** Size the drawing buffer to the rendered width (×dpr), then draw. */
   function sizeAndDraw(): void {
@@ -96,21 +103,19 @@
       const s = (cssW / W) * dpr;
       ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    redraw(spectrumBars, spectrumStyle, top, bottom, level, glyphs);
+    redraw(spectrumPair, top, bottom, level, glyphs);
   }
 
-  /** Branch: the analyzer bars (spectrum mode) or the normal text/glyph frame. */
+  /** Branch: the analyzer cells (spectrum mode) or the normal text/glyph frame. */
   function redraw(
-    bars: number[] | null,
-    style: string,
+    pair: { top: Cell[]; bottom: Cell[] } | null,
     topLine: string,
     bottomLine: string,
     brightnessLevel: number,
     glyphMap: GlyphMap,
   ): void {
-    if (bars) {
-      const { top: t, bottom: b } = spectrumCells(bars, style);
-      drawCells(t, b, brightnessLevel);
+    if (pair) {
+      drawCells(pair.top, pair.bottom, brightnessLevel);
     } else {
       drawFrame(topLine, bottomLine, brightnessLevel, glyphMap);
     }

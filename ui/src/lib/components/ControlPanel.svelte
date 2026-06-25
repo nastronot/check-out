@@ -10,6 +10,7 @@
     ScrollDir,
     ScrollSource,
     SpectrumStyle,
+    SpectrumLayout,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -110,6 +111,12 @@
     { value: 'line', label: 'LINE' },
   ];
   const setSpectrumStyle = (s: SpectrumStyle) => patch({ spectrum_style: s });
+  const LAYOUTS: { value: SpectrumLayout; label: string }[] = [
+    { value: 'full', label: 'FULL' },
+    { value: 'stereo_v', label: 'STEREO-V' },
+    { value: 'stereo_h', label: 'STEREO-H' },
+  ];
+  const setSpectrumLayout = (l: SpectrumLayout) => patch({ spectrum_layout: l });
 
   const DIRS: ScrollDir[] = ['left', 'right'];
   // Merge one animation_params field, keeping the siblings (full object so the
@@ -237,6 +244,24 @@
       </div>
 
       <div class="field">
+        <span class="field__label">Layout</span>
+        <div class="seg">
+          {#each LAYOUTS as l}
+            <button
+              type="button"
+              aria-pressed={state.spectrum_layout === l.value}
+              on:click={() => setSpectrumLayout(l.value)}>{l.label}</button
+            >
+          {/each}
+        </div>
+        <span class="field__hint">
+          <strong>Full</strong> = one mono spectrum. <strong>Stereo-V</strong> =
+          left/right spectrum per row. <strong>Stereo-H</strong> = a horizontal
+          level meter per channel. Auto-gain is shared so you can read the balance.
+        </span>
+      </div>
+
+      <div class="field">
         <span class="field__label">Style</span>
         <div class="seg">
           {#each STYLES as s}
@@ -248,8 +273,8 @@
           {/each}
         </div>
         <span class="field__hint">
-          <strong>Bars</strong> = filled columns; <strong>Line</strong> = a single
-          lit row per band (the peak) that rides up and down.
+          <strong>Bars</strong> = filled; <strong>Line</strong> = a single lit
+          row/column (the peak/edge). Applies across all layouts.
         </span>
       </div>
 

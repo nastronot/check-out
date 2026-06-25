@@ -78,6 +78,7 @@ def defaults() -> dict:
         "audio_gain": 1.0,               # sensitivity multiplier
         "audio_decay": 0.85,             # bar release factor (attack-fast/release-slow)
         "spectrum_style": "bars",        # "bars" (filled) | "line" (single-row peak)
+        "spectrum_layout": "full",       # "full" | "stereo_v" | "stereo_h"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -95,8 +96,9 @@ _NESTED_DEFAULTS = ("animation_params", "command")
 _SCROLL_SOURCES = ("message", "clock")
 _DEFAULT_SCROLL_SOURCE = "message"
 
-# Spectrum render styles (mono for now; stereo layouts reuse this seam later).
+# Spectrum render styles + stereo layouts (Bars/Line applies across all layouts).
 _SPECTRUM_STYLES = ("bars", "line")
+_SPECTRUM_LAYOUTS = ("full", "stereo_v", "stereo_h")
 
 
 def _backfill(data: dict) -> dict:
@@ -133,6 +135,9 @@ def _backfill(data: dict) -> dict:
     # Spectrum render style: filled bars (default) or single-row line; coerce junk.
     if merged.get("spectrum_style") not in _SPECTRUM_STYLES:
         merged["spectrum_style"] = "bars"
+    # Spectrum layout: full (default) | stereo_v | stereo_h; coerce junk.
+    if merged.get("spectrum_layout") not in _SPECTRUM_LAYOUTS:
+        merged["spectrum_layout"] = "full"
     return merged
 
 
