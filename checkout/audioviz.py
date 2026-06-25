@@ -425,7 +425,7 @@ def _read_exact(stream, nbytes: int, stopped) -> bytes | None:
 class ParecCapture:
     """System-audio capture via a pw-record/parec subprocess + reader thread."""
 
-    def __init__(self, source_name, rate, on_chunk, channels=1, tool=None):
+    def __init__(self, source_name, rate, on_chunk, channels=2, tool=None):
         self.source = source_name
         self.rate = int(rate)
         self.on_chunk = on_chunk
@@ -460,10 +460,16 @@ class ParecCapture:
                 if data is None:
                     break
                 arr = np.frombuffer(data, dtype="<i2").astype("float32") / 32768.0
-                if self.channels > 1:
-                    arr = arr.reshape(-1, self.channels).mean(axis=1)
+                # DEINTERLEAVE s16le: samples alternate L,R,L,R... Keep L and R
+                # SEPARATE (stereo layouts need per-channel data; the full layout
+                # derives mono = (L+R)/2 downstream — one capture path).
+                if self.channels >= 2:
+                    stereo = arr.reshape(-1, self.channels)
+                    left, right = stereo[:, 0], stereo[:, 1]
+                else:
+                    left = right = arr
                 try:
-                    self.on_chunk(arr, self.rate)
+                    self.on_chunk(left, right, self.rate)
                 except Exception:
                     pass
         except Exception as exc:
@@ -501,7 +507,9 @@ class SoundDeviceCapture:
         def _cb(indata, frames, time_info, status):
             mono = indata[:, 0] if getattr(indata, "ndim", 1) > 1 else indata
             try:
-                self.on_chunk(mono, self.rate)
+                # Mic is mono: feed it as BOTH channels so the stereo layouts work
+                # (L == R — a centered signal) and the full layout's (L+R)/2 = mono.
+                self.on_chunk(mono, mono, self.rate)
             except Exception:
                 pass
 
@@ -537,15 +545,25 @@ class AudioViz:
         # legacy audio_gain field for back-compat.
         self.sensitivity = 1.0
         self.decay = 0.85
-        self.levels = [0.0] * spectrum.NUM_BARS
-        self._ref = spectrum.REF_FLOOR   # auto-gain running reference
+        self.layout = "full"
+        self._ref = spectrum.REF_FLOOR   # auto-gain running reference (SHARED L/R)
         self._np = None
         self._window = None
-        self._edges = None
+        self._edges = None       # full: 20-band edges
+        self._edges_v = None     # stereo_v: 19-band edges
         self._n = None
         self._rate = None
+        self._reset_levels()
 
-    def configure(self, sensitivity, decay) -> None:
+    def _reset_levels(self) -> None:
+        """Zero every layout's smoothing state (on init / layout switch)."""
+        self.levels = [0.0] * spectrum.NUM_BARS                 # full
+        self.levels_l = [0.0] * spectrum.STEREO_BANDS           # stereo_v left
+        self.levels_r = [0.0] * spectrum.STEREO_BANDS           # stereo_v right
+        self.level_l = 0.0                                      # stereo_h left
+        self.level_r = 0.0                                      # stereo_h right
+
+    def configure(self, sensitivity, decay, layout="full") -> None:
         try:
             self.sensitivity = float(sensitivity)
         except (TypeError, ValueError):
@@ -554,19 +572,28 @@ class AudioViz:
             self.decay = float(decay)
         except (TypeError, ValueError):
             self.decay = 0.85
+        layout = layout if layout in spectrum.LAYOUTS else "full"
+        if layout != self.layout:
+            # Switching layouts: reset the per-layout smoothing + the shared ref so
+            # the new layout converges cleanly (no carryover from the old shape).
+            self.layout = layout
+            self._reset_levels()
+            self._ref = spectrum.REF_FLOOR
 
     def _ensure_dsp(self, n: int, rate: float) -> None:
         import numpy as np
 
-        if self._edges is None or self._n != n or self._rate != rate:
+        if self._window is None or self._n != n or self._rate != rate:
             self._np = np
             self._n = n
             self._rate = rate
             self._window = np.hanning(n)
             self._edges = spectrum.log_band_edges(spectrum.NUM_BARS, rate, n)
+            self._edges_v = spectrum.log_band_edges(spectrum.STEREO_BANDS, rate, n)
 
+    # --- per-layout analysis -------------------------------------------------
     def process(self, samples, rate: float) -> list[int]:
-        """One audio chunk (1-D float samples) → 20 integer bar heights.
+        """One MONO audio chunk → 20 integer bar heights (the full layout path).
 
         AUTO-GAIN: normalize against a running reference so bars are volume-
         independent (content-driven). Below the silence floor, output ~0 and let
@@ -579,42 +606,115 @@ class AudioViz:
         bands = spectrum.bucketize(mag, self._edges)
 
         if rms < spectrum.SILENCE_FLOOR_RMS:
-            # Silence: release the reference (peak 0) and let the bars fall.
             self._ref = spectrum.update_ref(self._ref, 0.0)
             new = [0] * spectrum.NUM_BARS
         else:
-            # Reference tracks BROADBAND loudness (band_mean) with a smooth
-            # attack — "how loud overall now", so volume cancels but the centered
-            # map still spreads typical content across the display (a per-band
-            # percentile would collapse everything but the loudest bands -> sink).
             self._ref = spectrum.update_ref(self._ref, spectrum.band_mean(bands))
             new = spectrum.normalize_levels(bands, self._ref, self.sensitivity)
 
-        # Bar smoothing (attack-fast / release-slow): prev = self.levels PERSISTS
-        # across frames and is fed back in, so beats rise instantly but bars fall
-        # smoothly — this is the anti-flash mechanism. Persistence verified here.
         self.levels = spectrum.decay_levels(self.levels, new, self.decay)
         return [int(round(x)) for x in self.levels]
 
-    def send(self, heights) -> None:
-        self.sender.send(heights)
+    def process_frame(self, left, right, rate: float) -> bytes:
+        """One STEREO chunk (L, R) → the encoded tagged frame for the active layout.
+
+        full     -> mono = (L+R)/2 through the 20-band path.
+        stereo_v -> each channel FFT'd to 19 bands, SHARED auto-gain.
+        stereo_h -> one overall level per channel (0..95), SHARED auto-gain.
+        """
+        self._ensure_dsp(len(left), rate)
+        np = self._np
+        L = np.asarray(left, dtype=float)
+        R = np.asarray(right, dtype=float)
+        if self.layout == "stereo_v":
+            return self._frame_stereo_v(L, R)
+        if self.layout == "stereo_h":
+            return self._frame_stereo_h(L, R)
+        return spectrum.encode_full(self.process((L + R) * 0.5, rate))
+
+    def _frame_stereo_v(self, L, R) -> bytes:
+        np = self._np
+        w = self._window
+        rms = (float(np.sqrt((np.mean(np.square(L)) + np.mean(np.square(R))) / 2.0))
+               if L.size else 0.0)
+        bands_l = spectrum.bucketize(np.abs(np.fft.rfft(L * w)), self._edges_v)
+        bands_r = spectrum.bucketize(np.abs(np.fft.rfft(R * w)), self._edges_v)
+        if rms < spectrum.SILENCE_FLOOR_RMS:
+            self._ref = spectrum.update_ref(self._ref, 0.0)
+            new_l = [0] * spectrum.STEREO_BANDS
+            new_r = [0] * spectrum.STEREO_BANDS
+        else:
+            # SHARED reference across BOTH channels (mean of all 38 bands) so a
+            # louder channel reads visibly louder — seeing the stereo BALANCE is
+            # the point. (Independent per-channel gain would hide the balance.)
+            self._ref = spectrum.update_ref(
+                self._ref, spectrum.band_mean(list(bands_l) + list(bands_r)))
+            new_l = spectrum.normalize_levels(
+                bands_l, self._ref, self.sensitivity, max_bar=spectrum.STEREO_V_MAX)
+            new_r = spectrum.normalize_levels(
+                bands_r, self._ref, self.sensitivity, max_bar=spectrum.STEREO_V_MAX)
+        self.levels_l = spectrum.decay_levels(self.levels_l, new_l, self.decay)
+        self.levels_r = spectrum.decay_levels(self.levels_r, new_r, self.decay)
+        return spectrum.encode_stereo_v(
+            [int(round(x)) for x in self.levels_l],
+            [int(round(x)) for x in self.levels_r])
+
+    def _frame_stereo_h(self, L, R) -> bytes:
+        np = self._np
+        rms_l = float(np.sqrt(np.mean(np.square(L)))) if L.size else 0.0
+        rms_r = float(np.sqrt(np.mean(np.square(R)))) if R.size else 0.0
+        if max(rms_l, rms_r) < spectrum.SILENCE_FLOOR_RMS:
+            self._ref = spectrum.update_ref(self._ref, 0.0)
+            new_l = new_r = 0
+        else:
+            # SHARED reference (mean broadband loudness of both channels), so the
+            # louder channel's meter is visibly longer — the balance is readable.
+            self._ref = spectrum.update_ref(self._ref, (rms_l + rms_r) / 2.0)
+            new_l = spectrum.normalize_levels(
+                [rms_l], self._ref, self.sensitivity, max_bar=spectrum.STEREO_H_MAX)[0]
+            new_r = spectrum.normalize_levels(
+                [rms_r], self._ref, self.sensitivity, max_bar=spectrum.STEREO_H_MAX)[0]
+        self.level_l = spectrum.decay_levels([self.level_l], [new_l], self.decay)[0]
+        self.level_r = spectrum.decay_levels([self.level_r], [new_r], self.decay)[0]
+        return spectrum.encode_stereo_h(int(round(self.level_l)), int(round(self.level_r)))
+
+    # --- output --------------------------------------------------------------
+    def feed(self, left, right, rate: float) -> None:
+        """Analyze a stereo chunk and stream the active layout's frame."""
+        self.sender.send(self.process_frame(left, right, rate))
 
     def send_zeros(self) -> None:
-        # Let the running levels relax so a re-start doesn't jump.
-        self.levels = spectrum.decay_levels(self.levels, ZERO_FRAME, self.decay)
-        self.sender.send([int(round(x)) for x in self.levels])
+        """Relax the ACTIVE layout's levels toward 0 and send (so a re-start
+        doesn't jump). Each layout drains its own smoothing state."""
+        if self.layout == "stereo_v":
+            zeros = [0] * spectrum.STEREO_BANDS
+            self.levels_l = spectrum.decay_levels(self.levels_l, zeros, self.decay)
+            self.levels_r = spectrum.decay_levels(self.levels_r, zeros, self.decay)
+            self.sender.send(spectrum.encode_stereo_v(
+                [int(round(x)) for x in self.levels_l],
+                [int(round(x)) for x in self.levels_r]))
+        elif self.layout == "stereo_h":
+            self.level_l = spectrum.decay_levels([self.level_l], [0], self.decay)[0]
+            self.level_r = spectrum.decay_levels([self.level_r], [0], self.decay)[0]
+            self.sender.send(spectrum.encode_stereo_h(
+                int(round(self.level_l)), int(round(self.level_r))))
+        else:
+            self.levels = spectrum.decay_levels(self.levels, ZERO_FRAME, self.decay)
+            self.sender.send(spectrum.encode_full([int(round(x)) for x in self.levels]))
 
     def close(self) -> None:
         self.sender.close()
 
 
 # --- supervisor --------------------------------------------------------------
-def _read_settings(state: dict) -> tuple[str, object, float, float]:
+def _read_settings(state: dict) -> tuple[str, object, float, float, str]:
+    layout = state.get("spectrum_layout", "full")
     return (
         state.get("audio_source", "system"),
         state.get("audio_device"),
         state.get("audio_gain", 1.0),
         state.get("audio_decay", 0.85),
+        layout if layout in spectrum.LAYOUTS else "full",
     )
 
 
@@ -678,7 +778,7 @@ def run(socket_path: str | None = None) -> int:
     log(f"{len(devices)} devices ({len(monitors)} monitors); "
         f"default monitor: {default_monitor}")
 
-    on_chunk = lambda s, r: av.send(av.process(s, r))  # noqa: E731
+    on_chunk = lambda l, r, rate: av.feed(l, r, rate)  # noqa: E731
     debouncer = ChangeDebouncer(RESTART_DEBOUNCE_MS)
     applied = _UNSET
     capture = None
@@ -689,8 +789,8 @@ def run(socket_path: str | None = None) -> int:
         if now - last_poll >= POLL_MS:
             last_poll = now
             state = load_state()
-            source, device, gain, decay = _read_settings(state)
-            av.configure(gain, decay)
+            source, device, gain, decay, layout = _read_settings(state)
+            av.configure(gain, decay, layout)
             # Capture only while in spectrum mode (no parec churn otherwise).
             desired = (
                 select_capture(source, device, devices, default_monitor, default_source)
