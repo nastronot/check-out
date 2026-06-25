@@ -142,6 +142,7 @@ def _new_ctx() -> dict:
         "last_status_ms": None,    # wall-clock ms of the last status write (throttle)
         # --- spectrum analyzer ---
         "spectrum_active": False,  # are the bar height-glyphs currently defined?
+        "spectrum_style": None,    # which glyph set is defined ("bars"|"line"|None)
         "spectrum_heights": [0] * spectrum.NUM_BARS,  # latest 20 bar heights
         "spectrum_recv_ms": None,  # wall-clock ms of the last audio datagram
         "spectrum_rx": None,       # the SpectrumReceiver (lazy-bound on first entry)
@@ -308,6 +309,8 @@ def _write_status(
             "blank": bool(state.get("blank")),
             "scroll": bool(state.get("scroll")),
             "bars": bars,
+            # The spectrum render style, so the preview mirrors bars vs line.
+            "spectrum_style": state.get("spectrum_style", "bars"),
             "last_command_id": ctx["last_command_id"],
             "heartbeat": ctx["heartbeat"],
         }
@@ -473,19 +476,36 @@ def _ensure_spectrum_rx(ctx: dict) -> None:
         ctx["spectrum_rx_failed"] = True
 
 
-def _enter_spectrum(driver: VFDDriver, ctx: dict) -> None:
-    """Define the 7 bar height-glyphs and start listening for audio frames.
+def _norm_spectrum_style(state: dict) -> str:
+    """The active spectrum render style ("bars"|"line"), coerced to a known one."""
+    style = state.get("spectrum_style")
+    return style if style in spectrum.SPECTRUM_STYLES else "bars"
 
-    This OVERWRITES user-glyph slots 0..6; the daemon re-applies ``state.glyphs``
-    when spectrum is left (see :func:`tick_once`). Defining characters can reset
-    the display's extended-mode/scroll state, so re-init + invalidate the setting
-    caches afterward.
+
+def _define_spectrum_glyphs(driver: VFDDriver, ctx: dict, style: str) -> None:
+    """Define the 7 height-glyphs for ``style`` into slots 0..6, then re-init.
+
+    Used on spectrum ENTER and whenever the style changes mid-mode. Defining
+    characters can reset extended-mode/scroll, so re-init + invalidate the
+    setting caches afterward; records the applied style so the next tick only
+    redefines on an actual change.
     """
-    log("entering spectrum: defining bar glyphs (user glyphs restored on exit)")
-    for slot, rows in spectrum.bar_glyphs().items():
+    for slot, rows in spectrum.style_glyphs(style).items():
         driver.define_character(slot, rows)
     driver.initialize()
     _invalidate_caches(ctx)
+    ctx["spectrum_style"] = style
+
+
+def _enter_spectrum(driver: VFDDriver, state: dict, ctx: dict) -> None:
+    """Define the height-glyphs for the active style and start listening.
+
+    This OVERWRITES user-glyph slots 0..6; the daemon re-applies ``state.glyphs``
+    when spectrum is left (see :func:`tick_once`).
+    """
+    style = _norm_spectrum_style(state)
+    log(f"entering spectrum ({style}): defining glyphs (user glyphs restored on exit)")
+    _define_spectrum_glyphs(driver, ctx, style)
     ctx["spectrum_active"] = True
     _ensure_spectrum_rx(ctx)
 
@@ -500,6 +520,13 @@ def _tick_spectrum(
     within ``SPECTRUM_STALE_MS`` the bars decay toward 0 (don't freeze)."""
     _apply_settings(driver, state, ctx, now_ms, "none", params)  # animation N/A
 
+    # A live STYLE change swaps the 7 glyph slots (bars <-> single-row line)
+    # before rendering, so the cell mapping and the on-glass glyphs stay in sync.
+    style = _norm_spectrum_style(state)
+    if style != ctx.get("spectrum_style"):
+        log(f"spectrum style -> {style}: redefining glyphs")
+        _define_spectrum_glyphs(driver, ctx, style)
+
     rx = ctx.get("spectrum_rx")
     latest = rx.drain() if rx is not None else None
     if latest is not None:
@@ -511,7 +538,7 @@ def _tick_spectrum(
             ctx["spectrum_heights"] = spectrum.decay_heights(ctx["spectrum_heights"])
 
     heights = ctx["spectrum_heights"]
-    top, bottom = spectrum.render_spectrum(heights)
+    top, bottom = spectrum.render_spectrum(heights, style)
     emit = ("show", top, bottom)
     if emit != ctx["last_emit"]:
         driver.show(top, bottom)
@@ -544,6 +571,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     # force section 3 below to re-define state.glyphs (restore the user's glyphs).
     if ctx["spectrum_active"] and mode != "spectrum":
         ctx["spectrum_active"] = False
+        ctx["spectrum_style"] = None   # re-define the glyph set on re-entry
         ctx["last_glyphs"] = None
         ctx["last_emit"] = None
 
@@ -570,7 +598,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     # (When blank, fall through to the normal blank handling below.)
     if mode == "spectrum" and not state.get("blank"):
         if not ctx["spectrum_active"]:
-            _enter_spectrum(driver, ctx)
+            _enter_spectrum(driver, state, ctx)
         _tick_spectrum(driver, state, ctx, now_ms, params)
         return
 

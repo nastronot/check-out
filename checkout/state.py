@@ -77,6 +77,7 @@ def defaults() -> dict:
         "audio_device": None,            # device name/index, or null = default/auto
         "audio_gain": 1.0,               # sensitivity multiplier
         "audio_decay": 0.85,             # bar release factor (attack-fast/release-slow)
+        "spectrum_style": "bars",        # "bars" (filled) | "line" (single-row peak)
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -93,6 +94,9 @@ _NESTED_DEFAULTS = ("animation_params", "command")
 # schema/UI shape already accommodate a third option.
 _SCROLL_SOURCES = ("message", "clock")
 _DEFAULT_SCROLL_SOURCE = "message"
+
+# Spectrum render styles (mono for now; stereo layouts reuse this seam later).
+_SPECTRUM_STYLES = ("bars", "line")
 
 
 def _backfill(data: dict) -> dict:
@@ -126,6 +130,9 @@ def _backfill(data: dict) -> dict:
         merged["audio_source"] = "system"
     merged["audio_gain"] = _clamp_float(merged.get("audio_gain"), 1.0, 0.05, 20.0)
     merged["audio_decay"] = _clamp_float(merged.get("audio_decay"), 0.85, 0.0, 0.999)
+    # Spectrum render style: filled bars (default) or single-row line; coerce junk.
+    if merged.get("spectrum_style") not in _SPECTRUM_STYLES:
+        merged["spectrum_style"] = "bars"
     return merged
 
 
