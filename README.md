@@ -406,6 +406,44 @@ sudo usermod -aG uucp "$USER"   # then re-login
 
 ---
 
+## Running as a service (start on login)
+
+`deploy/` installs check-out as **three systemd _user_ services** that start when
+you log in:
+
+| Service | Runs | Role |
+|---------|------|------|
+| `checkout-daemon`   | `python -m checkout.daemon`   | owns the serial port, drives the glass |
+| `checkout-audioviz` | `python -m checkout.audioviz` | captures audio + FFT → spectrum bars |
+| `checkout-web`      | `uvicorn web.app:app …`       | serves the UI + API on `http://127.0.0.1:8000` |
+
+```bash
+deploy/install.sh      # build UI if needed, install + enable + start all three
+deploy/uninstall.sh    # stop, disable, remove the unit files
+```
+
+The installer resolves the repo path from its own location and substitutes it
+into the unit templates (`deploy/systemd/*.service`), so nothing personal is
+committed — the units ship with a `__CHECKOUT_REPO__` placeholder.
+
+**Logs / control:**
+
+```bash
+journalctl --user -u checkout-daemon -f          # follow a service's log
+systemctl --user status checkout-daemon          # state
+systemctl --user restart checkout-web            # restart one
+```
+
+**Why user services, not headless/lingering.** These are **user** units that run
+inside your login session (we deliberately do **not** `loginctl enable-linger`).
+The `spectrum` system-audio capture taps the user's **PipeWire monitor**, which
+only exists inside an active login session — a headless/lingering box would have
+no audio session and the spectrum would read silence. Starting on login gives
+audioviz the PipeWire graph it needs. The display, web UI, and all non-audio
+modes would work headless too, but a single consistent install is simpler.
+
+---
+
 ## Design principles / lessons
 
 - **Empirical over assumed.** There's no datasheet; the bench is the source of
@@ -438,12 +476,10 @@ errors and no a11y warnings before commit.
 
 ## Roadmap / planned
 
-- **Always-on via systemd.** A headless/lingering service runs the display and all
-  non-audio modes fine. Caveat: the **PipeWire monitor capture** for `spectrum`
-  likely needs an **active user session** (the monitor source lives in the user's
-  PipeWire graph), so a fully headless box may run everything *except* system-audio
-  spectrum without a session workaround.
-  <!-- TODO: confirm headless PipeWire/spectrum capture under a systemd user service. -->
+- ~~**Always-on via systemd.**~~ Shipped in **v1.3.0** — three systemd _user_
+  services (daemon, audioviz, web) that start on login (`deploy/`). User (not
+  lingering/headless) so spectrum's PipeWire monitor capture has an active
+  session. See **Running as a service** above.
 - **News feed into SCROLL.** The per-row content-source enum is already news-ready
   (`message` | `clock`, with a documented `news` extension point in `state.py` and
   the daemon's `_scroll_row`) — wiring a live news source is a drop-in.

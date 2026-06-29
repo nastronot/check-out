@@ -584,6 +584,28 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   daemon blocks on the wire instead of dumping ~30fps renders into the OS TX
   buffer, so there's no growing latency backlog (see §3, `show()` byte sequence).
 
+### 4.x Running as a service (v1.3.0)
+`deploy/` installs check-out as **three systemd USER services** that start on
+login — `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
+(`python -m checkout.audioviz`), `checkout-web`
+(`uvicorn web.app:app --host 127.0.0.1 --port 8000 --no-access-log`) — each rooted
+at the repo `.venv`, `Restart=on-failure`/`RestartSec=2`,
+`[Install] WantedBy=default.target`.
+- **Host-agnostic templates.** `deploy/systemd/*.service` carry a
+  `__CHECKOUT_REPO__` placeholder (no personal path/hostname committed);
+  `deploy/install.sh` resolves the repo root from its own location, builds the UI
+  if `ui/dist` is missing, `sed`-substitutes the path into
+  `~/.config/systemd/user/`, then `daemon-reload` + `enable --now`.
+  `deploy/uninstall.sh` reverses it.
+- **USER, not lingering/headless (rationale).** Spectrum's system-audio capture
+  taps the user's PipeWire monitor, which only exists in an active login session,
+  so the services run as user units (no `loginctl enable-linger`) — they start on
+  login and audioviz inherits the PipeWire graph. Display + web + non-audio modes
+  would work headless, but a single consistent install is simpler.
+- Logs: `journalctl --user -u checkout-daemon -f`; UI at `http://127.0.0.1:8000`.
+  Tested by `tests/test_deploy.py` (well-formed units, `bash -n`/shellcheck-clean
+  scripts, placeholder substitution, no lingering).
+
 ---
 
 ## 5. Open items

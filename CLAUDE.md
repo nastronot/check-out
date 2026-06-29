@@ -645,6 +645,30 @@ with `sudo`:
 sudo usermod -aG uucp "$USER"   # then re-login
 ```
 
+## Running as a service (v1.3.0)
+`deploy/` installs check-out as **three systemd USER services** that start on
+login: `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
+(`python -m checkout.audioviz`), `checkout-web`
+(`uvicorn web.app:app --host 127.0.0.1 --port 8000 --no-access-log`). All three:
+`WorkingDirectory`/`ExecStart` rooted at the repo's `.venv`, `Restart=on-failure`
+`RestartSec=2`, `[Install] WantedBy=default.target`; audioviz is loosely
+`After=checkout-daemon.service`.
+- **Unit templates** live in `deploy/systemd/*.service` with a `__CHECKOUT_REPO__`
+  placeholder — NO personal path/hostname committed. `deploy/install.sh` resolves
+  the repo root from its own location, builds the UI if `ui/dist` is missing
+  (warns if npm absent), `sed`-substitutes the real path into
+  `~/.config/systemd/user/`, `daemon-reload`, then `enable --now` all three.
+  `deploy/uninstall.sh` does `disable --now` + removes the units + reload.
+- **USER services, NOT lingering/headless (the rationale):** spectrum's system-
+  audio capture taps the user's **PipeWire monitor**, which only exists inside an
+  active login session. `loginctl enable-linger` is deliberately NOT run — the
+  services start on login so audioviz has the PipeWire graph. Logs:
+  `journalctl --user -u checkout-daemon -f`; UI at `http://127.0.0.1:8000`.
+- **Tests:** `tests/test_deploy.py` checks the units are well-formed INI with the
+  required sections/keys + placeholder, the scripts are executable + `bash -n`
+  clean (+ shellcheck when present) and the installer seds the placeholder and
+  never enables lingering. Config files, so the bar is well-formed, not behavior.
+
 ## Roadmap
 - **Phase 1:** driver, renderer, clock frame, daemon, state seam. (done)
 - **Phase 2a (v0.3.0):** rich `state.json` schema + `status.json`; message/ticker
@@ -675,6 +699,10 @@ sudo usermod -aG uucp "$USER"   # then re-login
   + column glyphs, two stereo renderers, UI toggle + preview. (done)
 - **v1.2.1:** custom inverted L/R label bitmaps; audio sliders share the
   Brightness slider styling (global `.phosphor-slider`). (done)
+- **v1.3.0:** systemd USER services (`deploy/`) — daemon, audioviz, web start on
+  login via install/uninstall scripts; user (not lingering/headless) so spectrum's
+  PipeWire monitor capture has an active session; host-agnostic unit templates
+  (`__CHECKOUT_REPO__` placeholder, install-time sed); `tests/test_deploy.py`. (done)
 - **Phase 3:** more frames + rotation.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
