@@ -1,0 +1,15 @@
+[Unit]
+Description=check-out VFD daemon (sole serial-port owner)
+Documentation=https://github.com/check-out
+# Order after the graphical session is up; not a hard requirement.
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=__CHECKOUT_REPO__
+ExecStart=__CHECKOUT_REPO__/.venv/bin/python -m checkout.daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

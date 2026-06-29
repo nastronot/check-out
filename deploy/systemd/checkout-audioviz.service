@@ -1,0 +1,17 @@
+[Unit]
+Description=check-out audio capture + FFT (streams spectrum bars to the daemon)
+Documentation=https://github.com/check-out
+# Loose ordering: audioviz polls state.json and streams over a datagram socket,
+# so it tolerates the daemon coming up after it. As a USER service started on
+# login it inherits the user's PipeWire session (required for monitor capture).
+After=checkout-daemon.service
+
+[Service]
+Type=simple
+WorkingDirectory=__CHECKOUT_REPO__
+ExecStart=__CHECKOUT_REPO__/.venv/bin/python -m checkout.audioviz
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

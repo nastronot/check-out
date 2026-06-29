@@ -1,0 +1,14 @@
+[Unit]
+Description=check-out web control surface (FastAPI + Svelte UI)
+Documentation=https://github.com/check-out
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=__CHECKOUT_REPO__
+ExecStart=__CHECKOUT_REPO__/.venv/bin/uvicorn web.app:app --host 127.0.0.1 --port 8000 --no-access-log
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
