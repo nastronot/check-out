@@ -1,10 +1,15 @@
 [Unit]
 Description=check-out audio capture + FFT (streams spectrum bars to the daemon)
 Documentation=https://github.com/check-out
-# Loose ordering: audioviz polls state.json and streams over a datagram socket,
-# so it tolerates the daemon coming up after it. As a USER service started on
-# login it inherits the user's PipeWire session (required for monitor capture).
-After=checkout-daemon.service
+# NO ordering relative to the other checkout-* units (or default.target): the
+# services are order-independent by design. audioviz polls state.json and streams
+# over a datagram socket, reconnecting regardless of start order, so it tolerates
+# the daemon not being up yet (SpectrumSender drops silently with no listener) and
+# vice versa. A prior After=checkout-daemon.service formed a boot-time ordering
+# cycle (default.target -> audioviz -> daemon -> default.target) that systemd broke
+# by DELETING audioviz's start job — so it didn't start on login. As a USER service
+# started on login it inherits the user's PipeWire session (required for monitor
+# capture) with no ordering needed.
 
 [Service]
 Type=simple

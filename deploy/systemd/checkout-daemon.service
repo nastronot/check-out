@@ -1,8 +1,10 @@
 [Unit]
 Description=check-out VFD daemon (sole serial-port owner)
 Documentation=https://github.com/check-out
-# Order after the graphical session is up; not a hard requirement.
-After=default.target
+# NO ordering relative to the other checkout-* units (or default.target): the
+# services are order-independent by design (socket + state.json self-coordination).
+# A prior After=default.target was part of a boot-time ordering cycle — see the
+# note in checkout-audioviz.service.
 
 [Service]
 Type=simple

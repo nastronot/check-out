@@ -1,7 +1,10 @@
 [Unit]
 Description=check-out web control surface (FastAPI + Svelte UI)
 Documentation=https://github.com/check-out
-After=default.target
+# NO ordering relative to the other checkout-* units (or default.target): the
+# services are order-independent by design (the web app only reads status.json and
+# writes state.json — never the port). See checkout-audioviz.service for why the
+# prior ordering was removed (a boot-time cycle).
 
 [Service]
 Type=simple
