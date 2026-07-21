@@ -584,13 +584,20 @@ audioviz (capture+FFT) ── unix DGRAM socket (20-byte frame) ──► daemon
   daemon blocks on the wire instead of dumping ~30fps renders into the OS TX
   buffer, so there's no growing latency backlog (see §3, `show()` byte sequence).
 
-### 4.x Running as a service (v1.3.0)
+### 4.x Running as a service (v1.3.0, ordering fix v1.3.1)
 `deploy/` installs check-out as **three systemd USER services** that start on
 login — `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
 (`python -m checkout.audioviz`), `checkout-web`
 (`uvicorn web.app:app --host 127.0.0.1 --port 8000 --no-access-log`) — each rooted
 at the repo `.venv`, `Restart=on-failure`/`RestartSec=2`,
 `[Install] WantedBy=default.target`.
+- **Order-independent (v1.3.1).** The units carry NO ordering between them — they
+  self-coordinate at runtime (audioviz reconnects to the daemon's datagram socket
+  regardless of start order; the daemon owns the socket lazily). An earlier
+  cosmetic `After=` (audioviz→daemon, daemon/web→`default.target`) combined with the
+  `default.target` wants formed a boot-time **ordering cycle** that systemd resolved
+  by dropping audioviz's start job (spectrum silently didn't start on login); the
+  ordering was removed.
 - **Host-agnostic templates.** `deploy/systemd/*.service` carry a
   `__CHECKOUT_REPO__` placeholder (no personal path/hostname committed);
   `deploy/install.sh` resolves the repo root from its own location, builds the UI

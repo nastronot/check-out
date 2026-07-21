@@ -424,7 +424,17 @@ deploy/uninstall.sh    # stop, disable, remove the unit files
 
 The installer resolves the repo path from its own location and substitutes it
 into the unit templates (`deploy/systemd/*.service`), so nothing personal is
-committed — the units ship with a `__CHECKOUT_REPO__` placeholder.
+committed — the units ship with a `__CHECKOUT_REPO__` placeholder. If you already
+installed a pre-v1.3.1 build, **re-run `deploy/install.sh`** to pick up the fixed
+units (or manually re-copy them and `systemctl --user daemon-reload`).
+
+**Order-independent by design.** The three units carry **no** systemd ordering
+between them — they self-coordinate at runtime (audioviz reconnects to the
+daemon's datagram socket regardless of start order; the daemon owns the socket
+lazily), so they start in any order. An earlier cosmetic `After=` ordering,
+combined with the `WantedBy=default.target` wants, formed a boot-time **ordering
+cycle** that systemd broke by silently dropping audioviz's start job (the spectrum
+didn't start on login); v1.3.1 removed the ordering.
 
 **Logs / control:**
 

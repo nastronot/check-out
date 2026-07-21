@@ -645,14 +645,24 @@ with `sudo`:
 sudo usermod -aG uucp "$USER"   # then re-login
 ```
 
-## Running as a service (v1.3.0)
+## Running as a service (v1.3.0, ordering fix v1.3.1)
 `deploy/` installs check-out as **three systemd USER services** that start on
 login: `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
 (`python -m checkout.audioviz`), `checkout-web`
 (`uvicorn web.app:app --host 127.0.0.1 --port 8000 --no-access-log`). All three:
 `WorkingDirectory`/`ExecStart` rooted at the repo's `.venv`, `Restart=on-failure`
-`RestartSec=2`, `[Install] WantedBy=default.target`; audioviz is loosely
-`After=checkout-daemon.service`.
+`RestartSec=2`, `[Install] WantedBy=default.target`.
+- **Order-independent, NO inter-unit ordering (v1.3.1).** The three units carry NO
+  `After=`/`Before=`/`Wants=`/`Requires=` referencing each other or
+  `default.target` — they self-coordinate at runtime (audioviz polls `state.json`
+  and reconnects to the daemon's datagram socket regardless of start order;
+  `SpectrumSender` drops silently if the daemon isn't listening yet; the daemon
+  owns the socket lazily). A prior cosmetic `After=checkout-daemon.service` (plus
+  the daemon/web `After=default.target`), combined with the `WantedBy=default.target`
+  wants, formed a boot-time **ordering cycle** (`default.target` → audioviz →
+  daemon → `default.target`); systemd broke it by DELETING audioviz's start job, so
+  the spectrum silently didn't start on login (a manual `systemctl --user restart
+  checkout-audioviz` worked). Removing all inter-unit ordering fixes it.
 - **Unit templates** live in `deploy/systemd/*.service` with a `__CHECKOUT_REPO__`
   placeholder — NO personal path/hostname committed. `deploy/install.sh` resolves
   the repo root from its own location, builds the UI if `ui/dist` is missing
@@ -703,6 +713,14 @@ login: `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
   login via install/uninstall scripts; user (not lingering/headless) so spectrum's
   PipeWire monitor capture has an active session; host-agnostic unit templates
   (`__CHECKOUT_REPO__` placeholder, install-time sed); `tests/test_deploy.py`. (done)
+- **v1.3.1:** fixed a boot-time systemd **ordering cycle** that dropped audioviz at
+  login — removed all inter-unit ordering (`After=checkout-daemon.service` on
+  audioviz + `After=default.target` on daemon/web), which with the
+  `WantedBy=default.target` wants formed a cycle systemd broke by deleting
+  audioviz's start job. The services are order-independent by design (socket +
+  `state.json` self-coordination), so the ordering was cosmetic. `test_deploy.py`
+  now asserts no unit references another checkout-* unit / `default.target` in an
+  ordering key. Re-run `deploy/install.sh` to pick up the fixed units. (done)
 - **Phase 3:** more frames + rotation.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).

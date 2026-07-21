@@ -60,6 +60,28 @@ def test_execstart_uses_venv_and_placeholder(svc):
     assert "/home/" not in body
 
 
+@pytest.mark.parametrize("svc", SERVICES)
+def test_no_ordering_between_units(svc):
+    # Guard against reintroducing the boot-time ordering cycle (v1.3.1): the three
+    # units must carry NO ordering/dependency directive referencing another
+    # checkout-* unit or default.target. They self-coordinate at runtime (socket +
+    # state.json), so any After=/Before=/Wants=/Requires= among them is both
+    # unnecessary and — with the [Install] WantedBy=default.target — cycle-forming.
+    forbidden_keys = ("after", "before", "wants", "requires", "requisite", "bindsto")
+    forbidden_targets = ("checkout-daemon", "checkout-audioviz", "checkout-web", "default.target")
+    with open(_unit_path(svc), encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip().lower() in forbidden_keys:
+                assert not any(t in value for t in forbidden_targets), (
+                    f"{svc}: '{line}' reintroduces an ordering cycle "
+                    "(units must be order-independent)"
+                )
+
+
 def test_module_invocation_per_service():
     expected = {
         "checkout-daemon": "-m checkout.daemon",
