@@ -44,6 +44,18 @@ export interface WeatherStatus {
   error: string | null;
 }
 
+/** News alert source keys (checkout/news.py SOURCES) and brightness effect. */
+export type NewsSource = 'ap' | 'bbc' | 'nyt';
+export type NewsEffect = 'none' | 'flash' | 'throb';
+
+/** status.news — each source's lead story + error, the newest lead, alert flag. */
+export interface NewsStatus {
+  sources: Record<string, { title: string | null; published: string | null; error: string | null }>;
+  latest: { source: string; title: string; published: string | null } | null;
+  error: string | null;
+  alerting: boolean;
+}
+
 /** {"0".."8"} -> 7 row ints (low 5 bits = columns 1..5). Shared with state.glyphs. */
 export type GlyphMap = Record<string, number[]>;
 
@@ -91,6 +103,13 @@ export interface AppState {
   dynamic_colon_half: boolean;
   dynamic_pacman_solo: boolean;
   dynamic_pacman_sprite: DynamicPacmanSprite;
+  // dynamic: news alerts
+  news_enabled: boolean;
+  news_sources: NewsSource[];
+  news_interval_min: number;
+  news_repeat: number;
+  news_speed_ms: number;
+  news_effect: NewsEffect;
   command: CommandRef;
   updated_at?: string;
 }
@@ -132,6 +151,8 @@ export interface Status {
   mode_glyphs?: GlyphMap | null;
   /** Weather mode: the latest reading + fetch health; null elsewhere. */
   weather?: WeatherStatus | null;
+  /** Dynamic + news on: per-source leads, the newest, whether an alert shows. */
+  news?: NewsStatus | null;
   last_command_id: string | null;
   updated_at: string | null;
 }

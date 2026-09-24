@@ -2,6 +2,8 @@
   import { lineBudget } from '../message';
   import { audioDevices, refreshDevices } from '../stores';
   import { parseCoord, weatherSummary } from '../weather';
+  import { newsSummary } from '../news';
+  import { postCommand } from '../api';
   import type {
     Align,
     AppState,
@@ -15,6 +17,8 @@
     Status,
     DynamicColon,
     DynamicPacmanSprite,
+    NewsEffect,
+    NewsSource,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -163,6 +167,38 @@
   const setSolo = (e: Event) => patch({ dynamic_pacman_solo: checked(e) });
   const setSprite = (p: DynamicPacmanSprite) => patch({ dynamic_pacman_sprite: p });
   $: weatherLine = weatherSummary(status?.weather);
+
+  // news alerts (dynamic): sources are a multi-select; numbers patch on change.
+  const NEWS_SOURCES: { value: NewsSource; label: string }[] = [
+    { value: 'ap', label: 'AP' },
+    { value: 'bbc', label: 'BBC' },
+    { value: 'nyt', label: 'NYT' },
+  ];
+  const NEWS_EFFECTS: { value: NewsEffect; label: string }[] = [
+    { value: 'none', label: 'NONE' },
+    { value: 'flash', label: 'FLASH' },
+    { value: 'throb', label: 'THROB' },
+  ];
+  function toggleNewsSource(src: NewsSource): void {
+    const cur = state?.news_sources ?? [];
+    const next = cur.includes(src) ? cur.filter((s) => s !== src) : [...cur, src];
+    patch({ news_sources: next });
+  }
+  const setNewsEnabled = (e: Event) => patch({ news_enabled: checked(e) });
+  const setNewsInterval = (e: Event) => patch({ news_interval_min: num(e) });
+  const setNewsRepeat = (e: Event) => patch({ news_repeat: num(e) });
+  const setNewsSpeed = (e: Event) => patch({ news_speed_ms: num(e) });
+  const setNewsEffect = (x: NewsEffect) => patch({ news_effect: x });
+  let showingLatest = false;
+  async function showLatestNews(): Promise<void> {
+    showingLatest = true;
+    try {
+      await postCommand('show_news');
+    } finally {
+      showingLatest = false;
+    }
+  }
+  $: newsLine = newsSummary(status?.news);
 
   // One line per colon choice: only the selected one is explained.
   const COLON_HINTS: Record<DynamicColon, string> = {
@@ -475,6 +511,59 @@
           {/if}
         </div>
         <span class="field__hint">{COLON_HINTS[state.dynamic_colon]}</span>
+      </div>
+
+      <div class="field">
+        <span class="field__label">News</span>
+        <div class="ctl-row">
+          <label class="switch">
+            <input type="checkbox" checked={state.news_enabled} on:change={setNewsEnabled} />
+            <span class="switch__track"></span>
+            <span class="switch__label">Alerts</span>
+          </label>
+          <div class="seg seg--sm" aria-label="news sources">
+            {#each NEWS_SOURCES as src}
+              <button
+                type="button"
+                aria-pressed={state.news_sources.includes(src.value)}
+                on:click={() => toggleNewsSource(src.value)}>{src.label}</button
+              >
+            {/each}
+          </div>
+          <button
+            type="button"
+            class="btn"
+            disabled={!state.news_enabled || showingLatest}
+            on:click={showLatestNews}>Show latest</button
+          >
+        </div>
+        {#if state.news_enabled}
+          <div class="ctl-row">
+            <span class="ctl-row__name">Every</span>
+            <input type="number" min="1" max="60" value={state.news_interval_min} on:change={setNewsInterval} />
+            <span class="field__hint">min</span>
+            <span class="ctl-row__name">Repeat</span>
+            <input type="number" min="0" max="5" value={state.news_repeat} on:change={setNewsRepeat} />
+          </div>
+          <div class="ctl-row">
+            <span class="ctl-row__name">Speed</span>
+            <input type="number" min="60" max="1000" step="10" value={state.news_speed_ms} on:change={setNewsSpeed} />
+            <span class="field__hint">ms per step</span>
+          </div>
+          <div class="ctl-row">
+            <span class="ctl-row__name">Effect</span>
+            <div class="seg seg--sm">
+              {#each NEWS_EFFECTS as x}
+                <button
+                  type="button"
+                  aria-pressed={state.news_effect === x.value}
+                  on:click={() => setNewsEffect(x.value)}>{x.label}</button
+                >
+              {/each}
+            </div>
+          </div>
+          <span class="field__hint">{newsLine}</span>
+        {/if}
       </div>
     {/if}
 
