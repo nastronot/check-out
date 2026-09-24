@@ -139,31 +139,30 @@
       </button>
     </div>
 
-    <div class="tool">
-      <span class="tool__label">seed from char</span>
-      <div class="row">
-        <input
-          type="text"
-          maxlength="1"
-          bind:value={charInput}
-          placeholder="A"
-          spellcheck="false"
-          on:keydown={(e) => e.key === 'Enter' && loadChar()}
-        />
-        <button class="btn btn--mini" on:click={loadChar} disabled={!charKnown}>
-          load
-        </button>
-      </div>
-    </div>
+    <label class="tool">
+      <span>seed from</span>
+      <input
+        type="text"
+        maxlength="1"
+        bind:value={charInput}
+        placeholder="A"
+        spellcheck="false"
+        aria-label="seed from character"
+        on:keydown={(e) => e.key === 'Enter' && loadChar()}
+      />
+      <button class="btn btn--mini" on:click={loadChar} disabled={!charKnown}>
+        load
+      </button>
+    </label>
 
-    <div class="tool">
-      <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
+    <div class="tool tool--end">
       <span class="sync-label">
         {#if sync[selected] === 'syncing'}syncing…
         {:else if sync[selected] === 'synced'}synced ✓
         {:else if sync[selected] === 'error'}sync failed
         {/if}
       </span>
+      <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
     </div>
   </div>
 
@@ -270,12 +269,12 @@
     box-shadow: var(--shadow-inset);
   }
 
-  /* tools: one row under the board */
+  /* tools: one row under the board, every group centred on the same line */
   .tools {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 14px 24px;
+    align-items: center;
+    gap: 10px 24px;
     margin-bottom: 10px;
   }
 
@@ -290,25 +289,22 @@
 
   .tool {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .tool__label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
     color: var(--text-mute);
   }
 
-  .tool .row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
+  .tool--end {
+    margin-left: auto; /* Clear sits at the right edge */
   }
 
+
+
   .tool input[type='text'] {
-    width: 48px;
+    width: 40px;
+    padding-top: 5px;
+    padding-bottom: 5px;
     text-align: center;
   }
 
@@ -321,7 +317,6 @@
     font-size: 11px;
     letter-spacing: 0.06em;
     color: var(--text-faint);
-    min-height: 14px;
   }
 
   code {
