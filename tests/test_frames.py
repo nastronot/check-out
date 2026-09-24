@@ -345,23 +345,23 @@ def test_twinkle_glyphs_match_the_drawn_frames():
 
 
 # --- pacman colon mode ----------------------------------------------------------
-_GA = chr(GLYPH_CODES[_weather.SLOT_GHOST_A])
-_GB = chr(GLYPH_CODES[_weather.SLOT_GHOST_B])
+# Slots 5/6 hold the chosen sprite's two frames (a mirrored pacman in duo), 7/8
+# hold pacman in duo. Which bitmaps sit there depends on the cast (glyph_set).
+_SA = chr(GLYPH_CODES[_weather.SLOT_SPRITE_A])
+_SB = chr(GLYPH_CODES[_weather.SLOT_SPRITE_B])
 _PA = chr(GLYPH_CODES[_weather.SLOT_PAC_A])
 _PB = chr(GLYPH_CODES[_weather.SLOT_PAC_B])
 
 
-def _pac(us, second=12, half=False, sprite="both"):
-    solo = sprite != "both"
+def _pac(us, second=12, half=False, sprite="ghost", solo=False):
     state = {**_WX, "weather_colon": "pacman", "weather_colon_half": half,
-             "weather_pacman_solo": solo,
-             "weather_pacman_sprite": sprite if solo else "ghost"}
+             "weather_pacman_solo": solo, "weather_pacman_sprite": sprite}
     return WeatherFrame(_FakeFetcher()).render(_T.replace(second=second, microsecond=us), state)[0]
 
 
 def test_pacman_is_compact_text_left_sprites_far_right():
     top = _pac(100_000)
-    assert top == "9/23/26 WED 8:33".ljust(18) + _GA + _PA   # one space, any hour
+    assert top == "9/23/26 WED 8:33".ljust(18) + _SA + _PA   # one space, any hour
 
 
 def test_pacman_longest_date_and_time_still_fit():
@@ -382,19 +382,26 @@ def test_pacman_keeps_the_minute_and_year_zeros():
     assert top.startswith("1/5/27 TUE 12:07")
 
 
-def test_pacman_sprites_swap_frames_each_half_second():
-    assert _pac(100_000)[18:] == _GA + _PA
-    assert _pac(600_000)[18:] == _GB + _PB
+def test_duo_pacman_eats_the_chosen_sprite_in_step():
+    for sprite in ("ghost", "heart"):
+        assert _pac(100_000, sprite=sprite)[18:] == _SA + _PA
+        assert _pac(600_000, sprite=sprite)[18:] == _SB + _PB
+
+
+def test_duo_pacman_faces_a_mirror_on_the_opposite_frame():
+    assert _pac(100_000, sprite="pacman")[18:] == _SB + _PA   # one open, one closed
+    assert _pac(600_000, sprite="pacman")[18:] == _SA + _PB
 
 
 def test_pacman_half_speed_swaps_each_second():
-    assert _pac(600_000, second=12, half=True)[18:] == _GA + _PA
-    assert _pac(100_000, second=13, half=True)[18:] == _GB + _PB
+    assert _pac(600_000, second=12, half=True)[18:] == _SA + _PA
+    assert _pac(100_000, second=13, half=True)[18:] == _SB + _PB
 
 
-def test_pacman_solo_puts_the_chosen_sprite_in_the_far_right_cell():
-    assert _pac(100_000, sprite="ghost")[18:] == " " + _GA
-    assert _pac(600_000, sprite="pacman")[18:] == " " + _PB
+def test_solo_puts_the_chosen_sprite_alone_in_the_far_right_cell():
+    for sprite in ("ghost", "heart", "pacman"):
+        assert _pac(100_000, sprite=sprite, solo=True)[18:] == " " + _SA
+        assert _pac(600_000, sprite=sprite, solo=True)[18:] == " " + _SB
 
 
 def test_pacman_colon_is_steady():
@@ -407,24 +414,31 @@ def test_pacman_glyphs_match_the_drawn_frames():
     assert _draw(_glyphs.GHOST_C) == [".....", ".###.", "#####", ".#.##", "#####", "#.#.#", "....."]
     assert _draw(_glyphs.PACMAN_CLOSED) == [".....", ".###.", "#####", "...##", "#####", ".###.", "....."]
     assert _draw(_glyphs.PACMAN_OPEN) == [".....", ".###.", "..###", "...##", "..###", ".###.", "....."]
+    assert _draw(_glyphs.HEART_FULL) == [".....", ".#.#.", "#####", "#####", ".###.", "..#..", "....."]
+    assert _draw(_glyphs.HEART_EMPTY) == [".....", ".#.#.", "#.#.#", "#...#", ".#.#.", "..#..", "....."]
+
+
+def test_mirror_flips_the_columns():
+    assert _draw(_glyphs.mirror(_glyphs.PACMAN_OPEN)) == [
+        ".....", ".###.", "###..", "##...", "###..", ".###.", "....."]
+    assert _glyphs.mirror(_glyphs.mirror(_glyphs.GHOST_A)) == _glyphs.GHOST_A
 
 
 def test_widest_line_forces_the_last_solo_sprite():
     from checkout.frames.weather import pacman_cast
     widest = datetime(2026, 12, 31, 12, 33)          # 12/31/26 THU 12:33 = 18 cells
     narrower = datetime(2026, 12, 31, 1, 33)         # 17 cells: duo still fits
-    for sprite, frames in (("ghost", (_GA, _GB)), ("pacman", (_PA, _PB))):
+    for sprite in ("ghost", "heart", "pacman"):
         state = {**_WX, "weather_colon": "pacman", "weather_pacman_solo": False,
                  "weather_pacman_sprite": sprite}
         assert pacman_cast(state, widest) == sprite
-        assert pacman_cast(state, narrower) == "both"
+        assert pacman_cast(state, narrower) == f"duo-{sprite}"
         top = WeatherFrame(_FakeFetcher()).render(widest, state)[0]
         assert top[:19] == "12/31/26 THU 12:33 "   # the gap duo had no room for
-        assert top[19] in frames
+        assert top[19] in (_SA, _SB)
 
 
 def test_solo_switch_wins_whatever_the_width():
     from checkout.frames.weather import pacman_cast
-    state = {"weather_pacman_solo": True, "weather_pacman_sprite": "pacman"}
-    assert pacman_cast(state, datetime(2026, 9, 23, 8, 33)) == "pacman"
-
+    state = {"weather_pacman_solo": True, "weather_pacman_sprite": "heart"}
+    assert pacman_cast(state, datetime(2026, 9, 23, 8, 33)) == "heart"

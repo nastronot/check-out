@@ -675,3 +675,11 @@ hour) was the hour just past: the request now asks for 25 hours and drops the
 first, for high and low too. The 3-cell value uses the fewest digits that fit:
 `.04` under an inch, `1.2` under ten, whole inches above (`" 42"`, `"100"`), `" --"`
 only past 999 — the US 24-hour record is about 42".
+
+**Heart, and what pacman eats.** A third sprite, the heart (`HEART_FULL` /
+`HEART_EMPTY`, beating). The chosen sprite now also decides duo: pacman eats it —
+the ghost, the heart, or, when pacman itself is chosen, a left-right mirror of
+pacman (`glyphs.mirror`, derived rather than drawn) whose frame runs opposite
+his, so one mouth opens as the other closes. Solo shows the chosen sprite alone.
+`pacman_cast` now returns `duo-<sprite>` or `<sprite>`; `glyph_set("pacman",
+cast)` puts the sprite's two frames in slots 5/6 and, in duo, pacman in 7/8.

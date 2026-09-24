@@ -995,13 +995,13 @@ def test_pacman_solo_choice_loads_its_own_ghost_frames(monkeypatch):
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, {**state, "weather_pacman_solo": False}, ctx, now=NOW)
-    assert drv.defined[wx.SLOT_GHOST_A] == glyphs.GHOST_A
+    assert drv.defined[wx.SLOT_SPRITE_A] == glyphs.GHOST_A
     drv.defined.clear()
     daemon.tick_once(drv, {**state, "weather_pacman_solo": True,
                            "weather_pacman_sprite": "ghost"}, ctx, now=NOW)
     assert ctx["mode_glyphs_key"] == ("weather", "pacman-ghost")
-    assert drv.defined[wx.SLOT_GHOST_A] == glyphs.GHOST_B
-    assert drv.defined[wx.SLOT_GHOST_B] == glyphs.GHOST_C
+    assert drv.defined[wx.SLOT_SPRITE_A] == glyphs.GHOST_B
+    assert drv.defined[wx.SLOT_SPRITE_B] == glyphs.GHOST_C
 
 
 def test_widest_line_loads_the_solo_glyphs_automatically(monkeypatch):
@@ -1012,8 +1012,8 @@ def test_widest_line_loads_the_solo_glyphs_automatically(monkeypatch):
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 12, 31, 1, 33))    # 17 cells
-    assert ctx["mode_glyphs_key"] == ("weather", "pacman")
+    assert ctx["mode_glyphs_key"] == ("weather", "pacman-duo-ghost")
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 12, 31, 12, 33))   # 18 cells
     assert ctx["mode_glyphs_key"] == ("weather", "pacman-ghost")
-    assert drv.defined[wx.SLOT_GHOST_B] == glyphs.GHOST_C
+    assert drv.defined[wx.SLOT_SPRITE_B] == glyphs.GHOST_C
 

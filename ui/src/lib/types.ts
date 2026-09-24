@@ -29,7 +29,7 @@ export type ScrollSource = 'message' | 'clock';
 export type WeatherColon = 'on' | 'tick' | 'wiggle' | 'twinkle' | 'pacman';
 /** Pacman colon: the sprite shown alone when solo (also forced automatically
  *  when the date/time is as wide as it gets). */
-export type WeatherPacmanSprite = 'ghost' | 'pacman';
+export type WeatherPacmanSprite = 'ghost' | 'heart' | 'pacman';
 
 /** status.weather — the latest reading (°F; rain = next-24-hour total in inches)
  *  and fetch health. */

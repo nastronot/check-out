@@ -34,8 +34,16 @@ GHOST_B = [0, 14, 31, 21, 31, 21, 0]        # eyes centred
 GHOST_C = [0, 14, 31, 26, 31, 21, 0]        # eyes left
 PACMAN_CLOSED = [0, 14, 31, 24, 31, 14, 0]  # faces left, mouth a slit
 PACMAN_OPEN = [0, 14, 28, 24, 28, 14, 0]    # faces left, mouth open
+HEART_FULL = [0, 10, 31, 31, 14, 4, 0]      # heart, filled
+HEART_EMPTY = [0, 10, 21, 17, 10, 4, 0]     # heart, outline
 
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
+
+
+def mirror(rows: list[int]) -> list[int]:
+    """The glyph flipped left-right (column 1 <-> 5), e.g. a pacman facing right
+    from one facing left — derived, so it can never drift from the original."""
+    return [int(f"{r & 0x1F:05b}"[::-1], 2) for r in rows]
 
 
 def label_glyph(letter: str) -> list[int]:

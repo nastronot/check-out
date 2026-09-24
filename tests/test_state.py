@@ -334,6 +334,9 @@ def test_weather_pacman_solo_and_sprite(state_path):
     import json
     s = state.load_state()
     assert s["weather_pacman_solo"] is False and s["weather_pacman_sprite"] == "ghost"
+    for sprite in ("ghost", "heart", "pacman"):
+        state_path.write_text(json.dumps({"weather_pacman_sprite": sprite}))
+        assert state.load_state()["weather_pacman_sprite"] == sprite
     state_path.write_text(json.dumps({"weather_pacman_sprite": "inky"}))
     assert state.load_state()["weather_pacman_sprite"] == "ghost"
     # The earlier single key migrates: a solo choice -> solo on + that sprite.

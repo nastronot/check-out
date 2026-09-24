@@ -22,8 +22,9 @@ from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
 from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
-                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C,
-                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN)
+                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
+                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN,
+                     mirror)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 STALE_S = 3600          # a reading this old shows " --" (never pass old data as current)
@@ -36,7 +37,7 @@ HTTP_TIMEOUT_S = 10
 COLON_MODES = ("on", "tick", "wiggle", "twinkle", "pacman")
 # weather_pacman_sprite: which sprite shows alone when solo (remembered while
 # solo is off, since the widest date/time forces solo — frames/weather.py).
-PACMAN_SPRITES = ("ghost", "pacman")
+PACMAN_SPRITES = ("ghost", "heart", "pacman")
 # Names used while v1.4.0 was built -> (final name, half speed); state.py migrates.
 LEGACY_COLON_MODES = {
     "pulse": ("wiggle", False),
@@ -53,9 +54,10 @@ LEGACY_COLON_MODES = {
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
  SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
 # Pacman needs up to 4 sprite frames, so its set uses slots 5-8 for them instead
-# of the colon glyphs (and its time colon is the font's ':'). The ghost is always
-# "slot A frame, then slot B frame"; WHICH bitmaps sit there depends on solo.
-SLOT_GHOST_A, SLOT_GHOST_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
+# of the colon glyphs (and its time colon is the font's ':'). Slots 5/6 hold the
+# chosen sprite's two frames, 7/8 hold pacman (duo only); WHICH bitmaps sit in
+# 5/6 depends on the cast (see glyph_set), so the frame code never changes.
+SLOT_SPRITE_A, SLOT_SPRITE_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
 _LABEL_GLYPHS = {
     SLOT_HIGH: LABEL_H,
     SLOT_LOW: LABEL_L,
@@ -69,12 +71,18 @@ _BASE_GLYPHS = {
     SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
 }
 _PAC_FRAMES = {SLOT_PAC_A: PACMAN_CLOSED, SLOT_PAC_B: PACMAN_OPEN}
-# The on-screen cast ("both" or one sprite) -> the sprite frames it loads. Duo's ghost glances right
-# (A <-> centred); the solo ghost glances left (centred <-> C).
-_PACMAN_SPRITE_GLYPHS = {
-    "both": {SLOT_GHOST_A: GHOST_A, SLOT_GHOST_B: GHOST_B, **_PAC_FRAMES},
-    "ghost": {SLOT_GHOST_A: GHOST_B, SLOT_GHOST_B: GHOST_C},
-    "pacman": dict(_PAC_FRAMES),
+# The chosen sprite's two frames. Duo (being eaten): the ghost glances right, the
+# heart beats, and a pacman faces its mirror (drawn on the opposite frame by the
+# frame code). Solo: the ghost glances left instead.
+_DUO_SPRITE_FRAMES = {
+    "ghost": (GHOST_A, GHOST_B),
+    "heart": (HEART_FULL, HEART_EMPTY),
+    "pacman": (mirror(PACMAN_CLOSED), mirror(PACMAN_OPEN)),
+}
+_SOLO_SPRITE_FRAMES = {
+    "ghost": (GHOST_B, GHOST_C),
+    "heart": (HEART_FULL, HEART_EMPTY),
+    "pacman": (PACMAN_CLOSED, PACMAN_OPEN),
 }
 _PEAKS = {
     "wiggle": (COLON_TWIST_R, COLON_TWIST_L),
@@ -82,17 +90,22 @@ _PEAKS = {
 }
 
 
-def glyph_set(colon: str, pacman: str = "both") -> tuple[str, dict[int, list[int]]]:
-    """``(family, {slot: rows})`` for a weather_colon value (and, for pacman,
-    who is on screen: "both", "ghost" or "pacman" — see ``pacman_cast``). on/tick/wiggle share the wiggle set (so
-    switching among them redefines nothing); twinkle loads the twinkle peaks;
-    pacman loads its sprites in place of the colons — a different set per solo
-    choice, so the family names it."""
+def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[int]]]:
+    """``(family, {slot: rows})`` for a weather_colon value — and, for pacman,
+    the CAST from ``pacman_cast``: "duo-<sprite>" (pacman eating the sprite) or
+    "<sprite>" (solo). on/tick/wiggle share the wiggle set (so switching among
+    them redefines nothing); twinkle loads the twinkle peaks; each pacman cast
+    loads its own sprite frames, and the family names it."""
     if colon == "pacman":
-        if pacman not in _PACMAN_SPRITE_GLYPHS:
-            pacman = "both"
-        family = "pacman" if pacman == "both" else f"pacman-{pacman}"
-        return family, {**_LABEL_GLYPHS, **_PACMAN_SPRITE_GLYPHS[pacman]}
+        solo = not cast.startswith("duo-")
+        sprite = cast.removeprefix("duo-")
+        if sprite not in PACMAN_SPRITES:
+            sprite, solo = "ghost", False
+        frame_a, frame_b = (_SOLO_SPRITE_FRAMES if solo else _DUO_SPRITE_FRAMES)[sprite]
+        glyphs = {**_LABEL_GLYPHS, SLOT_SPRITE_A: frame_a, SLOT_SPRITE_B: frame_b}
+        if not solo:
+            glyphs.update(_PAC_FRAMES)
+        return f"pacman-{sprite if solo else 'duo-' + sprite}", glyphs
     family = "twinkle" if colon == "twinkle" else "wiggle"
     peak_a, peak_b = _PEAKS[family]
     return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}

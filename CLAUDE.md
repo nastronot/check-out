@@ -73,7 +73,8 @@ field uses the fewest digits that fit 3 cells: `.04` / `1.2` / ` 42`. Both lines
 hides Justify in weather. State:
 `weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle` | `pacman`),
 `weather_colon_half` (bool), `weather_pacman_solo` (bool) +
-`weather_pacman_sprite` (`ghost` | `pacman`, remembered while solo is off);
+`weather_pacman_sprite` (`ghost` | `heart` | `pacman`, remembered while solo
+is off);
 the earlier `weather_pacman` key and development colon names migrate on load.
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
   service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
@@ -90,15 +91,16 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
   fill all 9 slots. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
-  between fields; 15-18 cells) left-aligned, `[ghost][pacman]` in cells 18-19;
-  solo shows the chosen sprite in cell 19 (18 blank). **Solo is forced
-  automatically** when the date/time fills all 18 cells (2-digit month, day
-  and hour), using the remembered sprite — `frames/weather.py pacman_cast(state,
-  now)` decides, and both the frame and the daemon's glyph set call it. Each
-  cast ("both" / "ghost" / "pacman") loads its own sprite frames (`weather.glyph_set(colon, pacman)`, key
-  `("weather", "pacman" | "pacman-ghost" | "pacman-pacman")`): duo ghost =
-  `GHOST_A`/`GHOST_B`, solo ghost = `GHOST_B`/`GHOST_C` (glances the other way). Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
-  (no slot left for `COLON_THIN`).
+  between fields; 15-18 cells) left-aligned, then two sprite cells (18-19).
+  **Duo:** pacman (19) eats the chosen sprite (18) — ghost glancing right, a
+  beating heart, or a mirrored pacman (`glyphs.mirror`) on the opposite frame.
+  **Solo:** the chosen sprite alone in 19 (the solo ghost glances left). Solo
+  is also **forced automatically** when the date/time fills all 18 cells.
+  `frames/weather.py pacman_cast(state, now)` returns the cast — `duo-<sprite>`
+  or `<sprite>` — and both the frame and the daemon's glyph set use it;
+  `weather.glyph_set("pacman", cast)` loads the sprite frames into slots 5/6
+  and, in duo, pacman into 7/8 (key `("weather", "pacman-<cast>")`). With the
+  5 labels that fills all 9 slots, so pacman's time colon is the font's `:`.
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
 

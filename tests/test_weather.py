@@ -140,15 +140,24 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
     assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
     labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
     pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
-    duo = {**labels, weather.SLOT_GHOST_A: glyphs.GHOST_A,
-           weather.SLOT_GHOST_B: glyphs.GHOST_B, **pacs}
-    assert weather.glyph_set("pacman") == ("pacman", duo)
-    assert weather.glyph_set("pacman", "both") == ("pacman", duo)
-    # Solo ghost looks the other way: frames g1 <-> g2 instead of g0 <-> g1.
-    solo_ghost = {**labels, weather.SLOT_GHOST_A: glyphs.GHOST_B,
-                  weather.SLOT_GHOST_B: glyphs.GHOST_C}
-    assert weather.glyph_set("pacman", "ghost") == ("pacman-ghost", solo_ghost)
-    assert weather.glyph_set("pacman", "pacman") == ("pacman-pacman", {**labels, **pacs})
+
+    def sprite(a, b):
+        return {weather.SLOT_SPRITE_A: a, weather.SLOT_SPRITE_B: b}
+
+    cases = {
+        # duo: pacman (7/8) eats the chosen sprite (5/6)
+        "duo-ghost": {**labels, **sprite(glyphs.GHOST_A, glyphs.GHOST_B), **pacs},
+        "duo-heart": {**labels, **sprite(glyphs.HEART_FULL, glyphs.HEART_EMPTY), **pacs},
+        "duo-pacman": {**labels, **sprite(glyphs.mirror(glyphs.PACMAN_CLOSED),
+                                          glyphs.mirror(glyphs.PACMAN_OPEN)), **pacs},
+        # solo: the chosen sprite alone (5/6); the solo ghost glances the other way
+        "ghost": {**labels, **sprite(glyphs.GHOST_B, glyphs.GHOST_C)},
+        "heart": {**labels, **sprite(glyphs.HEART_FULL, glyphs.HEART_EMPTY)},
+        "pacman": {**labels, **sprite(glyphs.PACMAN_CLOSED, glyphs.PACMAN_OPEN)},
+    }
+    for cast, expected in cases.items():
+        assert weather.glyph_set("pacman", cast) == (f"pacman-{cast}", expected), cast
+    assert weather.glyph_set("pacman") == ("pacman-duo-ghost", cases["duo-ghost"])
 
 
 # --- WeatherFetcher ------------------------------------------------------------

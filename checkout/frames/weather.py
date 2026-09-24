@@ -17,9 +17,11 @@ would change):
   big burst, small burst, thin, dot.
 
 - ``pacman``  — ``9/23/26 WED 8:33`` (no leading zeros, one space between
-  fields) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
-  swapping between two frames. The time colon is the steady font
-  ``:`` (the sprites need the colon's glyph slots). Solo
+  fields) left-aligned, and in the last two cells pacman eating the chosen
+  sprite (``weather_pacman_sprite``: ghost | heart | pacman — a pacman faces
+  its mirror image, one frame out of step), each swapping between two frames.
+  The time colon is the steady font ``:`` (the sprites need the colon's glyph
+  slots). Solo
   (``weather_pacman_solo`` + ``weather_pacman_sprite``) shows just one, in the
   far-right cell — and is FORCED when the date/time fills all 18 cells, since
   duo would then touch the text (``pacman_cast``); the solo ghost glances
@@ -76,7 +78,7 @@ def colon_char(state: dict, now: datetime) -> str:
 
 
 # pacman: each sprite's two frames, swapped once per half loop.
-_GHOST = (chr(GLYPH_CODES[weather.SLOT_GHOST_A]), chr(GLYPH_CODES[weather.SLOT_GHOST_B]))
+_SPRITE = (chr(GLYPH_CODES[weather.SLOT_SPRITE_A]), chr(GLYPH_CODES[weather.SLOT_SPRITE_B]))
 _PACMAN = (chr(GLYPH_CODES[weather.SLOT_PAC_A]), chr(GLYPH_CODES[weather.SLOT_PAC_B]))
 
 
@@ -89,11 +91,12 @@ def _loop_index(state: dict, now: datetime, frames: int) -> int:
 
 
 def pacman_cast(state: dict, now: datetime) -> str:
-    """Who is on screen: "both", or the solo sprite ("ghost" | "pacman").
+    """Who is on screen: "duo-<sprite>" (pacman eating the chosen sprite) or
+    "<sprite>" alone (solo), where sprite is ghost | heart | pacman.
 
     Solo when the switch is on, AND automatically when the date/time is as wide
     as it gets (a 2-digit month and day and a 2-digit hour: 18 cells) — duo's
-    two cells would then touch the text. The forced sprite is the remembered
+    two cells would then touch the text. Either way the sprite is the remembered
     ``weather_pacman_sprite``. The daemon loads glyphs from this too, so what is
     drawn and what is defined always agree.
     """
@@ -102,19 +105,19 @@ def pacman_cast(state: dict, now: datetime) -> str:
         sprite = "ghost"
     if state.get("weather_pacman_solo") or len(compact_date_time(now)) > COLS - 3:
         return sprite
-    return "both"
+    return f"duo-{sprite}"
 
 
 def pacman_top(state: dict, now: datetime) -> str:
     """Compact date/time on the left + two sprite cells on the right (20 cells)."""
     i = _loop_index(state, now, 2)
     cast = pacman_cast(state, now)
-    if cast == "ghost":
-        cells = " " + _GHOST[i]       # solo: the one sprite sits in the last cell
-    elif cast == "pacman":
-        cells = " " + _PACMAN[i]
+    if not cast.startswith("duo-"):
+        cells = " " + _SPRITE[i]       # solo: the one sprite sits in the last cell
+    elif cast == "duo-pacman":
+        cells = _SPRITE[1 - i] + _PACMAN[i]   # a mirror pacman, on the opposite frame
     else:
-        cells = _GHOST[i] + _PACMAN[i]
+        cells = _SPRITE[i] + _PACMAN[i]       # pacman eating the ghost / heart
     return compact_date_time(now).ljust(COLS - 2) + cells
 
 

@@ -164,6 +164,7 @@
   // is off, because the widest date/time forces solo with it automatically.
   const SPRITES: { value: WeatherPacmanSprite; label: string }[] = [
     { value: 'ghost', label: 'GHOST' },
+    { value: 'heart', label: 'HEART' },
     { value: 'pacman', label: 'PACMAN' },
   ];
   const setSolo = (e: Event) => patch({ weather_pacman_solo: checked(e) });
@@ -468,10 +469,10 @@
           <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
           on and off every second. <strong>Wiggle</strong> = the colon twists
           one way, then the other. <strong>Twinkle</strong> = it grows into a
-          burst and back. <strong>Pacman</strong> = date and time at the left, a
-          ghost and pacman at the right (or one, with <strong>Solo</strong> —
-          the chosen sprite also goes solo by itself when the date and time fill
-          the line).
+          burst and back. <strong>Pacman</strong> = date and time at the left,
+          pacman eating the chosen sprite at the right (a pacman meets its mirror
+          image). <strong>Solo</strong> shows the sprite alone — it also goes solo
+          by itself when the date and time fill the line.
           <strong>Half speed</strong> stretches each loop to 2 s.
         </span>
       </div>
