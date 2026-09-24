@@ -175,8 +175,8 @@
   ];
   const NEWS_EFFECTS: { value: NewsEffect; label: string }[] = [
     { value: 'none', label: 'NONE' },
-    { value: 'flash', label: 'FLASH' },
-    { value: 'throb', label: 'THROB' },
+    { value: 'flash', label: '3X' },
+    { value: 'throb', label: '∞' },
   ];
   function toggleNewsTopic(t: NewsTopic): void {
     const cur = state?.news_topics ?? [];
@@ -553,7 +553,7 @@
             <input type="number" min="0" max="5" value={state.news_repeat} on:change={setNewsRepeat} />
           </div>
           <div class="ctl-row">
-            <span class="ctl-row__name">Effect</span>
+            <span class="ctl-row__name">Flash</span>
             <div class="seg seg--sm">
               {#each NEWS_EFFECTS as x}
                 <button
