@@ -390,8 +390,8 @@ def test_pacman_half_speed_swaps_each_second():
     assert _pac(100_000, second=13, half=True)[18:] == _GB + _PB
 
 
-def test_pacman_solo_keeps_each_sprite_in_its_own_cell():
-    assert _pac(100_000, sprite="ghost")[18:] == _GA + " "
+def test_pacman_solo_puts_the_chosen_sprite_in_the_far_right_cell():
+    assert _pac(100_000, sprite="ghost")[18:] == " " + _GA
     assert _pac(600_000, sprite="pacman")[18:] == " " + _PB
 
 

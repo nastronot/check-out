@@ -20,7 +20,7 @@ would change):
   5-cell field) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
   swapping between two frames. The time colon is the steady font
   ``:`` (the sprites need the colon's glyph slots). Solo (``weather_pacman`` =
-  ghost | pacman) shows just one; each keeps its own cell.
+  ghost | pacman) shows just one, in the far-right cell.
 
 Each loop takes 1 second, or 2 with ``weather_colon_half`` (half speed), and is
 locked to the wall clock (a 2 s loop starts on even seconds). Wiggle's twists and
@@ -89,9 +89,13 @@ def pacman_top(state: dict, now: datetime) -> str:
     """Compact date/time on the left + two sprite cells on the right (20 cells)."""
     i = _loop_index(state, now, 2)
     sprite = state.get("weather_pacman")
-    ghost = _GHOST[i] if sprite in ("both", "ghost", None) else " "
-    pacman = _PACMAN[i] if sprite in ("both", "pacman", None) else " "
-    return compact_date_time(now).ljust(COLS - 2) + ghost + pacman
+    if sprite == "ghost":
+        cells = " " + _GHOST[i]       # solo: the one sprite sits in the last cell
+    elif sprite == "pacman":
+        cells = " " + _PACMAN[i]
+    else:
+        cells = _GHOST[i] + _PACMAN[i]
+    return compact_date_time(now).ljust(COLS - 2) + cells
 
 
 class WeatherFrame(Frame):

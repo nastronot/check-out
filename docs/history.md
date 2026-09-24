@@ -633,3 +633,6 @@ fixed 5-cell right-aligned field: `9/23/26 WED  8:33` (two spaces for a 1-digit
 hour), `9/23/26 WED 10:33`. The date keeps no leading zeros, so a 2-digit month
 or day shifts everything after it right by one. The longest case,
 `12/31/26 THU 12:59`, is exactly the 18 cells before the sprites.
+
+**Pacman solo.** A solo sprite always sits in the far-right cell (19), whichever
+one is chosen.

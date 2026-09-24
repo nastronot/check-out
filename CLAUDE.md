@@ -87,7 +87,7 @@ development colon names `pulse`/`throb*`/`burst*` migrate on load).
   (`clock.compact_date_time`: no leading zeros on month/day/hour; the time is a
   fixed 5-cell field, so a 1-digit hour leaves two spaces; 15-18 cells)
   left-aligned, `[ghost][pacman]` in cells 18-19;
-  solo blanks the other sprite's cell. Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
+  solo shows the chosen sprite in cell 19 (18 blank). Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
   (no slot left for `COLON_THIN`).
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
