@@ -99,3 +99,136 @@ _XXE = (b'<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passw
 def test_hostile_feeds_are_rejected_not_expanded(payload):
     with pytest.raises(ValueError):
         news.parse_rss(payload, news.SOURCES["bbc"])
+
+
+# --- NewsFetcher: lead changes become alerts ------------------------------------
+def _rss(*items):
+    """A minimal feed from (title, link, 'YYYY-MM-DD HH:MM') tuples, in order."""
+    body = "".join(
+        f"<item><title>{t}</title><link>{link}</link>"
+        f"<pubDate>{datetime.fromisoformat(d).strftime('%a, %d %b %Y %H:%M:%S')} GMT</pubDate></item>"
+        for t, link, d in items)
+    return f"<rss><channel>{body}</channel></rss>".encode()
+
+
+class _Clock:
+    def __init__(self, t=_ts(2026, 9, 24, 12, 0)):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+class _Web:
+    """Serves feeds by source key; a value that is an Exception is raised."""
+
+    def __init__(self, **feeds):
+        self.feeds = dict(feeds)
+
+    def __call__(self, url, timeout):
+        key = next(k for k, s in news.SOURCES.items() if s.url == url)
+        reply = self.feeds[key]
+        if isinstance(reply, BaseException):
+            raise reply
+        return reply
+
+
+def _fetcher(web, sources=("bbc", "nyt"), interval=300):
+    f = news.NewsFetcher(get_bytes=web, clock=_Clock(), autostart=False)
+    f.set_config(list(sources), interval)
+    return f
+
+
+BBC_1 = _rss(("Lead one", "b1", "2026-09-24 10:00"), ("Other", "b2", "2026-09-24 11:00"))
+BBC_2 = _rss(("Lead two", "b3", "2026-09-24 11:30"), ("Lead one", "b1", "2026-09-24 10:00"))
+NYT_1 = _rss(("NYT lead", "n1", "2026-09-24 09:00"))
+NYT_2 = _rss(("NYT new lead", "n2", "2026-09-24 11:45"))
+
+
+def test_first_sighting_is_silent_but_is_the_latest():
+    f = _fetcher(_Web(bbc=BBC_1, nyt=NYT_1))
+    f.fetch_once()
+    assert f.take_alert() is None
+    assert f.latest().title == "Lead one"               # newest lead across sources
+
+
+def test_a_changed_lead_alerts_once():
+    web = _Web(bbc=BBC_1, nyt=NYT_1)
+    f = _fetcher(web)
+    f.fetch_once()
+    web.feeds["bbc"] = BBC_2
+    f.fetch_once()
+    alert = f.take_alert()
+    assert (alert.source, alert.title) == ("bbc", "Lead two")
+    assert f.take_alert() is None
+
+
+def test_when_several_change_the_newest_wins_and_there_is_no_backlog():
+    web = _Web(bbc=BBC_1, nyt=NYT_1)
+    f = _fetcher(web)
+    f.fetch_once()
+    web.feeds.update(bbc=BBC_2, nyt=NYT_2)
+    f.fetch_once()
+    assert f.take_alert().title == "NYT new lead"       # 11:45 beats 11:30
+    assert f.take_alert() is None
+
+
+def test_a_lead_that_returns_does_not_alert_again():
+    web = _Web(bbc=BBC_1, nyt=NYT_1)
+    f = _fetcher(web)
+    f.fetch_once()
+    web.feeds["bbc"] = BBC_2
+    f.fetch_once()
+    f.take_alert()
+    web.feeds["bbc"] = BBC_1                             # the old lead is back on top
+    f.fetch_once()
+    assert f.take_alert() is None
+
+
+def test_a_failing_source_does_not_stop_the_others():
+    web = _Web(bbc=BBC_1, nyt=NYT_1)
+    f = _fetcher(web)
+    f.fetch_once()
+    web.feeds.update(bbc=BBC_2, nyt=OSError("timed out"))
+    f.fetch_once()
+    assert f.take_alert().title == "Lead two"
+    s = f.status()
+    assert "timed out" in s["sources"]["nyt"]["error"]
+    assert s["sources"]["nyt"]["title"] == "NYT lead"   # kept its last lead
+    assert s["sources"]["bbc"]["error"] is None
+
+
+def test_junk_from_one_source_is_a_failure_for_that_source_only():
+    web = _Web(bbc=b"<html>not a feed", nyt=NYT_1)
+    f = _fetcher(web)
+    f.fetch_once()
+    assert f.status()["sources"]["bbc"]["error"]
+    assert f.latest().title == "NYT lead"
+
+
+def test_when_every_source_fails_the_poller_backs_off():
+    f = _fetcher(_Web(bbc=OSError("down"), nyt=OSError("down")))
+    f.fetch_once()
+    assert f.due_in(f._clock()) == news.NewsFetcher.RETRY_START_S
+
+
+def test_next_check_follows_the_interval():
+    f = _fetcher(_Web(bbc=BBC_1, nyt=NYT_1), interval=120)
+    f.fetch_once()
+    assert f.due_in(f._clock()) == 120
+
+
+def test_no_sources_is_idle_and_a_new_source_set_starts_silent_again():
+    web = _Web(bbc=BBC_1, nyt=NYT_1)
+    f = _fetcher(web)
+    f.set_config([], 300)
+    assert f.due_in(0) is None
+    f.set_config(["bbc"], 300)
+    f.fetch_once()
+    assert f.take_alert() is None                        # silent on the first sighting
+
+
+def test_unknown_sources_are_ignored():
+    f = _fetcher(_Web(bbc=BBC_1), sources=("bbc", "cnn"))
+    f.fetch_once()
+    assert set(f.status()["sources"]) == {"bbc"}
