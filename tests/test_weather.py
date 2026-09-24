@@ -144,7 +144,7 @@ def test_weather_glyph_sets_per_time_feature():
     assert len(weather.glyph_set("twinkle")[1]) == 9      # exactly full
     assert weather.glyph_set("pulse", meridiem="am") == (
         "pulse-am", {**labels5, weather.SLOT_ANIM_1: glyphs.PULSE_1,
-                     weather.SLOT_ANIM_2: glyphs.PULSE_2, weather.SLOT_ANIM_3: glyphs.PULSE_3,
+                     weather.SLOT_ANIM_2: glyphs.PULSE_2,
                      weather.SLOT_MERIDIEM: glyphs.AM})
     labels = dict(base)
     pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}

@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from .driver import GLYPH_CODES
 from .glyphs import (AM, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
                      LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN,
-                     PM, PULSE_1, PULSE_2, PULSE_3, TWINKLE_CORNERS, TWINKLE_DIAMOND, TWINKLE_DOT, mirror)
+                     PM, PULSE_1, PULSE_2, TWINKLE_CORNERS, TWINKLE_DIAMOND, TWINKLE_DOT, mirror)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 STALE_S = 3600          # a reading this old shows " --" (never pass old data as current)
@@ -46,7 +46,7 @@ LEGACY_COLON_MODES = {
 
 # Dynamic's glyph sets (loaded by the daemon's mode-glyph swap): every time
 # feature keeps the 5 labels in slots 0-4 and loads its own glyphs above them —
-# twinkle / pulse: three frames (5-7);
+# twinkle: three frames (5-7); pulse: two frames (5-6);
 # twinkle / pulse also the AM/PM marker (8); on/tick: the marker only (8); pacman:
 # sprite frames (5-8).
 SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE = range(5)
@@ -61,12 +61,12 @@ SLOT_SPRITE_A, SLOT_SPRITE_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
 SLOT_MERIDIEM = 8
 MERIDIEM_FEATURES = ("on", "tick", "twinkle", "pulse")
 _MARKERS = {"am": AM, "pm": PM}
-# twinkle and pulse are sets too: the labels plus the animation's three frames,
-# in the same three slots (the family names which animation is loaded).
+# twinkle and pulse are sets too: the labels plus the animation's frames (three
+# for twinkle, two for pulse), from slot 5 up (the family names which animation is loaded).
 SLOT_ANIM_1, SLOT_ANIM_2, SLOT_ANIM_3 = 5, 6, 7
 _ANIM_FRAMES = {
     "twinkle": (TWINKLE_DOT, TWINKLE_DIAMOND, TWINKLE_CORNERS),
-    "pulse": (PULSE_1, PULSE_2, PULSE_3),
+    "pulse": (PULSE_1, PULSE_2),
 }
 _LABEL_GLYPHS = {
     SLOT_HIGH: LABEL_H,
@@ -101,10 +101,8 @@ def glyph_set(colon: str, cast: str = "duo-ghost",
     if colon in ("on", "tick"):
         return f"clock-{meridiem}", {**_LABEL_GLYPHS, **marker}
     if colon in _ANIM_FRAMES:
-        first, second, third = _ANIM_FRAMES[colon]
-        return f"{colon}-{meridiem}", {
-            **_LABEL_GLYPHS, SLOT_ANIM_1: first, SLOT_ANIM_2: second,
-            SLOT_ANIM_3: third, **marker}
+        frames = dict(zip((SLOT_ANIM_1, SLOT_ANIM_2, SLOT_ANIM_3), _ANIM_FRAMES[colon]))
+        return f"{colon}-{meridiem}", {**_LABEL_GLYPHS, **frames, **marker}
     if colon == "pacman":
         solo = not cast.startswith("duo-")
         sprite = cast.removeprefix("duo-")

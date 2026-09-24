@@ -15,8 +15,7 @@ would change):
   (twinkle and pulse also end with the marker.)
 - ``twinkle`` — 6 frames straight up and down: blank, a dot, a diamond, four
   corner dots, the diamond, the dot.
-- ``pulse``   — 4 frames: the colon's two dots, a taller column, the full
-  column, the taller column; then back to the two dots.
+- ``pulse``   — 2 frames: the colon's two dots, then a taller column.
 
 - ``pacman``  — ``9/23/26 WED 8:33`` (no leading zeros, one space between
   fields) left-aligned, and in the last two cells pacman eating the chosen
@@ -64,7 +63,7 @@ _ANIM_3 = chr(GLYPH_CODES[weather.SLOT_ANIM_3])
 _LOOPS = {
     "tick": (":", _BLANK),
     "twinkle": (_BLANK, _ANIM_1, _ANIM_2, _ANIM_3, _ANIM_2, _ANIM_1),
-    "pulse": (_ANIM_1, _ANIM_2, _ANIM_3, _ANIM_2),
+    "pulse": (_ANIM_1, _ANIM_2),
 }
 
 

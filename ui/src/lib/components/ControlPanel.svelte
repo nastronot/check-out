@@ -205,7 +205,7 @@
     on: 'A steady colon.',
     tick: 'The colon blinks every second.',
     twinkle: 'A star twinkles in place of the colon.',
-    pulse: 'The colon grows into a full bar and back, once a second.',
+    pulse: 'The colon grows taller and back, once a second.',
     pacman: 'Pacman eats the chosen sprite; Solo shows it alone (automatic when the date fills the line).',
   };
 

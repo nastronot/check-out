@@ -254,7 +254,7 @@ _T1 = chr(GLYPH_CODES[_weather.SLOT_ANIM_1])
 _T2 = chr(GLYPH_CODES[_weather.SLOT_ANIM_2])
 _T3 = chr(GLYPH_CODES[_weather.SLOT_ANIM_3])
 _TWINKLE = [" ", _T1, _T2, _T3, _T2, _T1]
-_PULSE = [_T1, _T2, _T3, _T2]
+_PULSE = [_T1, _T2]
 
 
 def _top(colon, us, second=12, half=False):
@@ -327,14 +327,14 @@ def test_twinkle_goes_straight_up_and_down_once_a_second():
 
 
 def test_pulse_grows_and_shrinks_once_a_second():
-    assert _loop("pulse", 4) == _PULSE
+    assert _loop("pulse", 2) == _PULSE
     assert _top("pulse", 0)[15] == _T1                       # a loop starts on the two dots
 
 
 def test_half_speed_doubles_every_loop():
     assert _loop("tick", 2, half=True) == [":", " "]         # 1 s on, 1 s off
     assert _loop("twinkle", 6, half=True) == _TWINKLE
-    assert _loop("pulse", 4, half=True) == _PULSE
+    assert _loop("pulse", 2, half=True) == _PULSE
 
 
 def test_half_speed_leaves_on_steady():
@@ -460,4 +460,3 @@ def test_solo_switch_wins_whatever_the_width():
 def test_pulse_glyphs_match_the_drawn_frames():
     assert _draw(_glyphs.PULSE_1) == [".....", ".....", "..#..", ".....", "..#..", ".....", "....."]
     assert _draw(_glyphs.PULSE_2) == [".....", "..#..", "..#..", ".....", "..#..", "..#..", "....."]
-    assert _draw(_glyphs.PULSE_3) == ["..#..", "..#..", "..#..", ".....", "..#..", "..#..", "..#.."]
