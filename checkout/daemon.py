@@ -59,7 +59,8 @@ from .frames.message import MessageFrame
 from .frames.dynamic import DynamicFrame, colon_mode, meridiem, pacman_cast
 from .renderer import WIDTH, fit_line, render_lines, ticker_window
 from .state import load_state, save_status
-from . import spectrum, weather
+from . import news, spectrum, weather
+from .frames import news_alert
 
 # status.json write throttle (ms between writes) derived from config.STATUS_HZ:
 # the fast loop runs ~30Hz but the status mirror is refreshed at most this often.
@@ -77,7 +78,8 @@ SPECTRUM_STALE_MS = 200
 # Frames, keyed by name. "marquee" is handled specially in the tick (the
 # hardware ticker), not via a Frame; "message" covers the old "scroll" mode.
 # Weather's fetcher lives on its frame so tests can swap in a threadless one.
-DYNAMIC_FRAME = DynamicFrame(weather.WeatherFetcher(log=lambda m: log(m)))
+DYNAMIC_FRAME = DynamicFrame(weather.WeatherFetcher(log=lambda m: log(m)),
+                             news.NewsFetcher(log=lambda m: log(m)))
 FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), DYNAMIC_FRAME)}
 DEFAULT_FRAME = "clock"
 
@@ -199,6 +201,8 @@ def mode_glyph_set(mode: str, state: dict, now: datetime):
     if mode == "spectrum":
         layout, style = _norm_spectrum_layout(state), _norm_spectrum_style(state)
         return ("spectrum", layout, style), spectrum.layout_glyphs(layout, style)
+    if mode == "dynamic" and DYNAMIC_FRAME.alerting(now):
+        return ("dynamic", "news"), news_alert.alert_glyphs()
     if mode == "dynamic":
         family, glyphs = weather.glyph_set(
             colon_mode(state), pacman_cast(state, now), meridiem(now))
@@ -237,7 +241,8 @@ def _sync_glyphs(
             ctx["last_glyphs"] = dict(glyphs)
 
 
-def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict) -> bool:
+def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict,
+                 now: datetime | None = None) -> bool:
     """Execute a one-shot command. All actions are idempotent.
 
     Returns True if the command reset the display's internal state (so the
@@ -254,6 +259,11 @@ def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict) -> bo
         driver.reset()           # re-initializes the display itself
         _invalidate_caches(ctx)
         return True
+    elif action == "show_news":
+        # Play the alert for the newest headline now (no display reset).
+        shown = DYNAMIC_FRAME.show_latest(now or datetime.now(), state)
+        log("command: show_news" + ("" if shown else " (no headline yet)"))
+        return False
     elif action == "redefine_glyphs":
         log("command: redefine_glyphs")
         glyphs = state.get("glyphs") or {}
@@ -339,6 +349,14 @@ def _apply_emit(driver: VFDDriver, emit: tuple, prev: tuple | None) -> None:
 
 
 # --- the tick ----------------------------------------------------------------
+def _news_status(state: dict, now_ms: int) -> dict | None:
+    """status.json's ``news``: the fetcher's view + the alert flag, while on."""
+    if _norm_mode(state.get("mode")) != "dynamic" or not state.get("news_enabled"):
+        return None
+    status = DYNAMIC_FRAME.news.status() or {"sources": {}, "latest": None, "error": None}
+    return {**status, "alerting": DYNAMIC_FRAME.alerting(datetime.fromtimestamp(now_ms / 1000))}
+
+
 def _write_status(
     state: dict,
     top: str,
@@ -389,6 +407,8 @@ def _write_status(
             # preview draws those cells; null = the user's state.glyphs are loaded.
             "mode_glyphs": ({str(k): v for k, v in ctx["mode_glyphs"].items()}
                             if ctx["mode_glyphs"] else None),
+            # News: per-source leads + errors and whether an alert is showing.
+            "news": _news_status(state, now_ms),
             "weather": (DYNAMIC_FRAME.fetcher.status()
                         if _norm_mode(state.get("mode")) == "dynamic" else None),
             "last_command_id": ctx["last_command_id"],
@@ -404,8 +424,12 @@ def _apply_settings(
     now_ms: int,
     animation: str,
     params: dict,
+    override=None,
 ) -> None:
     """Apply brightness (incl. blink/pulse), hardware-scroll mode, code page.
+
+    ``override(base) -> level | None`` lets the frame on screen take over the
+    brightness (a news alert's flash/throb); None keeps the animation's.
 
     Each is change-gated (no redundant writes). An invalid brightness is coerced
     to the default ONCE with a single warning per distinct bad value.
@@ -419,7 +443,9 @@ def _apply_settings(
         if ctx["bad_brightness"] != raw_brightness:
             log(f"invalid brightness {raw_brightness!r}; using {base_brightness}")
             ctx["bad_brightness"] = raw_brightness
-    brightness = animation_brightness(now_ms, animation, params, base_brightness)
+    brightness = override(base_brightness) if override else None
+    if brightness is None:
+        brightness = animation_brightness(now_ms, animation, params, base_brightness)
     if brightness != ctx["last_brightness"]:
         driver.set_brightness(brightness)
         ctx["last_brightness"] = brightness
@@ -605,7 +631,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     command = state.get("command") or {}
     command_id = command.get("id")
     if command_id is not None and command_id != ctx["last_command_id"]:
-        did_reset = _run_command(driver, command, state, ctx)
+        did_reset = _run_command(driver, command, state, ctx, now)
         ctx["last_command_id"] = command_id
         if did_reset:
             # A self-test/reset can swallow writes sent immediately after it
@@ -622,9 +648,9 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         ctx["last_emit"] = None
         ctx["last_mode"] = mode
 
-    # The weather fetcher works only while dynamic is the active mode.
-    DYNAMIC_FRAME.fetcher.set_location(
-        weather.location(state) if mode == "dynamic" else None)
+    # Dynamic's fetchers (weather, news) work only while it is the active mode;
+    # tick() also starts and ends news alerts.
+    DYNAMIC_FRAME.tick(now, state, active=mode == "dynamic")
 
     # 3. glyphs: the active mode's own set (spectrum, dynamic), else the user's.
     _sync_glyphs(driver, state, ctx, mode, now)
@@ -663,6 +689,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
 
     # 4. frame + animation. Compute the frame first, so the brightness step below
     # can apply blink's brightness PULSE for this tick.
+    override = None
     if state.get("blank"):
         top, bottom = _BLANK_LINE, _BLANK_LINE
         emit: tuple = ("blank",)
@@ -674,9 +701,10 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
             bottom_align=frame.align or _align(state.get("align_bottom")),
         )
         emit = resolve_emit(now_ms, animation, params, top, bottom)
+        override = lambda base: frame.brightness(now, state, base)  # noqa: E731
 
     # 5. display settings (brightness incl. blink/pulse, scroll mode, code page).
-    _apply_settings(driver, state, ctx, now_ms, animation, params)
+    _apply_settings(driver, state, ctx, now_ms, animation, params, override)
 
     # 6. push the frame to the glass (only when it changes).
     if emit != ctx["last_emit"]:
@@ -786,6 +814,7 @@ def run(dry_run: bool = False, once: bool = False) -> int:
             pass
         driver.close()
         DYNAMIC_FRAME.fetcher.stop()
+        DYNAMIC_FRAME.news.stop()
         rx = ctx.get("spectrum_rx")
         if rx is not None:
             rx.close()

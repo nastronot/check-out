@@ -1,6 +1,6 @@
 """Daemon-level tests: shutdown, command nonce, animation, status mirror."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import checkout.daemon as daemon
 from checkout.driver import VFDDriver
@@ -1006,3 +1006,100 @@ def test_marker_glyph_reloads_at_noon(monkeypatch):
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 24, 12, 0, 0))
     assert drv.defined[wx.SLOT_MERIDIEM] == glyphs.PM
 
+
+
+# --- news alerts in dynamic --------------------------------------------------------
+from checkout.frames import news_alert as _na  # noqa: E402
+from checkout.news import Headline as _Headline  # noqa: E402
+
+_HEAD = _Headline("bbc", "A headline that is long enough to scroll", "b1", 1.0)
+_T = datetime(2026, 9, 24, 12, 0, 0)
+
+
+class _FakeNews:
+    def __init__(self, alert=None, latest=None):
+        self.alert, self._latest = alert, latest
+
+    def set_config(self, sources, interval_s):
+        self.config = (sources, interval_s)
+
+    def take_alert(self):
+        a, self.alert = self.alert, None
+        return a
+
+    def latest(self):
+        return self._latest
+
+    def status(self):
+        return {"sources": {"bbc": {"title": "t", "published": None, "error": None}},
+                "latest": None, "error": None}
+
+
+def _news_setup(monkeypatch, effect="none", **fake):
+    written, _, state = _weather_setup(monkeypatch, colon="on")
+    news = _FakeNews(**fake)
+    monkeypatch.setattr(daemon.DYNAMIC_FRAME, "news", news)
+    monkeypatch.setattr(daemon.DYNAMIC_FRAME, "_alert", None)
+    state = {**state, "news_enabled": True, "news_sources": ["bbc"], "news_interval_min": 5,
+             "news_repeat": 0, "news_speed_ms": 100, "news_effect": effect}
+    return written, news, state
+
+
+def test_an_alert_loads_the_banner_glyphs_then_the_clock_glyphs_return(monkeypatch):
+    written, _, state = _news_setup(monkeypatch, alert=_HEAD)
+    drv = _RecordingDefines()
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, state, ctx, now=_T)
+    assert ctx["mode_glyphs_key"] == ("dynamic", "news")
+    assert drv.defined == _na.alert_glyphs()
+    assert written[-1]["top"] == _na.banner()
+    end = _T + timedelta(milliseconds=_na.duration_ms(_HEAD.title, 0, 100))
+    daemon.tick_once(drv, state, ctx, now=end)
+    assert ctx["mode_glyphs_key"][1].startswith("clock-")
+    assert written[-1]["top"].startswith("09/24/26")
+
+
+def test_the_alert_effect_drives_brightness(monkeypatch):
+    _, _, state = _news_setup(monkeypatch, effect="throb", alert=_HEAD)
+    levels = []
+
+    class _Drv(_CountingDriver):
+        def set_brightness(self, level):
+            levels.append(level)
+
+    drv, ctx = _Drv(), daemon._new_ctx()
+    for ms in range(0, 900, 50):
+        daemon.tick_once(drv, {**state, "animation": "flash"}, ctx,
+                         now=_T + timedelta(milliseconds=ms))
+    assert levels[:6] == [0, 1, 2, 3, 2, 1]
+
+
+def test_show_news_command_plays_the_latest_headline(monkeypatch):
+    written, _, state = _news_setup(monkeypatch, latest=_HEAD)
+    state = {**state, "command": {"id": "n1", "action": "show_news", "args": {}}}
+    daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=_T)
+    assert written[-1]["top"] == _na.banner()                  # no reset: drawn at once
+
+
+def test_status_reports_news_while_it_is_on(monkeypatch):
+    written, _, state = _news_setup(monkeypatch)
+    daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=_T)
+    assert written[-1]["news"]["sources"]["bbc"]["title"] == "t"
+    assert written[-1]["news"]["alerting"] is False
+    daemon.tick_once(_CountingDriver(), {**state, "news_enabled": False}, daemon._new_ctx(), now=_T)
+    assert written[-1]["news"] is None
+
+
+def test_leaving_dynamic_ends_an_alert(monkeypatch):
+    _, _, state = _news_setup(monkeypatch, alert=_HEAD)
+    ctx = daemon._new_ctx()
+    daemon.tick_once(_CountingDriver(), state, ctx, now=_T)
+    assert daemon.DYNAMIC_FRAME.alerting(_T)
+    daemon.tick_once(_CountingDriver(), {**state, "mode": "clock"}, ctx, now=_T)
+    assert not daemon.DYNAMIC_FRAME.alerting(_T)
+
+
+def test_status_says_when_an_alert_is_showing(monkeypatch):
+    written, _, state = _news_setup(monkeypatch, alert=_HEAD)
+    daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=_T)
+    assert written[-1]["news"]["alerting"] is True
