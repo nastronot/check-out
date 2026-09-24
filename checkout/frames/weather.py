@@ -19,8 +19,10 @@ would change):
 - ``pacman``  — ``9/23/26 WED 8:33`` (no leading zeros, one space between
   fields) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
   swapping between two frames. The time colon is the steady font
-  ``:`` (the sprites need the colon's glyph slots). Solo (``weather_pacman`` =
-  ghost | pacman) shows just one, in the far-right cell; the solo ghost glances
+  ``:`` (the sprites need the colon's glyph slots). Solo
+  (``weather_pacman_solo`` + ``weather_pacman_sprite``) shows just one, in the
+  far-right cell — and is FORCED when the date/time fills all 18 cells, since
+  duo would then touch the text (``pacman_cast``); the solo ghost glances
   the other way (its own two frames, loaded by ``weather.glyph_set``).
 
 Each loop takes 1 second, or 2 with ``weather_colon_half`` (half speed), and is
@@ -86,13 +88,30 @@ def _loop_index(state: dict, now: datetime, frames: int) -> int:
     return phase_us * frames // (seconds * _US_PER_S)
 
 
+def pacman_cast(state: dict, now: datetime) -> str:
+    """Who is on screen: "both", or the solo sprite ("ghost" | "pacman").
+
+    Solo when the switch is on, AND automatically when the date/time is as wide
+    as it gets (a 2-digit month and day and a 2-digit hour: 18 cells) — duo's
+    two cells would then touch the text. The forced sprite is the remembered
+    ``weather_pacman_sprite``. The daemon loads glyphs from this too, so what is
+    drawn and what is defined always agree.
+    """
+    sprite = state.get("weather_pacman_sprite")
+    if sprite not in weather.PACMAN_SPRITES:
+        sprite = "ghost"
+    if state.get("weather_pacman_solo") or len(compact_date_time(now)) > COLS - 3:
+        return sprite
+    return "both"
+
+
 def pacman_top(state: dict, now: datetime) -> str:
     """Compact date/time on the left + two sprite cells on the right (20 cells)."""
     i = _loop_index(state, now, 2)
-    sprite = state.get("weather_pacman")
-    if sprite == "ghost":
+    cast = pacman_cast(state, now)
+    if cast == "ghost":
         cells = " " + _GHOST[i]       # solo: the one sprite sits in the last cell
-    elif sprite == "pacman":
+    elif cast == "pacman":
         cells = " " + _PACMAN[i]
     else:
         cells = _GHOST[i] + _PACMAN[i]

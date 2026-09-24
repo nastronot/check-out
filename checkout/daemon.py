@@ -56,7 +56,7 @@ _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame
 from .frames.message import MessageFrame
-from .frames.weather import WeatherFrame, colon_mode
+from .frames.weather import WeatherFrame, colon_mode, pacman_cast
 from .renderer import WIDTH, fit_line, render_lines, ticker_window
 from .state import load_state, save_status
 from . import spectrum, weather
@@ -189,7 +189,7 @@ def _apply_glyphs(driver: VFDDriver, glyphs: dict) -> None:
 
 
 # --- mode glyph sets ---------------------------------------------------------
-def mode_glyph_set(mode: str, state: dict):
+def mode_glyph_set(mode: str, state: dict, now: datetime):
     """The glyph set ``mode`` needs loaded, as ``(key, {slot: rows})``, or None.
 
     The ONE place a mode claims glyph slots. The key names the exact set, so a
@@ -200,12 +200,14 @@ def mode_glyph_set(mode: str, state: dict):
         layout, style = _norm_spectrum_layout(state), _norm_spectrum_style(state)
         return ("spectrum", layout, style), spectrum.layout_glyphs(layout, style)
     if mode == "weather":
-        family, glyphs = weather.glyph_set(colon_mode(state), state.get("weather_pacman"))
+        family, glyphs = weather.glyph_set(colon_mode(state), pacman_cast(state, now))
         return ("weather", family), glyphs
     return None
 
 
-def _sync_glyphs(driver: VFDDriver, state: dict, ctx: dict, mode: str) -> None:
+def _sync_glyphs(
+    driver: VFDDriver, state: dict, ctx: dict, mode: str, now: datetime
+) -> None:
     """Load the active mode's glyph set, or the user's glyphs, when it changes.
 
     Defining characters may reset extended mode / scroll, so every define is
@@ -213,7 +215,7 @@ def _sync_glyphs(driver: VFDDriver, state: dict, ctx: dict, mode: str) -> None:
     then re-sent). Leaving a mode set clears ``last_glyphs`` via the invalidation,
     which makes the user-glyph branch below re-define ``state.glyphs``.
     """
-    wanted = mode_glyph_set(mode, state)
+    wanted = mode_glyph_set(mode, state, now)
     key = wanted[0] if wanted else None
     if key != ctx["mode_glyphs_key"]:
         if wanted:
@@ -624,7 +626,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         weather.location(state) if mode == "weather" else None)
 
     # 3. glyphs: the active mode's own set (spectrum, weather), else the user's.
-    _sync_glyphs(driver, state, ctx, mode)
+    _sync_glyphs(driver, state, ctx, mode, now)
 
     # Animation is N/A in marquee/spectrum: the ticker / the bars own the rows, so
     # flash/blink/pulse don't apply meaningfully. Force "none" so a leftover

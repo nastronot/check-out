@@ -86,7 +86,8 @@ def defaults() -> dict:
         "weather_lon": None,             # decimal degrees, -180..180, or null
         "weather_colon": "tick",         # "on" | "tick" | "wiggle" | "twinkle"
         "weather_colon_half": False,     # half speed: every colon loop takes 2 s
-        "weather_pacman": "both",        # pacman colon: "both" | solo "ghost" / "pacman"
+        "weather_pacman_solo": False,    # pacman colon: one sprite instead of both
+        "weather_pacman_sprite": "ghost",  # the solo sprite: "ghost" | "pacman"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -153,8 +154,14 @@ def _backfill(data: dict) -> dict:
     if legacy:  # a name used while v1.4.0 was built (e.g. throb2 -> wiggle + half)
         merged["weather_colon"], merged["weather_colon_half"] = legacy
     merged["weather_colon_half"] = bool(merged.get("weather_colon_half"))
-    if merged.get("weather_pacman") not in PACMAN_SPRITES:
-        merged["weather_pacman"] = "both"
+    # The earlier single key "weather_pacman" (both | ghost | pacman) splits into
+    # a solo switch + a remembered sprite.
+    legacy_pacman = merged.pop("weather_pacman", None)
+    if legacy_pacman in PACMAN_SPRITES:
+        merged["weather_pacman_solo"], merged["weather_pacman_sprite"] = True, legacy_pacman
+    merged["weather_pacman_solo"] = bool(merged.get("weather_pacman_solo"))
+    if merged.get("weather_pacman_sprite") not in PACMAN_SPRITES:
+        merged["weather_pacman_sprite"] = "ghost"
     if merged.get("weather_colon") not in COLON_MODES:
         merged["weather_colon"] = "tick"
     return merged

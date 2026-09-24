@@ -14,7 +14,7 @@
     SpectrumLayout,
     Status,
     WeatherColon,
-    WeatherPacman,
+    WeatherPacmanSprite,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -160,13 +160,14 @@
   ];
   const setColon = (c: WeatherColon) => patch({ weather_colon: c });
   const setColonHalf = (e: Event) => patch({ weather_colon_half: checked(e) });
-  // pacman: Solo on -> one sprite (ghost first); off -> both.
-  const SPRITES: { value: WeatherPacman; label: string }[] = [
+  // pacman: Solo shows one sprite; the chosen sprite is remembered while Solo
+  // is off, because the widest date/time forces solo with it automatically.
+  const SPRITES: { value: WeatherPacmanSprite; label: string }[] = [
     { value: 'ghost', label: 'GHOST' },
     { value: 'pacman', label: 'PACMAN' },
   ];
-  const setSolo = (e: Event) => patch({ weather_pacman: checked(e) ? 'ghost' : 'both' });
-  const setSprite = (p: WeatherPacman) => patch({ weather_pacman: p });
+  const setSolo = (e: Event) => patch({ weather_pacman_solo: checked(e) });
+  const setSprite = (p: WeatherPacmanSprite) => patch({ weather_pacman_sprite: p });
   $: weatherLine = weatherSummary(status?.weather);
 
   const DIRS: ScrollDir[] = ['left', 'right'];
@@ -446,31 +447,31 @@
             <label class="switch">
               <input
                 type="checkbox"
-                checked={state.weather_pacman !== 'both'}
+                checked={state.weather_pacman_solo}
                 on:change={setSolo}
               />
               <span class="switch__track"></span>
               <span class="switch__label">Solo</span>
             </label>
-            {#if state.weather_pacman !== 'both'}
-              <div class="seg seg--sm">
-                {#each SPRITES as p}
-                  <button
-                    type="button"
-                    aria-pressed={state.weather_pacman === p.value}
-                    on:click={() => setSprite(p.value)}>{p.label}</button
-                  >
-                {/each}
-              </div>
-            {/if}
+            <div class="seg seg--sm">
+              {#each SPRITES as p}
+                <button
+                  type="button"
+                  aria-pressed={state.weather_pacman_sprite === p.value}
+                  on:click={() => setSprite(p.value)}>{p.label}</button
+                >
+              {/each}
+            </div>
           </div>
         {/if}
         <span class="field__hint">
           <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
           on and off every second. <strong>Wiggle</strong> = the colon twists
           one way, then the other. <strong>Twinkle</strong> = it grows into a
-          burst and back. <strong>Pacman</strong> = date left, time right, a
-          ghost and pacman between (or one, with <strong>Solo</strong>).
+          burst and back. <strong>Pacman</strong> = date and time at the left, a
+          ghost and pacman at the right (or one, with <strong>Solo</strong> —
+          the chosen sprite also goes solo by itself when the date and time fill
+          the line).
           <strong>Half speed</strong> stretches each loop to 2 s.
         </span>
       </div>

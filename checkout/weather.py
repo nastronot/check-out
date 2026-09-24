@@ -32,8 +32,9 @@ HTTP_TIMEOUT_S = 10
 # (wiggle, twinkle), or pacman (a steady colon with sprites beside the time).
 # weather_colon_half doubles every loop's length.
 COLON_MODES = ("on", "tick", "wiggle", "twinkle", "pacman")
-# weather_pacman: both sprites, or one alone ("solo").
-PACMAN_SPRITES = ("both", "ghost", "pacman")
+# weather_pacman_sprite: which sprite shows alone when solo (remembered while
+# solo is off, since the widest date/time forces solo — frames/weather.py).
+PACMAN_SPRITES = ("ghost", "pacman")
 # Names used while v1.4.0 was built -> (final name, half speed); state.py migrates.
 LEGACY_COLON_MODES = {
     "pulse": ("wiggle", False),
@@ -66,7 +67,7 @@ _BASE_GLYPHS = {
     SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
 }
 _PAC_FRAMES = {SLOT_PAC_A: PACMAN_CLOSED, SLOT_PAC_B: PACMAN_OPEN}
-# weather_pacman -> the sprite frames it loads. Duo's ghost glances right
+# The on-screen cast ("both" or one sprite) -> the sprite frames it loads. Duo's ghost glances right
 # (A <-> centred); the solo ghost glances left (centred <-> C).
 _PACMAN_SPRITE_GLYPHS = {
     "both": {SLOT_GHOST_A: GHOST_A, SLOT_GHOST_B: GHOST_B, **_PAC_FRAMES},
@@ -81,7 +82,7 @@ _PEAKS = {
 
 def glyph_set(colon: str, pacman: str = "both") -> tuple[str, dict[int, list[int]]]:
     """``(family, {slot: rows})`` for a weather_colon value (and, for pacman,
-    the weather_pacman sprite choice). on/tick/wiggle share the wiggle set (so
+    who is on screen: "both", "ghost" or "pacman" — see ``pacman_cast``). on/tick/wiggle share the wiggle set (so
     switching among them redefines nothing); twinkle loads the twinkle peaks;
     pacman loads its sprites in place of the colons — a different set per solo
     choice, so the family names it."""

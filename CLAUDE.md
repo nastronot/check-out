@@ -68,8 +68,9 @@ Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R
 (`WeatherFrame.align`; a frame's `align` overrides the Justify setting), so the UI
 hides Justify in weather. State:
 `weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle` | `pacman`),
-`weather_colon_half` (bool), `weather_pacman` (`both` | `ghost` | `pacman`;
-development colon names `pulse`/`throb*`/`burst*` migrate on load).
+`weather_colon_half` (bool), `weather_pacman_solo` (bool) +
+`weather_pacman_sprite` (`ghost` | `pacman`, remembered while solo is off);
+the earlier `weather_pacman` key and development colon names migrate on load.
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
   service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
   in weather mode and fetches once per data refresh (`current.time` +
@@ -86,8 +87,11 @@ development colon names `pulse`/`throb*`/`burst*` migrate on load).
   fill all 9 slots. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
   between fields; 15-18 cells) left-aligned, `[ghost][pacman]` in cells 18-19;
-  solo shows the chosen sprite in cell 19 (18 blank). Each `weather_pacman`
-  choice loads its own sprite frames (`weather.glyph_set(colon, pacman)`, key
+  solo shows the chosen sprite in cell 19 (18 blank). **Solo is forced
+  automatically** when the date/time fills all 18 cells (2-digit month, day
+  and hour), using the remembered sprite — `frames/weather.py pacman_cast(state,
+  now)` decides, and both the frame and the daemon's glyph set call it. Each
+  cast ("both" / "ghost" / "pacman") loads its own sprite frames (`weather.glyph_set(colon, pacman)`, key
   `("weather", "pacman" | "pacman-ghost" | "pacman-pacman")`): duo ghost =
   `GHOST_A`/`GHOST_B`, solo ghost = `GHOST_B`/`GHOST_C` (glances the other way). Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
   (no slot left for `COLON_THIN`).

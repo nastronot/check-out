@@ -330,12 +330,16 @@ def test_weather_colon_validates(state_path):
     assert state.load_state()["weather_colon"] == "tick"
 
 
-def test_weather_pacman_sprite_validates(state_path):
+def test_weather_pacman_solo_and_sprite(state_path):
     import json
-    assert state.load_state()["weather_pacman"] == "both"
-    for v in ("both", "ghost", "pacman"):
-        state_path.write_text(json.dumps({"weather_pacman": v}))
-        assert state.load_state()["weather_pacman"] == v
-    state_path.write_text(json.dumps({"weather_pacman": "inky"}))
-    assert state.load_state()["weather_pacman"] == "both"
-
+    s = state.load_state()
+    assert s["weather_pacman_solo"] is False and s["weather_pacman_sprite"] == "ghost"
+    state_path.write_text(json.dumps({"weather_pacman_sprite": "inky"}))
+    assert state.load_state()["weather_pacman_sprite"] == "ghost"
+    # The earlier single key migrates: a solo choice -> solo on + that sprite.
+    for old, solo, sprite in (("ghost", True, "ghost"), ("pacman", True, "pacman"),
+                              ("both", False, "ghost")):
+        state_path.write_text(json.dumps({"weather_pacman": old}))
+        s = state.load_state()
+        assert (s["weather_pacman_solo"], s["weather_pacman_sprite"]) == (solo, sprite), old
+        assert "weather_pacman" not in s

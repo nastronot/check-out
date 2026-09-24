@@ -352,8 +352,10 @@ _PB = chr(GLYPH_CODES[_weather.SLOT_PAC_B])
 
 
 def _pac(us, second=12, half=False, sprite="both"):
+    solo = sprite != "both"
     state = {**_WX, "weather_colon": "pacman", "weather_colon_half": half,
-             "weather_pacman": sprite}
+             "weather_pacman_solo": solo,
+             "weather_pacman_sprite": sprite if solo else "ghost"}
     return WeatherFrame(_FakeFetcher()).render(_T.replace(second=second, microsecond=us), state)[0]
 
 
@@ -363,19 +365,19 @@ def test_pacman_is_compact_text_left_sprites_far_right():
 
 
 def test_pacman_longest_date_and_time_still_fit():
-    state = {**_WX, "weather_colon": "pacman", "weather_pacman": "both"}
+    state = {**_WX, "weather_colon": "pacman"}
     top = WeatherFrame(_FakeFetcher()).render(datetime(2026, 12, 31, 23, 59), state)[0]
     assert top[:18] == "12/31/26 THU 11:59" and len(top) == 20   # exactly fills 18
 
 
 def test_pacman_two_digit_hour_has_one_space():
-    state = {**_WX, "weather_colon": "pacman", "weather_pacman": "both"}
+    state = {**_WX, "weather_colon": "pacman"}
     top = WeatherFrame(_FakeFetcher()).render(datetime(2026, 9, 23, 22, 5), state)[0]
     assert top[:18] == "9/23/26 WED 10:05 "
 
 
 def test_pacman_keeps_the_minute_and_year_zeros():
-    state = {**_WX, "weather_colon": "pacman", "weather_pacman": "both"}
+    state = {**_WX, "weather_colon": "pacman"}
     top = WeatherFrame(_FakeFetcher()).render(datetime(2027, 1, 5, 0, 7), state)[0]
     assert top.startswith("1/5/27 TUE 12:07")
 
@@ -405,4 +407,24 @@ def test_pacman_glyphs_match_the_drawn_frames():
     assert _draw(_glyphs.GHOST_C) == [".....", ".###.", "#####", ".#.##", "#####", "#.#.#", "....."]
     assert _draw(_glyphs.PACMAN_CLOSED) == [".....", ".###.", "#####", "...##", "#####", ".###.", "....."]
     assert _draw(_glyphs.PACMAN_OPEN) == [".....", ".###.", "..###", "...##", "..###", ".###.", "....."]
+
+
+def test_widest_line_forces_the_last_solo_sprite():
+    from checkout.frames.weather import pacman_cast
+    widest = datetime(2026, 12, 31, 12, 33)          # 12/31/26 THU 12:33 = 18 cells
+    narrower = datetime(2026, 12, 31, 1, 33)         # 17 cells: duo still fits
+    for sprite, frames in (("ghost", (_GA, _GB)), ("pacman", (_PA, _PB))):
+        state = {**_WX, "weather_colon": "pacman", "weather_pacman_solo": False,
+                 "weather_pacman_sprite": sprite}
+        assert pacman_cast(state, widest) == sprite
+        assert pacman_cast(state, narrower) == "both"
+        top = WeatherFrame(_FakeFetcher()).render(widest, state)[0]
+        assert top[:19] == "12/31/26 THU 12:33 "   # the gap duo had no room for
+        assert top[19] in frames
+
+
+def test_solo_switch_wins_whatever_the_width():
+    from checkout.frames.weather import pacman_cast
+    state = {"weather_pacman_solo": True, "weather_pacman_sprite": "pacman"}
+    assert pacman_cast(state, datetime(2026, 9, 23, 8, 33)) == "pacman"
 

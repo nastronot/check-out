@@ -646,3 +646,14 @@ with a per-choice family key — so the frame code never changes.
 **Pacman spacing, final.** The time sits exactly one cell after the day whether
 it is 4 or 5 cells wide (`9/23/26 WED 8:33`, `9/23/26 WED 10:33`); the padding
 goes between the time and the sprites instead.
+
+**Forced solo on the widest line.** When the compact date/time is as wide as it
+gets — `12/31/26 THU 12:33`, a 2-digit month, day and hour, all 18 cells — duo's
+two sprite cells would touch the text, so pacman goes solo automatically with the
+last-chosen solo sprite. That needs the sprite remembered while solo is off, so
+`weather_pacman` (both | ghost | pacman) split into `weather_pacman_solo` +
+`weather_pacman_sprite` (migrated on load). `pacman_cast(state, now)` is the one
+decision: the frame draws from it and the daemon's `mode_glyph_set` (now given
+`now`) loads glyphs from it, so drawing and defining never disagree. Crossing
+the width boundary changes the glyph set, which reloads the sprite slots (one
+repaint).
