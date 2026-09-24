@@ -96,3 +96,18 @@ backlog-free path for all modes.
 | 5   | GND                                            |
 | 8   | +12V                                           |
 
+
+### Extended characters 0x80-0xFF (bench, v1.4.0)
+Photographed on page 0 (default) and page 2 (CP850). ASCII (0x20-0x7E) looks the
+same on both pages. **Reference only: the driver sends none of these** (only
+printable ASCII and the 9 user-glyph codes). A built-in degree sign — `0xF8` on
+page 2, a 4-dot ring identical to the custom one — was wired in and then reverted
+by choice: the custom degree glyph and pacman's font colon were preferred.
+
+Also seen: page 2 follows the standard CP850 table — `ø` 0x9B and `Ø`
+0x9D (but `Ø` is only 5 rows tall, so it cannot stand in for a slashed zero),
+`± ÷ ¼ ½ ¾ ¹ ² ³ § ¶ « »` in 0xA0-0xFF. Page 0 is CP437-like: accented Latin
+0x80-0x9F, Greek 0xB0-0xBF, maths/arrows 0xF0-0xFF (`≠ ≡ ← →`), superscripts and
+`× ± ∫` at 0xC5-0xCA, and a Cyrillic block at 0xD0-0xEF. Before using any of these,
+bench-confirm the exact byte and page, and let it through `driver._sanitize`
+(it replaces everything above 0x7E with `?`).

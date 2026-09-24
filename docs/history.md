@@ -711,3 +711,9 @@ shows the format until a location is saved, then the reading's freshness.
 Message rows share one template (helpers over top/bottom); scroll speed only
 shows while a row scrolls. Display: brightness shows its level once, the
 command footnote and raw command id are gone, the daemon readout is one row.
+
+**Built-in degree: tried and reverted.** Wiring in the display's own degree
+sign (CP850 `0xF8`) freed a glyph slot for pacman's thin colon, but on glass the
+custom degree glyph and pacman's standard font colon were preferred, so the
+change was reverted (commit 1168bf0). The extended-character map from the
+bench photos stays in `docs/hardware.md` as reference.
