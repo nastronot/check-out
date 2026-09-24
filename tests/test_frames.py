@@ -147,6 +147,7 @@ _WX = {"weather_lat": 41.9, "weather_lon": -87.6}
 _T = datetime(2026, 9, 23, 20, 33, 12)
 _MID = chr(GLYPH_CODES[_weather.SLOT_COLON_MID])
 _LOW = chr(GLYPH_CODES[_weather.SLOT_COLON_LOW])
+_THIN = chr(GLYPH_CODES[_weather.SLOT_COLON_THIN])
 
 
 def _top(colon, us):
@@ -155,7 +156,7 @@ def _top(colon, us):
 
 
 def test_weather_top_is_the_short_clock():
-    assert _top("on", 0) == "09/23/26 WED 08:33"
+    assert _top("on", 0) == f"09/23/26 WED 08{_THIN}33"
 
 
 def test_weather_without_location_asks_for_one():
@@ -169,12 +170,12 @@ def test_weather_bottom_is_twenty_cells_even_with_no_reading():
 
 
 def test_on_is_a_steady_colon():
-    assert {_top("on", us)[15] for us in range(0, 1_000_000, 100_000)} == {":"}
+    assert {_top("on", us)[15] for us in range(0, 1_000_000, 100_000)} == {_THIN}
 
 
 def test_tick_shows_the_colon_for_the_first_half_second_only():
-    assert _top("tick", 0)[15] == ":"
-    assert _top("tick", 499_999)[15] == ":"
+    assert _top("tick", 0)[15] == _THIN
+    assert _top("tick", 499_999)[15] == _THIN
     assert _top("tick", 500_000)[15] == " "
     assert _top("tick", 999_999)[15] == " "
 
@@ -202,3 +203,8 @@ def test_colon_fade_glyphs_thin_the_real_colon():
     for rows, dots in ((_glyphs.COLON_MID, 4), (_glyphs.COLON_LOW, 2)):
         assert sum(bin(r).count("1") for r in rows) == dots
         assert all(r & ~full == 0 for r, full in zip(rows, real))
+
+
+def test_thin_colon_is_the_centre_column():
+    rows = ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in _glyphs.COLON_THIN]
+    assert rows == [".....", "..#..", "..#..", ".....", "..#..", "..#..", "....."]

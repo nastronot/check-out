@@ -71,8 +71,8 @@ Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R
   in weather mode and fetches once per data refresh (`current.time` +
   `interval` 900 s + 60 s), retrying 60 s → 900 s on failure. The loop never
   waits on the network.
-- **Colon:** the colon cell changes CHARACTER — `tick` = `:` then space each
-  half second; `pulse` = a 1 s fade through space / 2 dots / 4 dots / `:` (two
+- **Colon:** the colon cell changes CHARACTER — `on` / `tick` use a one-column
+  thin colon glyph (`COLON_THIN`); `tick` = thin colon then space each half second; `pulse` = a 1 s fade through space / 2 dots / 4 dots / `:` (two
   glyphs in weather's set); `on` = steady. **Never use the hardware cursor or
   brightness for it** (see the bench TODO below). Weather ignores `animation`.
 

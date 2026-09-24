@@ -543,3 +543,8 @@ the redraw and leave marquee's text up, since the emit tuple was unchanged.
 
 **Location Save.** Lat and lon are drafts in the UI, validated (±90 / ±180, empty
 clears) and written only on Save, so typing never triggers a fetch.
+
+**Thin colon.** After seeing it on glass, `on` and `tick` switched from the font's
+2-wide `:` to `COLON_THIN` — the centre column only, 4 dots — in weather's glyph
+set (slot 7; weather now uses 8 of the 9 slots). `pulse` keeps its fade to the
+font's `:`.

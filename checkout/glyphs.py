@@ -25,6 +25,10 @@ DEGREE = [4, 10, 4, 0, 0, 0, 0]
 COLON_MID = [0, 2, 4, 0, 2, 4, 0]   # 4 dots: one diagonal of each block
 COLON_LOW = [0, 0, 2, 0, 2, 0, 0]   # 2 dots: the inner dot of each block
 
+# A one-column colon (the centre column, 4 dots) — the weather clock's colon for
+# "on" and "tick"; slimmer than the font's 2-wide ':'.
+COLON_THIN = [0, 4, 4, 0, 4, 4, 0]
+
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
 
 

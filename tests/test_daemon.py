@@ -909,7 +909,7 @@ def test_weather_status_reports_glyphs_and_weather(monkeypatch):
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
     assert s["mode"] == "weather"
-    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4", "5", "6"}
+    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4", "5", "6", "7"}
     assert s["weather"]["error"] is None
 
 
@@ -952,7 +952,10 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
     daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
     assert _tx_after(capsys) == [0x10, 16, ord(" "), 0x14]       # colon off
     daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
-    assert _tx_after(capsys) == [0x10, 16, ord(":"), 0x14]       # colon on
+    from checkout import weather as wx
+    from checkout.driver import GLYPH_CODES
+    thin = GLYPH_CODES[wx.SLOT_COLON_THIN]
+    assert _tx_after(capsys) == [0x10, 16, thin, 0x14]           # colon on
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):

@@ -9,8 +9,9 @@ the colon CHARACTER — never the hardware cursor (an underline on this glass th
 stays on across writes) and never brightness (display-wide, so the whole panel
 would pulse):
 
-- ``on``    — a steady ``:``.
-- ``tick``  — ``:`` for the first half of each second, a space for the second.
+- ``on``    — a steady thin colon (one centre column of dots, a weather glyph).
+- ``tick``  — the thin colon for the first half of each second, a space for the
+  second.
 - ``pulse`` — the colon fades 0→3→0 once a second through four steps: space,
   2 dots, 4 dots, the full 8-dot ``:`` (the dot glyphs are in weather's set).
 
@@ -27,6 +28,7 @@ from .base import Frame
 from .clock import short_date_time
 
 NO_LOCATION = "SET LOCATION"
+_THIN_COLON = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _US_PER_S = 1_000_000
 
 # pulse: one triangle per second, each step one of these colon characters.
@@ -50,10 +52,10 @@ def colon_char(state: dict, now: datetime) -> str:
     """The character in the colon's cell at ``now``."""
     mode = colon_mode(state)
     if mode == "tick":
-        return ":" if now.microsecond < _US_PER_S // 2 else " "
+        return _THIN_COLON if now.microsecond < _US_PER_S // 2 else " "
     if mode == "pulse":
         return _PULSE_STEPS[now.microsecond * len(_PULSE_STEPS) // _US_PER_S]
-    return ":"
+    return _THIN_COLON
 
 
 class WeatherFrame(Frame):
