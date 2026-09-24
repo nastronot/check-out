@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:nyt="http://www.nytimes.com/namespaces/rss/2.0" version="2.0">
+  <channel>
+    <title>NYT &gt; Top Stories</title>
+    <link>https://www.nytimes.com</link>
+    <atom:link href="https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" rel="self" type="application/rss+xml"></atom:link>
+    <description></description>
+    <language>en-us</language>
+    <copyright>Copyright 2026 The New York Times Company</copyright>
+    <lastBuildDate>Thu, 24 Sep 2026 06:14:40 +0000</lastBuildDate>
+    <pubDate>Thu, 24 Sep 2026 06:04:12 +0000</pubDate>
+    <image>
+      <title>NYT &gt; Top Stories</title>
+      <url>https://static01.nyt.com/images/misc/NYT_logo_rss_250x40.png</url>
+      <link>https://www.nytimes.com</link>
+    </image>
+    <item>
+      <title>Court Blocks Trump’s White House Ban on CNN, MS NOW and Politico</title>
+      <link>https://www.nytimes.com/2026/09/23/business/media/cnn-ms-now-politico-white-house-trump-ban-ruling.html</link>
+      <guid isPermaLink="true">https://www.nytimes.com/2026/09/23/business/media/cnn-ms-now-politico-white-house-trump-ban-ruling.html</guid>
+      <atom:link href="https://www.nytimes.com/2026/09/23/business/media/cnn-ms-now-politico-white-house-trump-ban-ruling.html" rel="standout"></atom:link>
+      <description>Judge Timothy J. Kelly issued a temporary restraining order and told the White House to immediately restore the press credentials for the employees of the three news outlets.</description>
+      <dc:creator>Erik Wemple</dc:creator>
+      <pubDate>Thu, 24 Sep 2026 05:59:15 +0000</pubDate>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">United States Politics and Government</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">Decisions and Verdicts</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">Freedom of Speech and Expression</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">News and News Media</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">Suits and Litigation (Civil)</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_org">CNN</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_org">MS NOW</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_org">Politico, The</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_per">Trump, Donald J</category>
+      <media:content height="1800" medium="image" url="https://static01.nyt.com/images/2026/09/23/multimedia/23biz-media-ban-ruling-hfo-hclw/23biz-media-ban-ruling-hfo-hclw-mediumSquareAt3X.jpg" width="1800"></media:content>
+      <media:credit>Haiyun Jiang/The New York Times</media:credit>
+      <media:description>CNN, MS Now and Politico had sued the administration after they were banned from the White House.</media:description>
+    </item>
+<item>
+      <title>Iowa Judge Dismisses Trump’s Lawsuit Against The Des Moines Register</title>
+      <link>https://www.nytimes.com/2026/09/23/us/politics/des-moines-register-trump-lawsuit.html</link>
+      <guid isPermaLink="true">https://www.nytimes.com/2026/09/23/us/politics/des-moines-register-trump-lawsuit.html</guid>
+      <atom:link href="https://www.nytimes.com/2026/09/23/us/politics/des-moines-register-trump-lawsuit.html" rel="standout"></atom:link>
+      <description>The suit challenged a poll that showed Trump trailing Kamala Harris in the final weeks of the 2024 race. A judge warned that similar legal challenges could have a chilling effect on news reporting.</description>
+      <dc:creator>Ishani Desai</dc:creator>
+      <pubDate>Thu, 24 Sep 2026 02:07:27 +0000</pubDate>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">United States Politics and Government</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">Suits and Litigation (Civil)</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">Polls and Public Opinion</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_per">Selzer, Ann (1956- )</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_per">Trump, Donald J</category>
+      <media:content height="1799" medium="image" url="https://static01.nyt.com/images/2026/09/23/multimedia/23xp-selzer-mqkb/23xp-selzer-mqkb-mediumSquareAt3X.jpg" width="1800"></media:content>
+      <media:credit>Chip Somodevilla/Getty Images</media:credit>
+      <media:description>A poll published by The Des Moines Register in 2024 showed Donald J. Trump trailing Kamala Harris in Iowa. Mr. Trump went on to win the state by double digits.</media:description>
+    </item>
+<item>
+      <title>As Xi Visits Washington, Trump Plays Down China’s Actions Against U.S. Interests</title>
+      <link>https://www.nytimes.com/2026/09/23/us/politics/trump-xi-china-visit.html</link>
+      <guid isPermaLink="true">https://www.nytimes.com/2026/09/23/us/politics/trump-xi-china-visit.html</guid>
+      <atom:link href="https://www.nytimes.com/2026/09/23/us/politics/trump-xi-china-visit.html" rel="standout"></atom:link>
+      <description>Despite the rivalry between the United States and China, President Trump has repeatedly found ways to give President Xi Jinping of China a pass, portraying him more as a personal friend than a competitor.</description>
+      <dc:creator>Erica L. Green</dc:creator>
+      <pubDate>Wed, 23 Sep 2026 21:14:18 +0000</pubDate>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">United States Politics and Government</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">International Relations</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_per">Trump, Donald J</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_geo">United States</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_geo">China</category>
+      <media:content height="1800" medium="image" url="https://static01.nyt.com/images/2026/09/23/multimedia/23dc-prexy-01-qbwc/23dc-prexy-01-qbwc-mediumSquareAt3X.jpg" width="1800"></media:content>
+      <media:credit>Kenny Holston/The New York Times</media:credit>
+      <media:description>President Trump has spent weeks dismissing or excusing reports of China’s infractions as he’s prepared for the “great honor” of hosting President Xi Jinping in Washington.</media:description>
+    </item>
+<item>
+      <title>U.S. and China Agree to Extend Trade Truce by 2 Months, Bessent Says</title>
+      <link>https://www.nytimes.com/2026/09/23/us/politics/china-trade-truce-tariffs.html</link>
+      <guid isPermaLink="true">https://www.nytimes.com/2026/09/23/us/politics/china-trade-truce-tariffs.html</guid>
+      <atom:link href="https://www.nytimes.com/2026/09/23/us/politics/china-trade-truce-tariffs.html" rel="standout"></atom:link>
+      <description>The Treasury secretary, who is leading talks with China, said the countries had agreed to extend a trade truce until January.</description>
+      <dc:creator>Ana Swanson and Keith Bradsher</dc:creator>
+      <pubDate>Thu, 24 Sep 2026 01:32:50 +0000</pubDate>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">International Trade and World Market</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/des">United States International Relations</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_per">Bessent, Scott</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_per">He Lifeng (1955- )</category>
+      <category domain="http://www.nytimes.com/namespaces/keywords/nyt_geo">China</category>
+      <media:content height="1800" medium="image" url="https://static01.nyt.com/images/2026/09/23/multimedia/23trump-xi-trade-truce-vckz/23trump-xi-trade-truce-vckz-mediumSquareAt3X.jpg" width="1800"></media:content>
+      <media:credit>Nathan Howard/Reuters</media:credit>
+      <media:description>Treasury Secretary Scott Bessent in Washington on Wednesday, ahead of a meeting with a Chinese official.</media:description>
+    </item>
+</channel>
+</rss>
