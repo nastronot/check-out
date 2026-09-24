@@ -264,8 +264,8 @@ def _top(colon, us, second=12, half=False):
     return DynamicFrame(_FakeFetcher()).render(now, state)[0]
 
 
-def test_dynamic_top_is_the_compact_clock():
-    assert _top("on", 0) == "9/23/26 WED 8:33"   # no leading zeros, standard colon
+def test_weather_top_is_the_short_clock():
+    assert _top("on", 0) == "09/23/26 WED 08:33"   # the font's standard colon
 
 
 def test_weather_without_location_asks_for_one():
@@ -279,19 +279,19 @@ def test_weather_bottom_is_twenty_cells_even_with_no_reading():
 
 
 def test_on_is_a_steady_colon():
-    assert {_top("on", us)[13] for us in range(0, 1_000_000, 100_000)} == {":"}
+    assert {_top("on", us)[15] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_tick_shows_the_colon_for_the_first_half_second_only():
-    assert _top("tick", 0)[13] == ":"
-    assert _top("tick", 499_999)[13] == ":"
-    assert _top("tick", 500_000)[13] == " "
-    assert _top("tick", 999_999)[13] == " "
+    assert _top("tick", 0)[15] == ":"
+    assert _top("tick", 499_999)[15] == ":"
+    assert _top("tick", 500_000)[15] == " "
+    assert _top("tick", 999_999)[15] == " "
 
 
 def test_tick_changes_only_the_colon_cell():
     on, off = _top("tick", 0), _top("tick", 600_000)
-    assert [i for i in range(len(on)) if on[i] != off[i]] == [13]
+    assert [i for i in range(len(on)) if on[i] != off[i]] == [15]
 
 
 def _loop(colon, frames, half=False):
@@ -301,7 +301,7 @@ def _loop(colon, frames, half=False):
     for k in range(frames):
         at_us = (2 * k + 1) * seconds * 1_000_000 // (2 * frames)
         out.append(_top(colon, at_us % 1_000_000, second=12 + at_us // 1_000_000,
-                        half=half)[13])
+                        half=half)[15])
     return out
 
 
@@ -320,13 +320,13 @@ def test_half_speed_doubles_every_loop():
 
 
 def test_half_speed_leaves_on_steady():
-    assert {_top("on", us, half=True)[13] for us in range(0, 1_000_000, 100_000)} == {":"}
+    assert {_top("on", us, half=True)[15] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_colon_defaults_to_tick():
     state = dict(_WX)
     frame = DynamicFrame(_FakeFetcher())
-    assert frame.render(_T.replace(microsecond=600_000), state)[0][13] == " "
+    assert frame.render(_T.replace(microsecond=600_000), state)[0][15] == " "
 
 
 def _draw(rows):

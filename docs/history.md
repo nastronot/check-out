@@ -722,8 +722,3 @@ bench photos stays in `docs/hardware.md` as reference.
 unblanks it. The thin colon glyph remains only as a frame of wiggle and twinkle.
 The degree glyph also moved one column left (`[2, 5, 2, 0, 0, 0, 0]`) to sit
 against its number.
-
-**No leading zeros anywhere in dynamic.** On, tick, wiggle and twinkle now use
-the same compact date/time as pacman (`9/24/26 THU 12:07`, centred), so every
-dynamic layout shares `clock.compact_date_time` (which gained the colon
-parameter). The zero-padded `short_date_time` and its helpers were removed.

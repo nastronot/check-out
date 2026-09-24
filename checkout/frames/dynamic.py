@@ -1,4 +1,4 @@
-"""DynamicFrame — ``M/D/YY DAY H:MM`` on top (no leading zeros), weather below.
+"""DynamicFrame — ``MM/DD/YY DAY HH:MM`` on top, today's weather on the bottom.
 
 The fetch happens elsewhere (``checkout.weather.WeatherFetcher``, a background
 thread); this frame only reads the latest reading, so rendering never waits on
@@ -42,7 +42,7 @@ from .. import weather
 from ..config import COLS
 from ..driver import GLYPH_CODES
 from .base import Frame
-from .clock import compact_date_time
+from .clock import compact_date_time, short_date_time
 
 NO_LOCATION = "SET LOCATION"
 _US_PER_S = 1_000_000
@@ -132,7 +132,7 @@ class DynamicFrame(Frame):
         if colon_mode(state) == "pacman":
             top = pacman_top(state, now)
         else:
-            top = compact_date_time(now, colon=colon_char(state, now))
+            top = short_date_time(now, colon=colon_char(state, now))
         if weather.location(state) is None:
             return top, NO_LOCATION
         return top, weather.bottom_line(self.fetcher.latest(), now.timestamp())
