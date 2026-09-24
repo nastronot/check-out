@@ -320,3 +320,25 @@ def test_force_raw_mode_noop_in_dry_run():
     drv = VFDDriver(dry_run=True)
     assert drv._serial is None
     drv._force_raw_mode()  # must not raise
+
+
+# --- show(cursor=): park the cursor block on a cell (weather colon tick) -------
+from checkout.driver import CURSOR_ON  # noqa: E402
+
+
+def test_show_with_cursor_ends_by_parking_the_cursor(driver, capsys):
+    driver.show("A" * 20, "B" * 20, cursor=15)
+    data = capture_bytes(capsys)
+    assert data[:44] == [0x10, 0x00] + [ord("A")] * 20 + [0x10, 0x14] + [ord("B")] * 20
+    assert data[44:] == [0x10, 15, CURSOR_ON]
+    assert CURSOR_OFF not in data[44:]
+
+
+def test_show_without_cursor_is_unchanged(driver, capsys):
+    driver.show("A" * 20, "B" * 20)
+    assert capture_bytes(capsys)[-1] == CURSOR_OFF
+
+
+def test_show_rejects_cursor_out_of_range(driver):
+    with pytest.raises(ValueError):
+        driver.show("A", "B", cursor=40)

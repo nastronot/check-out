@@ -342,7 +342,7 @@ class VFDDriver:
             raise ValueError(f"position {pos:#04x} out of range 0x00–{POS_MAX:#04x}")
         self._write(bytes([DISPLAY_POSITION, pos]) + _sanitize(text))
 
-    def show(self, top: str, bottom: str) -> None:
+    def show(self, top: str, bottom: str, cursor: int | None = None) -> None:
         """Overwrite both lines in place as a single buffered write.
 
         With the display correctly initialized (extended mode + scroll off) all
@@ -359,7 +359,14 @@ class VFDDriver:
         ``0x14`` (cursor off) must be LAST: any write after it re-enables the
         cursor block. Built as one buffer + one serial write so there is no
         flicker and the cursor-hide is reliably the final byte.
+
+        ``cursor`` instead PARKS the hardware cursor block on that linear cell
+        (0x00-0x27): the write then ends ``0x10 <cursor> 0x13`` (position, cursor
+        on) rather than ``0x14``. Weather mode's colon tick uses it; the next
+        show() without a cursor hides it again.
         """
+        if cursor is not None and not (POS_TOP <= cursor <= POS_MAX):
+            raise ValueError(f"cursor {cursor} out of range 0..{POS_MAX}")
         top_b = _sanitize(_pad(top))         # exactly 20 bytes
         bottom_b = _sanitize(_pad(bottom))   # exactly 20 bytes
 
@@ -368,7 +375,10 @@ class VFDDriver:
         buf += top_b
         buf += bytes([DISPLAY_POSITION, POS_BOTTOM])
         buf += bottom_b
-        buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
+        if cursor is None:
+            buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
+        else:
+            buf += bytes([DISPLAY_POSITION, cursor, CURSOR_ON])
         self._write(bytes(buf))
 
     def show_bottom(self, bottom: str) -> None:
