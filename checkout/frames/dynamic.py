@@ -20,7 +20,8 @@ would change):
   fields) left-aligned, and in the last two cells pacman eating the chosen
   sprite (``dynamic_pacman_sprite``: ghost | heart | pacman — a pacman faces
   its mirror image, one frame out of step), each swapping between two frames.
-  The time colon is the steady thin colon, as in ``on``. Solo
+  The time colon is the steady font ``:`` (the sprites need the colon's glyph
+  slots). Solo
   (``dynamic_pacman_solo`` + ``dynamic_pacman_sprite``) shows just one, in the
   far-right cell — and is FORCED when the date/time fills all 18 cells, since
   duo would then touch the text (``pacman_cast``); the solo ghost glances
@@ -117,7 +118,7 @@ def pacman_top(state: dict, now: datetime) -> str:
         cells = _SPRITE[1 - i] + _PACMAN[i]   # a mirror pacman, on the opposite frame
     else:
         cells = _SPRITE[i] + _PACMAN[i]       # pacman eating the ghost / heart
-    return compact_date_time(now, colon=_THIN).ljust(COLS - 2) + cells
+    return compact_date_time(now).ljust(COLS - 2) + cells
 
 
 class DynamicFrame(Frame):

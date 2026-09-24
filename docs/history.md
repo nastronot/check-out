@@ -711,11 +711,3 @@ shows the format until a location is saved, then the reading's freshness.
 Message rows share one template (helpers over top/bottom); scroll speed only
 shows while a row scrolls. Display: brightness shows its level once, the
 command footnote and raw command id are gone, the daemon readout is one row.
-
-**Built-in degree sign.** A bench probe photographed every byte 0x80-0xFF on the
-default page and on CP850. CP850's `0xF8` is a degree ring identical to the
-custom one, so the weather line now sends that byte (the driver allows exactly
-that one extended byte, `BUILTIN_DEGREE`) and dynamic mode selects code page 2.
-That freed a glyph slot, which went to the thin colon — so pacman now uses the
-same thin colon as on/tick in duo too (4 labels + thin + 4 sprite frames = 9).
-A slashed zero was also looked for: CP850's `Ø` is too short, so it was dropped.

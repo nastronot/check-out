@@ -361,25 +361,25 @@ def _pac(us, second=12, half=False, sprite="ghost", solo=False):
 
 def test_pacman_is_compact_text_left_sprites_far_right():
     top = _pac(100_000)
-    assert top == f"9/23/26 WED 8{_THIN}33".ljust(18) + _SA + _PA   # thin colon
+    assert top == "9/23/26 WED 8:33".ljust(18) + _SA + _PA   # one space, any hour
 
 
 def test_pacman_longest_date_and_time_still_fit():
     state = {**_WX, "dynamic_colon": "pacman"}
     top = DynamicFrame(_FakeFetcher()).render(datetime(2026, 12, 31, 23, 59), state)[0]
-    assert top[:18] == f"12/31/26 THU 11{_THIN}59" and len(top) == 20   # exactly fills 18
+    assert top[:18] == "12/31/26 THU 11:59" and len(top) == 20   # exactly fills 18
 
 
 def test_pacman_two_digit_hour_has_one_space():
     state = {**_WX, "dynamic_colon": "pacman"}
     top = DynamicFrame(_FakeFetcher()).render(datetime(2026, 9, 23, 22, 5), state)[0]
-    assert top[:18] == f"9/23/26 WED 10{_THIN}05 "
+    assert top[:18] == "9/23/26 WED 10:05 "
 
 
 def test_pacman_keeps_the_minute_and_year_zeros():
     state = {**_WX, "dynamic_colon": "pacman"}
     top = DynamicFrame(_FakeFetcher()).render(datetime(2027, 1, 5, 0, 7), state)[0]
-    assert top.startswith(f"1/5/27 TUE 12{_THIN}07")
+    assert top.startswith("1/5/27 TUE 12:07")
 
 
 def test_duo_pacman_eats_the_chosen_sprite_in_step():
@@ -405,7 +405,7 @@ def test_solo_puts_the_chosen_sprite_alone_in_the_far_right_cell():
 
 
 def test_pacman_colon_is_steady():
-    assert {_pac(us)[13] for us in range(0, 1_000_000, 100_000)} == {_THIN}
+    assert {_pac(us)[13] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_pacman_glyphs_match_the_drawn_frames():
@@ -434,7 +434,7 @@ def test_widest_line_forces_the_last_solo_sprite():
         assert pacman_cast(state, widest) == sprite
         assert pacman_cast(state, narrower) == f"duo-{sprite}"
         top = DynamicFrame(_FakeFetcher()).render(widest, state)[0]
-        assert top[:19] == f"12/31/26 THU 12{_THIN}33 "   # the gap duo had no room for
+        assert top[:19] == "12/31/26 THU 12:33 "   # the gap duo had no room for
         assert top[19] in (_SA, _SB)
 
 

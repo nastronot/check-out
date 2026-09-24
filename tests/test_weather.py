@@ -25,8 +25,7 @@ PAYLOAD = {
 # 20:45 local at UTC-5 is 01:45 UTC the next day.
 OBSERVED = datetime(2026, 9, 24, 1, 45, tzinfo=timezone.utc).timestamp()
 
-H, L, C, R = (chr(GLYPH_CODES[s]) for s in range(4))
-DEG = chr(0xF8)   # the display's built-in degree sign (CP850 page, bench-confirmed)
+H, L, C, R, DEG = (chr(GLYPH_CODES[s]) for s in range(5))
 
 
 def test_parse_takes_the_next_24_hours_and_drops_the_past_one():
@@ -129,6 +128,7 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
     base = {
         weather.SLOT_HIGH: glyphs.LABEL_H, weather.SLOT_LOW: glyphs.LABEL_L,
         weather.SLOT_CURRENT: glyphs.LABEL_C, weather.SLOT_RAIN: glyphs.LABEL_R,
+        weather.SLOT_DEGREE: glyphs.DEGREE,
         weather.SLOT_COLON_DOT: glyphs.COLON_DOT, weather.SLOT_COLON_THIN: glyphs.COLON_THIN,
     }
     wiggle = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWIST_R,
@@ -138,13 +138,12 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
     for colon in ("on", "tick", "wiggle"):
         assert weather.glyph_set(colon) == ("wiggle", wiggle), colon
     assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
-    labels = {k: v for k, v in base.items() if k <= weather.SLOT_RAIN}
+    labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
     pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
 
     def sprite(a, b):
         return {weather.SLOT_SPRITE_A: a, weather.SLOT_SPRITE_B: b}
 
-    labels = {**labels, weather.SLOT_COLON_THIN: glyphs.COLON_THIN}   # pacman keeps the thin colon
     cases = {
         # duo: pacman (7/8) eats the chosen sprite (5/6)
         "duo-ghost": {**labels, **sprite(glyphs.GHOST_A, glyphs.GHOST_B), **pacs},
@@ -333,12 +332,3 @@ def test_non_finite_hours_are_skipped():
     p = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"], "temperature_2m": temps}}
     r = weather.parse(p, OBSERVED)
     assert (r.high, r.low) == (70.0, 60.0)
-
-
-def test_weather_never_spends_a_glyph_slot_on_the_degree_sign():
-    for colon in ("on", "tick", "wiggle", "twinkle"):
-        _, g = weather.glyph_set(colon)
-        assert len(g) <= 9 and weather.SLOT_COLON_THIN in g
-    _, duo = weather.glyph_set("pacman", "duo-heart")
-    assert len(duo) == 9 and duo[weather.SLOT_COLON_THIN] == [0, 4, 4, 0, 4, 4, 0]
-

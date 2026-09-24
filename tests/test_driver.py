@@ -361,13 +361,3 @@ def test_show_changes_falls_back_to_a_full_frame_when_cheaper(driver, capsys):
     driver.show_changes(("A" * 20, "A" * 20), ("B" * 20, "B" * 20))
     data = capture_bytes(capsys)
     assert data[:2] == [0x10, 0x00] and len(data) == 45   # exactly show()'s frame
-
-
-# --- the one extended character we use: a built-in degree sign ---------------
-from checkout.driver import BUILTIN_DEGREE  # noqa: E402
-
-
-def test_builtin_degree_byte_passes_through_but_other_high_bytes_do_not(driver, capsys):
-    driver.show("A" + chr(BUILTIN_DEGREE) + chr(0xF9), "")
-    data = capture_bytes(capsys)
-    assert data[2:5] == [ord("A"), 0xF8, ord("?")]

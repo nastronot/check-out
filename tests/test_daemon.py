@@ -828,7 +828,7 @@ def test_weather_status_reports_glyphs_and_weather(monkeypatch):
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
     assert s["mode"] == "dynamic"
-    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4", "5", "7", "8"}   # 6 is spare
+    assert set(s["mode_glyphs"]) == {str(n) for n in range(9)}
     assert s["weather"]["error"] is None
 
 
@@ -1016,16 +1016,4 @@ def test_widest_line_loads_the_solo_glyphs_automatically(monkeypatch):
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 12, 31, 12, 33))   # 18 cells
     assert ctx["mode_glyphs_key"] == ("dynamic", "pacman-ghost")
     assert drv.defined[wx.SLOT_SPRITE_B] == glyphs.GHOST_C
-
-
-def test_dynamic_switches_to_the_cp850_page_and_back(monkeypatch, capsys):
-    _, _, state = _weather_setup(monkeypatch, colon="on")
-    drv = VFDDriver(dry_run=True)
-    ctx = daemon._new_ctx()
-    daemon.tick_once(drv, {**state, "code_page": 0}, ctx, now=NOW)
-    tx = _all_tx_bytes(capsys.readouterr().out)
-    assert [0x02, 0x02] in [tx[i:i + 2] for i in range(len(tx) - 1)]   # page 2 selected
-    daemon.tick_once(drv, {"mode": "clock", "code_page": 0}, ctx, now=NOW)
-    tx = _all_tx_bytes(capsys.readouterr().out)
-    assert [0x02, 0x00] in [tx[i:i + 2] for i in range(len(tx) - 1)]   # back to page 0
 

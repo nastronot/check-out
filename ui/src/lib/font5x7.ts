@@ -139,20 +139,10 @@ function artRowToBits(row: string): number {
 }
 
 /** code (0x20..0x7E) -> 7 row values (low 5 bits). */
-// Beyond ASCII: only the characters the app actually sends, each bench-confirmed
-// on our panel (v1.4.0 photos of 0x80-0xFF). 0xF8 on the CP850 page — which
-// dynamic mode selects — is a degree ring (driver.BUILTIN_DEGREE).
-const EXTENDED_ART: Record<number, string[]> = {
-  0xf8: ['..#..', '.#.#.', '..#..', '.....', '.....', '.....', '.....'],
-};
-
 export const FONT5x7: Record<number, number[]> = (() => {
   const out: Record<number, number[]> = {};
   for (const [ch, art] of Object.entries(FONT_ART)) {
     out[ch.charCodeAt(0)] = art.map(artRowToBits);
-  }
-  for (const [code, art] of Object.entries(EXTENDED_ART)) {
-    out[Number(code)] = art.map(artRowToBits);
   }
   return out;
 })();

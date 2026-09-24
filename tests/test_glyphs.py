@@ -27,6 +27,12 @@ def test_c_is_an_inverted_c():
     ]
 
 
+def test_degree_is_a_small_ring_at_the_top():
+    assert _draw(glyphs.DEGREE) == [
+        "..#..", ".#.#.", "..#..", ".....", ".....", ".....", ".....",
+    ]
+
+
 def test_label_glyph_returns_a_copy():
     g = glyphs.label_glyph("H")
     g[0] = 0
