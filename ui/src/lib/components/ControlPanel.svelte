@@ -176,7 +176,7 @@
   const NEWS_EFFECTS: { value: NewsEffect; label: string }[] = [
     { value: 'none', label: 'NONE' },
     { value: 'flash', label: '3X' },
-    { value: 'throb', label: '∞' },
+    { value: 'throb', label: 'CONTINUOUS' },
   ];
   function toggleNewsTopic(t: NewsTopic): void {
     const cur = state?.news_topics ?? [];
