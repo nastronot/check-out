@@ -544,7 +544,7 @@
             <input type="number" min="1" max="60" value={state.news_interval_min} on:change={setNewsInterval} />
             <span class="ctl-row__name">Gap</span>
             <input type="number" min="0" max="60" value={state.news_gap_min} on:change={setNewsGap} />
-            <span class="field__hint">min</span>
+            <span class="ctl-row__name">min</span>
           </div>
           <div class="ctl-row">
             <span class="ctl-row__name">Speed</span>
