@@ -683,3 +683,11 @@ pacman (`glyphs.mirror`, derived rather than drawn) whose frame runs opposite
 his, so one mouth opens as the other closes. Solo shows the chosen sprite alone.
 `pacman_cast` now returns `duo-<sprite>` or `<sprite>`; `glyph_set("pacman",
 cast)` puts the sprite's two frames in slots 5/6 and, in duo, pacman in 7/8.
+
+**Considered and dropped: an alternate digit font.** A hand-drawn alt font for
+the bottom line's numbers was previewed on glass and dropped. The panel holds only
+9 user glyphs at once; the font was 12 (ten digits, °, ") and a consistent look
+would also need an alt `.` and space. Even with the H/L/C/R labels removed and
+the top line plain, only 7 digit slots remain — a simulated 200k weather lines
+fit fully 99.7% of the time, but the extra period/space glyphs push it past what
+fits. The glyphs remain in the library ("Alt 0-9", "Alt Degree", "Alt Inches").
