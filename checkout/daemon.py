@@ -56,7 +56,7 @@ _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
-from .frames.weather import WeatherFrame
+from .frames.weather import WeatherFrame, colon_mode
 from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
 from .state import load_state, save_status
 from . import spectrum, weather
@@ -204,7 +204,8 @@ def mode_glyph_set(mode: str, state: dict):
         layout, style = _norm_spectrum_layout(state), _norm_spectrum_style(state)
         return ("spectrum", layout, style), spectrum.layout_glyphs(layout, style)
     if mode == "weather":
-        return ("weather",), weather.WEATHER_GLYPHS
+        family, glyphs = weather.glyph_set(colon_mode(state))
+        return ("weather", family), glyphs
     return None
 
 

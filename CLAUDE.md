@@ -65,7 +65,8 @@ it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it �
 ### Weather mode (v1.4.0)
 Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R] 82%`
 (four fixed 5-cell fields, ` --` when missing or ≥1 h stale). State:
-`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `throb`; legacy `pulse` → `throb`).
+`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `throb` | `throb2` | `burst` | `burst2`; legacy
+`pulse` → `throb`).
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
   service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
   in weather mode and fetches once per data refresh (`current.time` +
@@ -73,9 +74,13 @@ Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R
   waits on the network.
 - **Colon:** the colon cell changes CHARACTER — `on` = the thin one-column
   colon (`COLON_THIN`); `tick` = thin colon then space each half second;
-  `throb` = a 12-frame loop once a second (blank, dot, thin, twist-R, thin, dot,
-  blank, dot, thin, twist-L, thin, dot — then back to blank, so it runs evenly). The 4 colon glyphs + 5 labels fill all
-  9 slots. **Never use the hardware cursor or brightness for it** (see the bench
+  `throb` / `burst` = a 12-frame loop once a second (blank, dot, thin, peak A,
+  thin, dot, blank, dot, thin, peak B, thin, dot — then back to blank, so it runs
+  evenly); `throb2` / `burst2` = the same over 2 s. The peaks (slots 7/8) are
+  twist-R/L for throb, burst small/big for burst — `weather.glyph_set(colon)`
+  picks them, and the glyph-set key `("weather", family)` redefines only on a
+  throb ↔ burst switch. 5 labels + dot + thin + 2 peaks fill all 9 slots.
+  **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
 
 ### Cell-diff writes (v1.4.0)

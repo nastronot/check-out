@@ -19,32 +19,49 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
-from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWIST_L, COLON_TWIST_R, DEGREE,
-                     LABEL_C, LABEL_H, LABEL_L, LABEL_R)
+from .glyphs import (COLON_BURST_BIG, COLON_BURST_SMALL, COLON_DOT, COLON_THIN,
+                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, LABEL_C, LABEL_H,
+                     LABEL_L, LABEL_R)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 STALE_S = 3600          # a reading this old shows " --" (never pass old data as current)
 FETCH_SLACK_S = 60      # fetch this long after the API's next refresh is due
 HTTP_TIMEOUT_S = 10
 
-# weather_colon values: steady colon, on/off tick, or an animated throb.
-COLON_MODES = ("on", "tick", "throb")
+# weather_colon values: a steady colon, an on/off tick, or an animated loop —
+# throb / burst once a second, throb2 / burst2 (half speed) once every 2 seconds.
+COLON_MODES = ("on", "tick", "throb", "throb2", "burst", "burst2")
 
-# Weather's glyph set (loaded on entry by the daemon's mode-glyph swap).
-# All 9 slots: 5 labels + the 4 colon frames (the throb's blank frame is a space).
+# Weather's glyph set (loaded on entry by the daemon's mode-glyph swap). All 9
+# slots: 5 labels, the dot + thin colons, and two PEAK frames for the animation.
+# Throb and burst share one frame order and differ only in the peak frames, so
+# switching between them redefines just slots 7 and 8.
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
- SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_TWIST_R, SLOT_COLON_TWIST_L) = range(9)
-WEATHER_GLYPHS = {
+ SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
+_BASE_GLYPHS = {
     SLOT_HIGH: LABEL_H,
     SLOT_LOW: LABEL_L,
     SLOT_CURRENT: LABEL_C,
     SLOT_RAIN: LABEL_R,
     SLOT_DEGREE: DEGREE,
     SLOT_COLON_DOT: COLON_DOT,
-    SLOT_COLON_THIN: COLON_THIN,        # also the on/tick colon
-    SLOT_COLON_TWIST_R: COLON_TWIST_R,
-    SLOT_COLON_TWIST_L: COLON_TWIST_L,
+    SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
 }
+_PEAKS = {
+    "throb": (COLON_TWIST_R, COLON_TWIST_L),
+    "burst": (COLON_BURST_SMALL, COLON_BURST_BIG),
+}
+
+
+def glyph_set(colon: str) -> tuple[str, dict[int, list[int]]]:
+    """``(family, {slot: rows})`` for a weather_colon value. on/tick/throb*
+    share the throb set (so switching among them redefines nothing); burst*
+    loads the burst peaks."""
+    family = "burst" if colon.startswith("burst") else "throb"
+    peak_a, peak_b = _PEAKS[family]
+    return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}
+
+
 _DEG = chr(GLYPH_CODES[SLOT_DEGREE])
 _DASHES = " --"
 

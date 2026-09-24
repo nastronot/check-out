@@ -101,16 +101,22 @@ def test_location_from_state(state, expected):
     assert weather.location(state) == expected
 
 
-def test_weather_glyph_set_uses_the_shared_bitmaps():
+def test_weather_glyph_sets_swap_only_the_peak_frames():
     from checkout import glyphs
-    assert weather.WEATHER_GLYPHS == {
+    base = {
         weather.SLOT_HIGH: glyphs.LABEL_H, weather.SLOT_LOW: glyphs.LABEL_L,
         weather.SLOT_CURRENT: glyphs.LABEL_C, weather.SLOT_RAIN: glyphs.LABEL_R,
         weather.SLOT_DEGREE: glyphs.DEGREE,
         weather.SLOT_COLON_DOT: glyphs.COLON_DOT, weather.SLOT_COLON_THIN: glyphs.COLON_THIN,
-        weather.SLOT_COLON_TWIST_R: glyphs.COLON_TWIST_R,
-        weather.SLOT_COLON_TWIST_L: glyphs.COLON_TWIST_L,
     }
+    throb = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWIST_R,
+             weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWIST_L}
+    burst = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_BURST_SMALL,
+             weather.SLOT_COLON_PEAK_B: glyphs.COLON_BURST_BIG}
+    for colon in ("on", "tick", "throb", "throb2"):
+        assert weather.glyph_set(colon) == ("throb", throb), colon
+    for colon in ("burst", "burst2"):
+        assert weather.glyph_set(colon) == ("burst", burst), colon
 
 
 # --- WeatherFetcher ------------------------------------------------------------

@@ -147,13 +147,15 @@ _WX = {"weather_lat": 41.9, "weather_lon": -87.6}
 _T = datetime(2026, 9, 23, 20, 33, 12)
 _DOT = chr(GLYPH_CODES[_weather.SLOT_COLON_DOT])
 _THIN = chr(GLYPH_CODES[_weather.SLOT_COLON_THIN])
-_TWR = chr(GLYPH_CODES[_weather.SLOT_COLON_TWIST_R])
-_TWL = chr(GLYPH_CODES[_weather.SLOT_COLON_TWIST_L])
+_PKA = chr(GLYPH_CODES[_weather.SLOT_COLON_PEAK_A])
+_PKB = chr(GLYPH_CODES[_weather.SLOT_COLON_PEAK_B])
+_LOOP = [" ", _DOT, _THIN, _PKA, _THIN, _DOT, " ", _DOT, _THIN, _PKB, _THIN, _DOT]
 
 
-def _top(colon, us):
+def _top(colon, us, second=12):
     state = {**_WX, "weather_colon": colon}
-    return WeatherFrame(_FakeFetcher()).render(_T.replace(microsecond=us), state)[0]
+    now = _T.replace(second=second, microsecond=us)
+    return WeatherFrame(_FakeFetcher()).render(now, state)[0]
 
 
 def test_weather_top_is_the_short_clock():
@@ -189,9 +191,17 @@ def test_tick_changes_only_the_colon_cell():
 def test_throb_plays_the_twelve_step_loop_once_a_second():
     # g4 g5 g6 g7 g6 g5 g4 g5 g6 g8 g6 g5, then back to g4 (g4 is a blank cell):
     # one blank between loops, so every frame is the same length.
-    steps = [_top("throb", (2 * k + 1) * 1_000_000 // 24)[15] for k in range(12)]  # mid-step
-    assert steps == [" ", _DOT, _THIN, _TWR, _THIN, _DOT,
-                     " ", _DOT, _THIN, _TWL, _THIN, _DOT]
+    for colon in ("throb", "burst"):   # same order; slots 7/8 hold the peak frames
+        steps = [_top(colon, (2 * k + 1) * 1_000_000 // 24)[15] for k in range(12)]  # mid-step
+        assert steps == _LOOP, colon
+
+
+def test_half_speed_loops_take_two_seconds():
+    for colon in ("throb2", "burst2"):
+        # 12 frames over 2 s: the first 6 in the even second, the rest in the odd.
+        even = [_top(colon, (2 * k + 1) * 1_000_000 // 12, second=12)[15] for k in range(6)]
+        odd = [_top(colon, (2 * k + 1) * 1_000_000 // 12, second=13)[15] for k in range(6)]
+        assert even + odd == _LOOP, colon
 
 def test_colon_defaults_to_tick():
     state = dict(_WX)
@@ -199,13 +209,16 @@ def test_colon_defaults_to_tick():
     assert frame.render(_T.replace(microsecond=600_000), state)[0][15] == " "
 
 
-def test_throb_glyphs_match_the_drawn_frames():
-    def draw(rows):
-        return ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in rows]
-    assert draw(_glyphs.COLON_DOT) == [".....", ".....", "..#..", ".....", "..#..", ".....", "....."]
-    assert draw(_glyphs.COLON_TWIST_R) == [".....", "..##.", "..#..", ".....", "..#..", ".##..", "....."]
-    assert draw(_glyphs.COLON_TWIST_L) == [".....", ".##..", "..#..", ".....", "..#..", "..##.", "....."]
+def _draw(rows):
+    return ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in rows]
 
-def test_thin_colon_is_the_centre_column():
-    rows = ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in _glyphs.COLON_THIN]
-    assert rows == [".....", "..#..", "..#..", ".....", "..#..", "..#..", "....."]
+
+def test_throb_glyphs_match_the_drawn_frames():
+    assert _draw(_glyphs.COLON_DOT) == [".....", ".....", "..#..", ".....", "..#..", ".....", "....."]
+    assert _draw(_glyphs.COLON_TWIST_R) == [".....", "..##.", "..#..", ".....", "..#..", ".##..", "....."]
+    assert _draw(_glyphs.COLON_TWIST_L) == [".....", ".##..", "..#..", ".....", "..#..", "..##.", "....."]
+
+
+def test_burst_glyphs_match_the_drawn_frames():
+    assert _draw(_glyphs.COLON_BURST_SMALL) == [".....", ".###.", "..#..", ".....", "..#..", ".###.", "....."]
+    assert _draw(_glyphs.COLON_BURST_BIG) == ["..#..", ".###.", "..#..", ".....", "..#..", ".###.", "..#.."]

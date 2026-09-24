@@ -12,8 +12,11 @@ would change):
 - ``on``    — a steady thin colon (one centre column of dots, a weather glyph).
 - ``tick``  — the thin colon for the first half of each second, a space for the
   second.
-- ``throb`` — a 12-frame loop once a second: blank, dots, thin, twist, thin,
-  dots, blank, dots, thin, mirrored twist, thin, dots (then blank again).
+- ``throb`` / ``burst`` — a 12-frame loop once a second: blank, dots, thin,
+  peak A, thin, dots, blank, dots, thin, peak B, thin, dots (then blank again).
+  The two share the order; weather's glyph set puts throb's twists or burst's
+  bursts in the peak slots (``weather.glyph_set``).
+- ``throb2`` / ``burst2`` — the same loops at half speed (2 seconds).
 
 Only the colon cell changes, so the daemon's cell-diff writes one cell.
 """
@@ -33,16 +36,18 @@ _US_PER_S = 1_000_000
 _BLANK = " "
 _DOT = chr(GLYPH_CODES[weather.SLOT_COLON_DOT])
 _THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
-_TWIST_R = chr(GLYPH_CODES[weather.SLOT_COLON_TWIST_R])
-_TWIST_L = chr(GLYPH_CODES[weather.SLOT_COLON_TWIST_L])
+_PEAK_A = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_A])
+_PEAK_B = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_B])
 
-# throb: these 12 frames, evenly spaced across each second (~83 ms apiece).
-# The loop wraps from the last dot back to the first blank, so there is one
-# blank between loops and every frame is the same length.
-_THROB_STEPS = (
-    _BLANK, _DOT, _THIN, _TWIST_R, _THIN, _DOT,
-    _BLANK, _DOT, _THIN, _TWIST_L, _THIN, _DOT,
+# throb/burst: these 12 frames, evenly spaced across the loop (~83 ms apiece at
+# full speed). The loop wraps from the last dot back to the first blank, so there
+# is one blank between loops and every frame is the same length.
+_LOOP_STEPS = (
+    _BLANK, _DOT, _THIN, _PEAK_A, _THIN, _DOT,
+    _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT,
 )
+# Loop length in seconds per animated colon mode.
+_LOOP_SECONDS = {"throb": 1, "burst": 1, "throb2": 2, "burst2": 2}
 
 
 def colon_mode(state: dict) -> str:
@@ -56,8 +61,12 @@ def colon_char(state: dict, now: datetime) -> str:
     mode = colon_mode(state)
     if mode == "tick":
         return _THIN if now.microsecond < _US_PER_S // 2 else _BLANK
-    if mode == "throb":
-        return _THROB_STEPS[now.microsecond * len(_THROB_STEPS) // _US_PER_S]
+    if mode in _LOOP_SECONDS:
+        # Phase within the loop, locked to the wall clock (a 2 s loop starts on
+        # even seconds).
+        seconds = _LOOP_SECONDS[mode]
+        phase_us = (now.second % seconds) * _US_PER_S + now.microsecond
+        return _LOOP_STEPS[phase_us * len(_LOOP_STEPS) // (seconds * _US_PER_S)]
     return _THIN
 
 

@@ -561,3 +561,13 @@ glyph library (`library.json`) under "Colon …" names.
 **Throb runs evenly.** The trailing blank was dropped (12 frames, ~83 ms each):
 with it, the loop's last and first frames were both blank, a doubled pause at the
 top of each second.
+
+**Burst + half-speed loops.** `burst` uses the throb frame order with two new
+hand-drawn peak frames, `COLON_BURST_SMALL` (a bar capping each dot) and
+`COLON_BURST_BIG` (each dot a small plus). The nine slots were already full, so
+throb and burst share slots 0-6 (labels, dot, thin) and swap only the two PEAK
+slots (7, 8): `weather.glyph_set(colon)` returns `(family, glyphs)` and the
+daemon's glyph-set key became `("weather", family)`, so the existing key-change
+mechanism redefines two slots on a throb ↔ burst switch and nothing among
+on/tick/throb/throb2. `throb2` / `burst2` run the same 12 frames over 2 s
+(~167 ms each), phase-locked to even seconds.
