@@ -142,8 +142,11 @@ AP via Google News RSS — AP blocks its own feeds — newest by `pubDate`). The
 first lead per source is recorded silently; a later new lead (by link, never a
 repeat) becomes the pending alert, newest wins, no backlog. `DynamicFrame.tick`
 starts it: top = `{g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}` (7 bar glyphs,
-glyph key `("dynamic", "news")`), bottom = the headline scrolling with a 6-space
-gap for 1 + `news_repeat` passes at `news_speed_ms`, then back to time/weather.
+glyph key `("dynamic", "news")`), bottom = `SOURCE: headline` scrolling in from
+off the right edge, 1 + `news_repeat` passes 6 spaces apart, ending once the last
+character leaves at the left (`news_alert._tape`), then back to time/weather.
+AP is searched as `site:apnews.com/article` — plain `site:apnews.com` also returns
+AP topic hubs, which surfaced as a headline reading just "Donald Trump".
 `news_effect` flash/throb goes through the generic `Frame.brightness` hook. The
 `show_news` command (UI **Show latest**) plays the newest lead. Headlines are
 cleaned to ASCII. The stdlib XML parser is used deliberately: expat ≥ 2.4.1

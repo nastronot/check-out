@@ -261,3 +261,9 @@ def test_an_empty_source_shows_an_error_while_the_others_work():
 def test_clean_title_is_printable_ascii_only(raw, clean):
     out = news.clean_title(raw)
     assert out == clean and all(0x20 <= ord(c) <= 0x7E for c in out)
+
+
+def test_ap_search_only_matches_article_pages_not_topic_hubs():
+    # AP topic pages (apnews.com/hub/donald-trump) showed up as "Donald Trump".
+    assert "site:apnews.com/article" in news.SOURCES["ap"].url
+

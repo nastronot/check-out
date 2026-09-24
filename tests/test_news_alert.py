@@ -67,15 +67,23 @@ def test_alert_glyphs_are_the_seven_distinct_bars():
     assert [slot[c] for c in banner[16:]] == glyphs.NEWS_BANNER_RIGHT
 
 
-def test_window_scrolls_one_cell_per_step_with_a_six_space_gap():
-    title = "X" * 30
-    assert na.window(title, 0, 250) == "X" * 20
-    assert na.window(title, 250 * 25, 250) == "X" * 5 + " " * 6 + "X" * 9
+def test_text_starts_off_screen_and_enters_from_the_right():
+    assert na.window("ABC", 0, 0, 100) == " " * 20                 # nothing yet
+    assert na.window("ABC", 100, 0, 100) == " " * 19 + "A"         # first char at the edge
+    assert na.window("ABC", 300, 0, 100) == " " * 17 + "ABC"
 
 
-def test_duration_is_passes_times_cycle_times_speed():
-    assert na.duration_ms("X" * 30, repeat=1, speed_ms=250) == 2 * 36 * 250
-    assert na.duration_ms("X" * 30, repeat=0, speed_ms=100) == 36 * 100
+def test_passes_are_separated_by_a_six_space_gap():
+    # repeat=1: ABC, 6 spaces, ABC — step 12 puts both copies in view
+    assert na.window("ABC", 1200, 1, 100) == " " * 8 + "ABC" + " " * 6 + "ABC"
+
+
+def test_it_ends_once_the_last_character_has_left_the_screen():
+    speed, repeat, text = 100, 1, "X" * 30
+    end = na.duration_ms(text, repeat, speed)
+    assert end == (20 + 30 + 6 + 30) * speed                       # in, 2 passes + gap, out
+    assert na.window(text, end - speed, repeat, speed) == "X" + " " * 19   # last char at the left
+    assert na.window(text, end, repeat, speed) == " " * 20                  # gone
 
 
 # --- brightness effects -------------------------------------------------------------------
@@ -97,8 +105,9 @@ def test_a_pending_alert_takes_over_the_screen_then_the_clock_returns():
     f.tick(T0, STATE)
     assert f.alerting(T0)
     top, bottom = f.render(_at(0), STATE)
-    assert top == na.banner() and bottom == HEAD.title[:20]
-    end = na.duration_ms(HEAD.title, 1, 250)
+    assert top == na.banner() and bottom == " " * 20              # starts off screen
+    assert f.render(_at(250 * 20), STATE)[1] == "BBC: A headline that"   # cites the source
+    end = na.duration_ms("BBC: " + HEAD.title, 1, 250)
     f.tick(_at(end), STATE)
     assert not f.alerting(_at(end))
     assert f.render(_at(end), STATE)[0].startswith("09/24/26")

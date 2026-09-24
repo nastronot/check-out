@@ -2,7 +2,8 @@
 
 Pure functions (no fetching, no state) used by DynamicFrame while an alert is
 showing: the top line is a fixed banner of fade-in bars around " NEWS ALERT ",
-the bottom scrolls the headline with a 6-space gap for 1 + repeat passes, and
+the bottom scrolls "SOURCE: headline" in from the right edge, 1 + repeat
+passes 6 spaces apart, until the last character leaves at the left; and
 brightness can flash or throb.
 """
 
@@ -10,7 +11,7 @@ from __future__ import annotations
 
 from ..driver import GLYPH_CODES
 from ..glyphs import NEWS_BANNER_LEFT, NEWS_BANNER_RIGHT
-from ..renderer import ticker_window
+from ..renderer import WIDTH
 
 GAP = 6                      # spaces between repeats of the headline
 _WORDS = " NEWS ALERT "      # 12 cells; 4 bars either side make 20
@@ -41,14 +42,23 @@ def banner() -> str:
     return left + _WORDS + right
 
 
-def window(title: str, elapsed_ms: int, speed_ms: int) -> str:
-    """The 20 cells of the headline showing ``elapsed_ms`` into the alert."""
-    return ticker_window(title, max(0, elapsed_ms) // max(1, speed_ms), gap=GAP)
+def _tape(text: str, repeat: int) -> str:
+    """Everything that scrolls past: a screen of blanks (so the text enters from
+    the right), 1 + repeat copies of the text 6 spaces apart, then a screen of
+    blanks (so the last character leaves at the left before it ends)."""
+    blank = " " * WIDTH
+    return blank + (" " * GAP).join([text] * (1 + max(0, repeat))) + blank
 
 
-def duration_ms(title: str, repeat: int, speed_ms: int) -> int:
-    """How long the alert shows: 1 + repeat passes of the headline and its gap."""
-    return (1 + repeat) * (len(title) + GAP) * speed_ms
+def window(text: str, elapsed_ms: int, repeat: int, speed_ms: int) -> str:
+    """The 20 cells showing ``elapsed_ms`` into the alert (one cell per step)."""
+    step = max(0, elapsed_ms) // max(1, speed_ms)
+    return _tape(text, repeat)[step:step + WIDTH].ljust(WIDTH)
+
+
+def duration_ms(text: str, repeat: int, speed_ms: int) -> int:
+    """From the text's first character entering to its last one leaving."""
+    return (len(_tape(text, repeat)) - WIDTH) * speed_ms
 
 
 def flash_level(elapsed_ms: int, base: int) -> int:

@@ -1053,7 +1053,7 @@ def test_an_alert_loads_the_banner_glyphs_then_the_clock_glyphs_return(monkeypat
     assert ctx["mode_glyphs_key"] == ("dynamic", "news")
     assert drv.defined == _na.alert_glyphs()
     assert written[-1]["top"] == _na.banner()
-    end = _T + timedelta(milliseconds=_na.duration_ms(_HEAD.title, 0, 100))
+    end = _T + timedelta(milliseconds=_na.duration_ms("BBC: " + _HEAD.title, 0, 100))
     daemon.tick_once(drv, state, ctx, now=end)
     assert ctx["mode_glyphs_key"][1].startswith("clock-")
     assert written[-1]["top"].startswith("09/24/26")

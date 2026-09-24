@@ -40,7 +40,9 @@ class Source:
 SOURCES: dict[str, Source] = {
     "ap": Source(
         "ap", "AP",
-        "https://news.google.com/rss/search?q=site:apnews.com+when:1d"
+        # /article: story pages only — plain site:apnews.com also returns AP's
+        # topic hubs (apnews.com/hub/donald-trump -> a "Donald Trump" item).
+        "https://news.google.com/rss/search?q=site:apnews.com/article+when:1d"
         "&hl=en-US&gl=US&ceid=US:en",
         pick="newest", strip_suffix=" - AP News"),
     "bbc": Source("bbc", "BBC", "https://feeds.bbci.co.uk/news/rss.xml", pick="first"),

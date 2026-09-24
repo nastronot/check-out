@@ -774,3 +774,10 @@ continuous ticker can use it later. The alert's pure pieces live in
 *row source* on the scroll/message rows (described in the v0.8.0 entries above).
 News arrived as dynamic alerts instead, so those stubs were removed; a news row,
 if wanted, would read `NewsFetcher`.
+
+**Ticker and AP fixes.** The headline now scrolls in from off the right edge and
+the alert ends when its last character leaves at the left (a "tape" of a blank
+screen, the passes 6 spaces apart, and another blank screen), and it is prefixed
+with its source (`AP: …`). The AP search became `site:apnews.com/article`: the
+bare site search also returned AP topic hub pages, one of which showed as the
+headline "Donald Trump".

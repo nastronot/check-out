@@ -42,7 +42,7 @@ from datetime import datetime
 from .. import weather
 from ..config import COLS
 from ..driver import GLYPH_CODES
-from ..news import Headline
+from ..news import SOURCES, Headline
 from . import news_alert
 from .base import Frame
 from .clock import compact_date_time, short_date_time
@@ -130,8 +130,10 @@ def pacman_top(state: dict, now: datetime) -> str:
 @dataclass
 class _Alert:
     headline: Headline
+    text: str            # what scrolls: "AP: <title>"
     started_ms: int
     speed_ms: int
+    repeat: int
     ends_ms: int
 
 
@@ -194,8 +196,10 @@ class DynamicFrame(Frame):
         speed = int(state.get("news_speed_ms", 250))
         repeat = int(state.get("news_repeat", 1))
         started = _ms(now)
-        self._alert = _Alert(headline, started, speed,
-                             started + news_alert.duration_ms(headline.title, repeat, speed))
+        source = SOURCES.get(headline.source)
+        text = f"{source.name if source else headline.source.upper()}: {headline.title}"
+        self._alert = _Alert(headline, text, started, speed, repeat,
+                             started + news_alert.duration_ms(text, repeat, speed))
 
     # --- drawing ---------------------------------------------------------------------
     def brightness(self, now: datetime, state: dict, base: int) -> int | None:
@@ -213,7 +217,7 @@ class DynamicFrame(Frame):
         if self.alerting(now):
             a = self._alert
             return news_alert.banner(), news_alert.window(
-                a.headline.title, _ms(now) - a.started_ms, a.speed_ms)
+                a.text, _ms(now) - a.started_ms, a.repeat, a.speed_ms)
         if colon_mode(state) == "pacman":
             top = pacman_top(state, now)
         else:
