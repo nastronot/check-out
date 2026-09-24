@@ -186,11 +186,12 @@ def test_tick_changes_only_the_colon_cell():
     assert [i for i in range(len(on)) if on[i] != off[i]] == [15]
 
 
-def test_throb_plays_the_thirteen_step_sequence_once_a_second():
-    # g4 g5 g6 g7 g6 g5 g4 g5 g6 g8 g6 g5 g4 (g4 is a blank cell)
-    steps = [_top("throb", (2 * k + 1) * 1_000_000 // 26)[15] for k in range(13)]  # mid-step
-    assert steps == [" ", _DOT, _THIN, _TWR, _THIN, _DOT, " ",
-                     _DOT, _THIN, _TWL, _THIN, _DOT, " "]
+def test_throb_plays_the_twelve_step_loop_once_a_second():
+    # g4 g5 g6 g7 g6 g5 g4 g5 g6 g8 g6 g5, then back to g4 (g4 is a blank cell):
+    # one blank between loops, so every frame is the same length.
+    steps = [_top("throb", (2 * k + 1) * 1_000_000 // 24)[15] for k in range(12)]  # mid-step
+    assert steps == [" ", _DOT, _THIN, _TWR, _THIN, _DOT,
+                     " ", _DOT, _THIN, _TWL, _THIN, _DOT]
 
 def test_colon_defaults_to_tick():
     state = dict(_WX)

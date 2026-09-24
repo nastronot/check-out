@@ -418,7 +418,7 @@
         </div>
         <span class="field__hint">
           <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
-          on and off every second. <strong>Throb</strong> = a 13-frame colon
+          on and off every second. <strong>Throb</strong> = a 12-frame colon
           animation once a second (dots → colon → twist → back, then the mirror).
         </span>
       </div>

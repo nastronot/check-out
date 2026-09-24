@@ -984,9 +984,9 @@ def test_weather_throb_steps_the_colon_glyphs(monkeypatch, capsys):
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 999_000))
     capsys.readouterr()
     cells = []
-    for k in range(13):
+    for k in range(12):
         daemon.tick_once(drv, state, ctx, now=datetime(
-            2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 26))
+            2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 24))
         tx = _tx_after(capsys)
         if tx:                                   # a repeat of the last cell writes nothing
             assert tx[:2] == [0x10, 16] and tx[-1] == 0x14 and len(tx) == 4
@@ -994,7 +994,7 @@ def test_weather_throb_steps_the_colon_glyphs(monkeypatch, capsys):
     dot, thin = GLYPH_CODES[wx.SLOT_COLON_DOT], GLYPH_CODES[wx.SLOT_COLON_THIN]
     twr, twl = GLYPH_CODES[wx.SLOT_COLON_TWIST_R], GLYPH_CODES[wx.SLOT_COLON_TWIST_L]
     sp = ord(" ")
-    assert cells == [dot, thin, twr, thin, dot, sp, dot, thin, twl, thin, dot, sp]
+    assert cells == [sp, dot, thin, twr, thin, dot, sp, dot, thin, twl, thin, dot]
 
 def test_mode_change_repaints_the_whole_frame(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)

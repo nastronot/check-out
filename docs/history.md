@@ -557,3 +557,7 @@ The frames are the user's hand-drawn glyphs: `COLON_DOT`, `COLON_THIN`,
 they fill all 9 glyph slots. `COLON_MID`/`COLON_LOW` were dropped. A saved
 `pulse` is migrated to `throb` on load. The four frames were also added to the
 glyph library (`library.json`) under "Colon …" names.
+
+**Throb runs evenly.** The trailing blank was dropped (12 frames, ~83 ms each):
+with it, the loop's last and first frames were both blank, a doubled pause at the
+top of each second.

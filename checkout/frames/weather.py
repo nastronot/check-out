@@ -12,8 +12,8 @@ would change):
 - ``on``    — a steady thin colon (one centre column of dots, a weather glyph).
 - ``tick``  — the thin colon for the first half of each second, a space for the
   second.
-- ``throb`` — a 13-frame animation once a second: blank, dots, thin, twist,
-  thin, dots, blank, dots, thin, mirrored twist, thin, dots, blank.
+- ``throb`` — a 12-frame loop once a second: blank, dots, thin, twist, thin,
+  dots, blank, dots, thin, mirrored twist, thin, dots (then blank again).
 
 Only the colon cell changes, so the daemon's cell-diff writes one cell.
 """
@@ -36,10 +36,12 @@ _THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _TWIST_R = chr(GLYPH_CODES[weather.SLOT_COLON_TWIST_R])
 _TWIST_L = chr(GLYPH_CODES[weather.SLOT_COLON_TWIST_L])
 
-# throb: these 13 frames, evenly spaced across each second (~77 ms apiece).
+# throb: these 12 frames, evenly spaced across each second (~83 ms apiece).
+# The loop wraps from the last dot back to the first blank, so there is one
+# blank between loops and every frame is the same length.
 _THROB_STEPS = (
     _BLANK, _DOT, _THIN, _TWIST_R, _THIN, _DOT,
-    _BLANK, _DOT, _THIN, _TWIST_L, _THIN, _DOT, _BLANK,
+    _BLANK, _DOT, _THIN, _TWIST_L, _THIN, _DOT,
 )
 
 

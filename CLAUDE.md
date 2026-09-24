@@ -73,8 +73,8 @@ Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R
   waits on the network.
 - **Colon:** the colon cell changes CHARACTER — `on` = the thin one-column
   colon (`COLON_THIN`); `tick` = thin colon then space each half second;
-  `throb` = 13 frames once a second (blank, dot, thin, twist-R, thin, dot, blank,
-  dot, thin, twist-L, thin, dot, blank). The 4 colon glyphs + 5 labels fill all
+  `throb` = a 12-frame loop once a second (blank, dot, thin, twist-R, thin, dot,
+  blank, dot, thin, twist-L, thin, dot — then back to blank, so it runs evenly). The 4 colon glyphs + 5 labels fill all
   9 slots. **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
 
