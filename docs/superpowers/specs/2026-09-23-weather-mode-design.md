@@ -2,6 +2,12 @@
 
 Status: approved in chat 2026-09-23; this file is the written spec.
 
+> **Superseded in part (bench, 2026-09-23):** the cursor-based `tick` and the
+> brightness `pulse` below did not work on the glass (the cursor is an underline
+> that stays on; brightness is display-wide). Both now change the colon
+> CHARACTER, and the daemon writes only changed cells. See the v1.4.0 "Bench
+> correction" entry in `docs/history.md` for what shipped.
+
 ## Goal
 
 A `weather` mode that works as an accurate clock and shows today's weather for a

@@ -520,3 +520,26 @@ a key change and restores `state.glyphs` when the mode has none. A reset or
 reconnect now re-sends the mode set too (the old code did not). `status.json`
 gains `mode_glyphs` (the loaded set, so the preview draws weather without a UI
 copy of the bitmaps), `cursor`, and `weather` (reading + fetch health).
+
+**Bench correction (same release): the cursor tick did not work.** On the glass
+`0x10 pos 0x13` shows an **underline** cursor, not a block, and it stays on
+across later writes — so each full-frame repaint swept a visible cursor over all
+40 cells, and the colon itself never blinked. Pulse, being brightness, pulsed the
+whole panel (brightness is display-wide; there is no per-cell dimming). Both were
+replaced by changing the colon CHARACTER: `tick` alternates `:` and a space;
+`pulse` fades through four steps — space, 2 dots, 4 dots, the font's 8-dot `:` —
+using two glyphs (`COLON_LOW`, `COLON_MID`, subsets of the real colon's dots) in
+weather's set. The cursor plumbing (`show(cursor=)`, `Frame.cursor`, the emit
+4-tuple, `status.cursor`, the preview overlay) was removed.
+
+**Cell-diff writes.** Every write briefly re-shows the cursor where it writes, so
+the daemon now sends only the changed cells when the glass holds a known frame
+(`VFDDriver.show_changes`): a colon or clock-second change is `0x10 pos <char>
+0x14`, 4 bytes, instead of a 45-byte repaint. Runs ≤2 cells apart merge (the
+re-sent cells cost no more than a new position header); runs never cross rows;
+a full `show()` is sent when it would be no longer. A mode change now forces a
+full repaint — previously clock → marquee → clock within one second could skip
+the redraw and leave marquee's text up, since the emit tuple was unchanged.
+
+**Location Save.** Lat and lon are drafts in the UI, validated (±90 / ±180, empty
+clears) and written only on Save, so typing never triggers a fetch.

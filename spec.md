@@ -140,10 +140,9 @@ sends exactly these bytes from `open()` (and on every reconnect).
 1. **Cursor off must be last.** `0x14` hides the cursor, but ANY subsequent write RE-ENABLES
    it. There is no persistent "cursor off" and no separate "cursor on" byte — writing
    implicitly turns it back on. Therefore `0x14` must be the LAST byte of every frame update.
-   *(v1.4.0: weather's colon tick deliberately ends a frame with `0x10 pos 0x13` —
-   position, then the Futaba "cursor on" command — to park the block on the colon.
-   `0x13` is in the Futaba command set but was first emitted here; its effect at a
-   merely-positioned cell is a bench-confirm TODO in CLAUDE.md.)*
+   *(v1.4.0 bench: `0x13` (cursor on) at a positioned cell shows an UNDERLINE
+   cursor that stays on across later writes — every repaint then sweeps it across
+   the glass. Not used; the weather colon changes character instead.)*
 
 2. **Initialize before drawing.** Extended mode + scroll-off (§3.1) must be set before any
    full frame, or the display scrolls when the 40th cell is written. `open()` runs the init

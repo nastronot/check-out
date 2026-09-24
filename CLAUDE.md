@@ -31,8 +31,8 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
 
 - `driver.py` — `VFDDriver`, owns **all** raw command bytes; nothing else emits bytes.
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
-- `frames/base.py` — `Frame` interface (`render` + optional `cursor`); `frames/{clock,message,ticker,weather}.py`.
-- `glyphs.py` — shared hand-drawn label/icon bitmaps (inverted L/R/H/C, degree).
+- `frames/base.py` — `Frame` interface; `frames/{clock,message,ticker,weather}.py`.
+- `glyphs.py` — shared hand-drawn label/icon bitmaps (inverted L/R/H/C, degree, colon fade).
 - `state.py` — atomic load/save of `state.json` + `status.json`.
 - `daemon.py` — the SINGLE FAST LOOP + entrypoint; diffs frames, reconnects, shuts down clean.
 - `spectrum.py` — spectrum protocol + bar rendering + DSP + `SpectrumReceiver`/`Sender` (shared).
@@ -71,10 +71,19 @@ Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R
   in weather mode and fetches once per data refresh (`current.time` +
   `interval` 900 s + 60 s), retrying 60 s → 900 s on failure. The loop never
   waits on the network.
-- **Colon:** `tick` parks the hardware cursor on the colon for the first half of
-  each second (`show(..., cursor=)` ends `0x10 pos 0x13`); `pulse` sweeps
-  brightness 0→3→0 once a second (display-wide); `on` is a plain colon. Weather
-  ignores the global `animation`.
+- **Colon:** the colon cell changes CHARACTER — `tick` = `:` then space each
+  half second; `pulse` = a 1 s fade through space / 2 dots / 4 dots / `:` (two
+  glyphs in weather's set); `on` = steady. **Never use the hardware cursor or
+  brightness for it** (see the bench TODO below). Weather ignores `animation`.
+
+### Cell-diff writes (v1.4.0)
+When the glass holds a known frame (`last_emit` is a show), the daemon calls
+`driver.show_changes(old, new)`: only changed cells, `0x10 pos <bytes>` per run
+(runs ≤2 cells apart merge, never across rows), one `0x14` at the end; a full
+`show()` when that is no longer. A one-cell change is 4 bytes instead of 45.
+**Anything that writes the glass outside the emit path must set `last_emit` to
+None** (`_invalidate_caches` does; a mode change does) or the diff is computed
+against the wrong glass.
 
 ## Build history
 
@@ -181,5 +190,8 @@ other code here is original Python.
   (v0.3.1): yes; 12 pages, confirmed names 0–5. See "Code pages" in `docs/history.md`.
 - [x] ~~Whether extended mode exposes the library's claimed 4 brightness levels~~
   — RESOLVED (v0.6.2): yes, four levels `0x20`/`0x40`/`0x60`/`0xFF` confirmed on glass.
-- [ ] Whether `0x10 pos 0x13` shows the cursor block at a cell that was only
-  positioned (weather `tick`), and how the block looks over the colon (v1.4.0).
+- [x] ~~Whether `0x10 pos 0x13` shows a cursor at a merely-positioned cell~~ —
+  RESOLVED (v1.4.0 bench): yes, but it is an **underline**, not a block, and it
+  stays on across later writes, so every repaint sweeps it visibly across the
+  glass. Unusable as a colon tick; weather changes the colon character instead.
+  Brightness (`0x04`) is display-wide — no per-cell dimming.

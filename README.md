@@ -32,8 +32,8 @@ process. The constraint — two lines, twenty characters — is the aesthetic.
   (Full / Stereo-V / Stereo-H) × two styles (Bars / Line).
 - **Weather clock** — `MM/DD/YY DAY HH:MM` over today's high / low / current /
   chance of rain for a latitude + longitude (Open-Meteo, no API key, fetched once
-  per 15-minute update). The colon stands in for seconds: steady, a cursor tick,
-  or a once-a-second brightness pulse.
+  per 15-minute update). The colon stands in for seconds: steady, blinking on
+  and off, or fading in and out once a second.
 - **Web control surface** — a Svelte single-page app over a FastAPI backend with a
   **live pixel-accurate phosphor preview** of the glass.
 
