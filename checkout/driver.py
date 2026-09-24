@@ -178,6 +178,13 @@ def _sanitize(text: str) -> bytes:
     return bytes(out)
 
 
+# show_changes(): merge changed cells this close into one run (re-sending the
+# unchanged cells between costs no more than a new 0x10 <pos> header).
+_MERGE_GAP = 2
+# Bytes in a full show() frame: 2 x (0x10 pos + 20 cells) + 0x14.
+_FULL_FRAME_BYTES = 2 * (2 + COLS) + 1
+
+
 def _pad(text: str) -> str:
     """Pad/truncate to exactly COLS chars (driver-side safety net)."""
     return text[:COLS].ljust(COLS)
@@ -342,7 +349,7 @@ class VFDDriver:
             raise ValueError(f"position {pos:#04x} out of range 0x00–{POS_MAX:#04x}")
         self._write(bytes([DISPLAY_POSITION, pos]) + _sanitize(text))
 
-    def show(self, top: str, bottom: str, cursor: int | None = None) -> None:
+    def show(self, top: str, bottom: str) -> None:
         """Overwrite both lines in place as a single buffered write.
 
         With the display correctly initialized (extended mode + scroll off) all
@@ -359,14 +366,7 @@ class VFDDriver:
         ``0x14`` (cursor off) must be LAST: any write after it re-enables the
         cursor block. Built as one buffer + one serial write so there is no
         flicker and the cursor-hide is reliably the final byte.
-
-        ``cursor`` instead PARKS the hardware cursor block on that linear cell
-        (0x00-0x27): the write then ends ``0x10 <cursor> 0x13`` (position, cursor
-        on) rather than ``0x14``. Weather mode's colon tick uses it; the next
-        show() without a cursor hides it again.
         """
-        if cursor is not None and not (POS_TOP <= cursor <= POS_MAX):
-            raise ValueError(f"cursor {cursor} out of range 0..{POS_MAX}")
         top_b = _sanitize(_pad(top))         # exactly 20 bytes
         bottom_b = _sanitize(_pad(bottom))   # exactly 20 bytes
 
@@ -375,11 +375,46 @@ class VFDDriver:
         buf += top_b
         buf += bytes([DISPLAY_POSITION, POS_BOTTOM])
         buf += bottom_b
-        if cursor is None:
-            buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
-        else:
-            buf += bytes([DISPLAY_POSITION, cursor, CURSOR_ON])
+        buf.append(CURSOR_OFF)  # MUST be last — any later write re-shows cursor
         self._write(bytes(buf))
+
+    def show_changes(self, old: tuple[str, str], new: tuple[str, str]) -> None:
+        """Rewrite only the cells that differ between two (top, bottom) frames.
+
+        ``old`` must be what is on the glass now. Each run of changed cells is
+        sent as ``0x10 <pos> <bytes>``; runs a gap of up to _MERGE_GAP cells apart
+        are merged (re-sending an unchanged cell is cheaper than a new 2-byte
+        position), and a run never crosses from the top row to the bottom. One
+        ``0x14`` ends the write, as in show(). Nothing is sent when nothing
+        changed; a full show() is sent when that would be no longer.
+
+        WHY: every write briefly re-shows the cursor (an underline on this glass)
+        wherever it is writing, so a 45-byte repaint sweeps a visible cursor
+        across all 40 cells. A one-cell change (a blinking colon, a clock second)
+        becomes a 4-byte write that touches only that cell.
+        """
+        before = _sanitize(_pad(old[0])) + _sanitize(_pad(old[1]))
+        after = _sanitize(_pad(new[0])) + _sanitize(_pad(new[1]))
+        runs: list[list[int]] = []  # [start, end) cell ranges
+        for pos in range(ROWS * COLS):
+            if before[pos] == after[pos]:
+                continue
+            last = runs[-1] if runs else None
+            if (last and pos - last[1] <= _MERGE_GAP
+                    and pos // COLS == last[0] // COLS):
+                last[1] = pos + 1
+            else:
+                runs.append([pos, pos + 1])
+        if not runs:
+            return
+        buf = bytearray()
+        for start, end in runs:
+            buf += bytes([DISPLAY_POSITION, start]) + after[start:end]
+        buf.append(CURSOR_OFF)  # MUST be last, as in show()
+        if len(buf) >= _FULL_FRAME_BYTES:
+            self.show(*new)
+        else:
+            self._write(bytes(buf))
 
     def show_bottom(self, bottom: str) -> None:
         """Update ONLY the bottom row, leaving the top untouched.

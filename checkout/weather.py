@@ -19,24 +19,27 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
-from .glyphs import DEGREE, LABEL_C, LABEL_H, LABEL_L, LABEL_R
+from .glyphs import COLON_LOW, COLON_MID, DEGREE, LABEL_C, LABEL_H, LABEL_L, LABEL_R
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 STALE_S = 3600          # a reading this old shows " --" (never pass old data as current)
 FETCH_SLACK_S = 60      # fetch this long after the API's next refresh is due
 HTTP_TIMEOUT_S = 10
 
-# weather_colon values: steady colon, cursor tick, or brightness pulse.
+# weather_colon values: steady colon, on/off tick, or a fading pulse.
 COLON_MODES = ("on", "tick", "pulse")
 
 # Weather's glyph set (loaded on entry by the daemon's mode-glyph swap).
-SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE = range(5)
+(SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
+ SLOT_COLON_MID, SLOT_COLON_LOW) = range(7)
 WEATHER_GLYPHS = {
     SLOT_HIGH: LABEL_H,
     SLOT_LOW: LABEL_L,
     SLOT_CURRENT: LABEL_C,
     SLOT_RAIN: LABEL_R,
     SLOT_DEGREE: DEGREE,
+    SLOT_COLON_MID: COLON_MID,   # pulse fade steps
+    SLOT_COLON_LOW: COLON_LOW,
 }
 _DEG = chr(GLYPH_CODES[SLOT_DEGREE])
 _DASHES = " --"

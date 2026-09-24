@@ -56,7 +56,7 @@ _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
-from .frames.weather import WeatherFrame, colon_animation
+from .frames.weather import WeatherFrame
 from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
 from .state import load_state, save_status
 from . import spectrum, weather
@@ -138,6 +138,7 @@ def _new_ctx() -> dict:
         "last_scroll": None,
         "last_code_page": None,
         "last_emit": None,         # last thing shown to the DISPLAY (gates serial writes)
+        "last_mode": None,         # mode of the last tick (a change repaints in full)
         "last_marquee_text": None,  # last text kicked into the hardware ticker
         "last_marquee_bottom": None,  # last bottom row written in marquee mode
         "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
@@ -313,24 +314,28 @@ def animation_brightness(
     if animation == "blink" and not _phase_on(now_ms, params):
         return _MIN_BRIGHTNESS
     if animation == "pulse":
-        period = int(params.get("period_ms", 0))
-        if period > 0:
-            # A fixed period, phase-locked to the wall clock: weather's
-            # once-a-second sweep starts dim at the top of each second.
-            idx = (now_ms % period) * len(_PULSE_TRIANGLE) // period
-        else:
-            step_ms = max(1, int(params.get("step_ms", _PULSE_STEP_MS)))
-            idx = (now_ms // step_ms) % len(_PULSE_TRIANGLE)
+        step_ms = max(1, int(params.get("step_ms", _PULSE_STEP_MS)))
+        idx = (now_ms // step_ms) % len(_PULSE_TRIANGLE)
         return _PULSE_TRIANGLE[idx]
     return base
 
 
-def _apply_emit(driver: VFDDriver, emit: tuple) -> None:
-    """("blank",) | ("show", top, bottom) | ("show", top, bottom, cursor)."""
+def _apply_emit(driver: VFDDriver, emit: tuple, prev: tuple | None) -> None:
+    """Put ``emit`` on the glass, given ``prev`` — what the glass shows now.
+
+    When the glass holds a known frame (``prev`` is a show), only the changed
+    cells are rewritten (a blinking colon or a clock second is a 4-byte write
+    instead of a 45-byte repaint that sweeps the cursor across the glass).
+    Anything that may have changed the glass behind the daemon's back — a reset,
+    a glyph define, a reconnect, a mode change — sets ``last_emit`` to None,
+    which forces a full frame here.
+    """
     if emit[0] == "blank":
         driver.blank()
+    elif prev is not None and prev[0] == "show":
+        driver.show_changes((prev[1], prev[2]), (emit[1], emit[2]))
     else:
-        driver.show(emit[1], emit[2], cursor=emit[3] if len(emit) > 3 else None)
+        driver.show(emit[1], emit[2])
 
 
 # --- the tick ----------------------------------------------------------------
@@ -342,7 +347,6 @@ def _write_status(
     now_ms: int,
     bars: list | None = None,
     stereo: dict | None = None,
-    cursor: int | None = None,
 ) -> None:
     """Mirror the current display state to status.json — a throttled HEARTBEAT.
 
@@ -381,8 +385,6 @@ def _write_status(
             "spectrum_right": (stereo or {}).get("right"),
             "spectrum_level_l": (stereo or {}).get("level_l"),
             "spectrum_level_r": (stereo or {}).get("level_r"),
-            # Cell the hardware cursor is parked on (weather's colon tick), else null.
-            "cursor": cursor,
             # The glyph set a MODE loaded (weather, spectrum), keyed "0".."8", so the
             # preview draws those cells; null = the user's state.glyphs are loaded.
             "mode_glyphs": ({str(k): v for k, v in ctx["mode_glyphs"].items()}
@@ -641,7 +643,7 @@ def _tick_spectrum(
     top, bottom = _render_spectrum(layout, style, ctx)
     emit = ("show", top, bottom)
     if emit != ctx["last_emit"]:
-        driver.show(top, bottom)
+        _apply_emit(driver, emit, ctx["last_emit"])
         ctx["last_emit"] = emit
     # status carries the layout's channel data so the preview renders it (throttled).
     bars, stereo = _spectrum_status(layout, ctx)
@@ -668,6 +670,12 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
 
     mode = _norm_mode(state.get("mode"))
 
+    # A mode change repaints in full: the previous mode may have written the
+    # glass outside the emit path (marquee's ticker, spectrum's glyphs).
+    if mode != ctx["last_mode"]:
+        ctx["last_emit"] = None
+        ctx["last_mode"] = mode
+
     # The weather fetcher works only while weather is the active mode.
     WEATHER_FRAME.fetcher.set_location(
         weather.location(state) if mode == "weather" else None)
@@ -682,11 +690,9 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         # A dark screen stays silent: blank() ends in cursor-off (0x14) and ANY
         # later write re-shows the cursor, so no brightness animation runs.
         animation, params = "none", {}
-    elif mode in ("marquee", "spectrum"):
+    elif mode in ("marquee", "spectrum", "weather"):
+        # N/A: the ticker / the bars own the rows; weather's colon animates itself.
         animation, params = "none", state.get("animation_params") or {}
-    elif mode == "weather":
-        # The colon setting owns the brightness animation in weather mode.
-        animation, params = colon_animation(state)
     else:
         animation = state.get("animation", "none")
         params = state.get("animation_params") or {}
@@ -710,10 +716,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     ctx["last_marquee_bottom"] = None
 
     # 4. frame + animation. Compute the frame first, so the brightness step below
-    # can apply blink's brightness PULSE for this tick. A frame may also park the
-    # hardware cursor on a cell (weather's colon tick); the cell rides on the emit
-    # tuple so emit-diffing writes when the cursor toggles.
-    cursor = None
+    # can apply blink's brightness PULSE for this tick.
     if state.get("blank"):
         top, bottom = _BLANK_LINE, _BLANK_LINE
         emit: tuple = ("blank",)
@@ -727,17 +730,14 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
                 top_align=_align(state.get("align_top")),
                 bottom_align=_align(state.get("align_bottom")),
             )
-            cursor = frame.cursor(now, state, top, bottom)
         emit = resolve_emit(now_ms, animation, params, top, bottom)
-        if cursor is not None and emit[0] == "show":
-            emit = (*emit, cursor)
 
     # 5. display settings (brightness incl. blink/pulse, scroll mode, code page).
     _apply_settings(driver, state, ctx, now_ms, animation, params)
 
     # 6. push the frame to the glass (only when it changes).
     if emit != ctx["last_emit"]:
-        _apply_emit(driver, emit)
+        _apply_emit(driver, emit, ctx["last_emit"])
         ctx["last_emit"] = emit
 
     # 7. mirror status — report what's ACTUALLY on the glass this tick (blank
@@ -747,8 +747,7 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         disp_top, disp_bottom = _BLANK_LINE, _BLANK_LINE
     else:
         disp_top, disp_bottom = emit[1], emit[2]
-    _write_status(state, disp_top, disp_bottom, ctx, now_ms,
-                  cursor=emit[3] if len(emit) > 3 else None)
+    _write_status(state, disp_top, disp_bottom, ctx, now_ms)
 
 
 def open_driver(dry_run: bool) -> VFDDriver | None:

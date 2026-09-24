@@ -22,11 +22,3 @@ class Frame(abc.ABC):
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
         """Return logical (top, bottom) strings for the given time/state."""
         raise NotImplementedError
-
-    def cursor(self, now: datetime, state: dict, top: str, bottom: str) -> int | None:
-        """Linear cell (0..39) to park the hardware cursor on this tick, or None.
-
-        ``top``/``bottom`` are the ALIGNED 20-cell lines, so a returned index
-        lands on the right cell whatever the justification. Default: no cursor.
-        """
-        return None

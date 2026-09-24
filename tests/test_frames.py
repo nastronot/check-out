@@ -130,8 +130,9 @@ def test_ticker_advances_one_cell_per_glyph():
 
 
 # --- WeatherFrame ------------------------------------------------------------
-from checkout.frames.weather import NO_LOCATION, WeatherFrame, colon_animation  # noqa: E402
-from checkout.renderer import render_lines  # noqa: E402
+from checkout import glyphs as _glyphs  # noqa: E402
+from checkout import weather as _weather  # noqa: E402
+from checkout.frames.weather import NO_LOCATION, WeatherFrame  # noqa: E402
 
 
 class _FakeFetcher:
@@ -144,11 +145,17 @@ class _FakeFetcher:
 
 _WX = {"weather_lat": 41.9, "weather_lon": -87.6}
 _T = datetime(2026, 9, 23, 20, 33, 12)
+_MID = chr(GLYPH_CODES[_weather.SLOT_COLON_MID])
+_LOW = chr(GLYPH_CODES[_weather.SLOT_COLON_LOW])
+
+
+def _top(colon, us):
+    state = {**_WX, "weather_colon": colon}
+    return WeatherFrame(_FakeFetcher()).render(_T.replace(microsecond=us), state)[0]
 
 
 def test_weather_top_is_the_short_clock():
-    top, _ = WeatherFrame(_FakeFetcher()).render(_T, _WX)
-    assert top == "09/23/26 WED 08:33"
+    assert _top("on", 0) == "09/23/26 WED 08:33"
 
 
 def test_weather_without_location_asks_for_one():
@@ -161,36 +168,37 @@ def test_weather_bottom_is_twenty_cells_even_with_no_reading():
     assert len(bottom) == 20
 
 
-def _cursor(state, now, align="center"):
-    frame = WeatherFrame(_FakeFetcher())
-    top, bottom = render_lines(*frame.render(now, state), top_align=align)
-    return frame.cursor(now, state, top, bottom), top
+def test_on_is_a_steady_colon():
+    assert {_top("on", us)[15] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
-def test_tick_parks_cursor_on_the_colon_in_the_first_half_second():
-    state = {**_WX, "weather_colon": "tick"}
-    cur, top = _cursor(state, _T.replace(microsecond=100_000))
-    assert top[cur] == ":"
-    assert _cursor(state, _T.replace(microsecond=600_000))[0] is None
+def test_tick_shows_the_colon_for_the_first_half_second_only():
+    assert _top("tick", 0)[15] == ":"
+    assert _top("tick", 499_999)[15] == ":"
+    assert _top("tick", 500_000)[15] == " "
+    assert _top("tick", 999_999)[15] == " "
 
 
-def test_colon_cell_follows_alignment():
-    state = {**_WX, "weather_colon": "tick"}
-    left, _ = _cursor(state, _T, "left")
-    right, _ = _cursor(state, _T, "right")
-    assert (left, right) == (15, 17)
+def test_tick_changes_only_the_colon_cell():
+    on, off = _top("tick", 0), _top("tick", 600_000)
+    assert [i for i in range(len(on)) if on[i] != off[i]] == [15]
 
 
-def test_on_and_pulse_never_park_the_cursor():
-    for colon in ("on", "pulse"):
-        assert _cursor({**_WX, "weather_colon": colon}, _T)[0] is None
+def test_pulse_fades_the_colon_through_four_steps_once_a_second():
+    steps = [_top("pulse", (2 * k + 1) * 1_000_000 // 12)[15] for k in range(6)]  # mid-step
+    assert steps == [" ", _LOW, _MID, ":", _MID, _LOW]
 
 
 def test_colon_defaults_to_tick():
-    assert _cursor(_WX, _T)[0] is not None
+    state = dict(_WX)
+    frame = WeatherFrame(_FakeFetcher())
+    assert frame.render(_T.replace(microsecond=600_000), state)[0][15] == " "
 
 
-def test_colon_animation():
-    assert colon_animation({"weather_colon": "pulse"}) == ("pulse", {"period_ms": 1000})
-    assert colon_animation({"weather_colon": "tick"}) == ("none", {})
-    assert colon_animation({"weather_colon": "on"}) == ("none", {})
+def test_colon_fade_glyphs_thin_the_real_colon():
+    # The font's ':' is two 2x2 blocks (8 dots); the fade steps light 4, then 2,
+    # always a subset of the real colon so the fade reads as the same colon.
+    real = [0, 6, 6, 0, 6, 6, 0]
+    for rows, dots in ((_glyphs.COLON_MID, 4), (_glyphs.COLON_LOW, 2)):
+        assert sum(bin(r).count("1") for r in rows) == dots
+        assert all(r & ~full == 0 for r, full in zip(rows, real))

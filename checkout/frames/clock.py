@@ -26,11 +26,15 @@ def _hour12(now: datetime) -> int:
     return now.hour % 12 or 12
 
 
-def short_date_time(now: datetime) -> str:
-    """``MM/DD/YY DAY HH:MM`` (12-hour, no AM/PM), e.g. ``09/23/26 WED 08:33``."""
+def short_date_time(now: datetime, colon: str = ":") -> str:
+    """``MM/DD/YY DAY HH:MM`` (12-hour, no AM/PM), e.g. ``09/23/26 WED 08:33``.
+
+    ``colon`` is the one character between HH and MM, so a caller can blink or
+    fade it (weather mode) without re-deriving the layout.
+    """
     return (
         f"{now.month:02d}/{now.day:02d}/{now.year % 100:02d} "
-        f"{_DAYS[now.weekday()]} {_hour12(now):02d}:{now.minute:02d}"
+        f"{_DAYS[now.weekday()]} {_hour12(now):02d}{colon}{now.minute:02d}"
     )
 
 

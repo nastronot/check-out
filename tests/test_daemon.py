@@ -694,7 +694,10 @@ class _CountingDriver:
     def set_vertical_scroll(self, enabled):
         pass
 
-    def show(self, top, bottom, cursor=None):
+    def show(self, top, bottom):
+        self.shows += 1
+
+    def show_changes(self, old, new):
         self.shows += 1
 
     def blank(self):
@@ -880,55 +883,6 @@ def _weather_setup(monkeypatch, colon="tick"):
     return written, fetcher, state
 
 
-def test_weather_tick_toggles_the_cursor_on_the_colon(monkeypatch, capsys):
-    written, _, state = _weather_setup(monkeypatch)
-    drv = VFDDriver(dry_run=True)
-    ctx = daemon._new_ctx()
-    t = datetime(2026, 9, 23, 20, 33, 12, 100_000)
-    daemon.tick_once(drv, state, ctx, now=t)
-    capsys.readouterr()
-    daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=200_000))
-    assert _all_tx_bytes(capsys.readouterr().out) == []      # same frame: no write
-    daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
-    off = _all_tx_bytes(capsys.readouterr().out)
-    assert off[-1] == 0x14                                   # cursor hidden
-    daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
-    on = _all_tx_bytes(capsys.readouterr().out)
-    assert on[-3:] == [0x10, 16, 0x13]                       # centered colon cell
-    assert ctx["last_emit"][3] == 16
-
-
-def test_weather_on_never_writes_a_cursor(monkeypatch, capsys):
-    _, _, state = _weather_setup(monkeypatch, colon="on")
-    drv = VFDDriver(dry_run=True)
-    daemon.tick_once(drv, state, daemon._new_ctx(), now=datetime(2026, 9, 23, 20, 33, 12))
-    assert 0x13 not in _all_tx_bytes(capsys.readouterr().out)
-
-
-def test_weather_blank_has_no_cursor(monkeypatch, capsys):
-    _, _, state = _weather_setup(monkeypatch)
-    drv = VFDDriver(dry_run=True)
-    daemon.tick_once(drv, {**state, "blank": True}, daemon._new_ctx(),
-                     now=datetime(2026, 9, 23, 20, 33, 12))
-    assert 0x13 not in _all_tx_bytes(capsys.readouterr().out)
-
-
-def test_weather_pulse_sweeps_brightness_once_a_second(monkeypatch):
-    _, _, state = _weather_setup(monkeypatch, colon="pulse")
-    levels = []
-
-    class _Drv(_CountingDriver):
-        def set_brightness(self, level):
-            levels.append(level)
-
-    drv = _Drv()
-    ctx = daemon._new_ctx()
-    for ms in range(0, 1000, 50):
-        daemon.tick_once(drv, state, ctx,
-                         now=datetime(2026, 9, 23, 20, 33, 12, ms * 1000))
-    assert levels == [0, 1, 2, 3, 2, 1]
-
-
 def test_weather_ignores_the_global_animation(monkeypatch, capsys):
     _, _, state = _weather_setup(monkeypatch, colon="on")
     drv = VFDDriver(dry_run=True)
@@ -948,36 +902,116 @@ def test_weather_sets_and_clears_the_fetch_location(monkeypatch):
     assert fetcher.due_in(0) is None                         # idle outside weather
 
 
-def test_weather_status_reports_cursor_glyphs_and_weather(monkeypatch):
+def test_weather_status_reports_glyphs_and_weather(monkeypatch):
     written, _, state = _weather_setup(monkeypatch)
     drv = _CountingDriver()
     daemon.tick_once(drv, state, daemon._new_ctx(),
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
     assert s["mode"] == "weather"
-    assert s["cursor"] == 16
-    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4"}
+    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4", "5", "6"}
     assert s["weather"]["error"] is None
 
 
-def test_clock_status_has_no_mode_glyphs_or_cursor(monkeypatch):
+def test_clock_status_has_no_mode_glyphs(monkeypatch):
     written = []
     monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
     daemon.tick_once(_CountingDriver(), {"mode": "clock"}, daemon._new_ctx(), now=NOW)
     assert written[-1]["mode_glyphs"] is None
-    assert written[-1]["cursor"] is None
     assert written[-1]["weather"] is None
 
 
 def test_blank_stops_brightness_animation_so_nothing_follows_cursor_off(monkeypatch, capsys):
     # hardware rule 1: any write after 0x14 re-shows the cursor, so a dark screen
     # must stay silent — no pulse brightness writes while blank.
-    _, _, state = _weather_setup(monkeypatch, colon="pulse")
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
     drv = VFDDriver(dry_run=True)
     ctx = daemon._new_ctx()
-    state = {**state, "blank": True}
+    state = {"mode": "clock", "animation": "pulse", "blank": True}
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 0))
     capsys.readouterr()
     for ms in range(50, 1000, 50):
         daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, ms * 1000))
     assert _all_tx_bytes(capsys.readouterr().out) == []
+
+
+# --- weather colon: a character change, written as a one-cell update ----------
+def _tx_after(capsys):
+    return _all_tx_bytes(capsys.readouterr().out)
+
+
+def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
+    _, _, state = _weather_setup(monkeypatch, colon="tick")
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    t = datetime(2026, 9, 23, 20, 33, 12, 100_000)
+    daemon.tick_once(drv, state, ctx, now=t)                     # first frame: full
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=200_000))
+    assert _tx_after(capsys) == []                               # unchanged: silent
+    daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
+    assert _tx_after(capsys) == [0x10, 16, ord(" "), 0x14]       # colon off
+    daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
+    assert _tx_after(capsys) == [0x10, 16, ord(":"), 0x14]       # colon on
+
+
+def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
+    for colon in ("on", "tick", "pulse"):
+        _, _, state = _weather_setup(monkeypatch, colon=colon)
+        drv = VFDDriver(dry_run=True)
+        ctx = daemon._new_ctx()
+        daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12))
+        capsys.readouterr()
+        tx = []
+        for ms in range(0, 1000, 20):
+            daemon.tick_once(drv, state, ctx,
+                             now=datetime(2026, 9, 23, 20, 33, 13, ms * 1000))
+            tx += _tx_after(capsys)
+        assert 0x13 not in tx, colon                             # no cursor-on
+        assert 0x04 not in tx, colon                             # no brightness writes
+
+
+def test_weather_pulse_steps_the_colon_glyphs(monkeypatch, capsys):
+    from checkout import weather as wx
+    from checkout.driver import GLYPH_CODES
+
+    _, _, state = _weather_setup(monkeypatch, colon="pulse")
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 999_000))
+    capsys.readouterr()
+    cells = []
+    for k in range(6):
+        daemon.tick_once(drv, state, ctx, now=datetime(
+            2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 12))
+        tx = _tx_after(capsys)
+        assert tx[:2] == [0x10, 16] and tx[-1] == 0x14 and len(tx) == 4
+        cells.append(tx[2])
+    low, mid = GLYPH_CODES[wx.SLOT_COLON_LOW], GLYPH_CODES[wx.SLOT_COLON_MID]
+    assert cells == [ord(" "), low, mid, ord(":"), mid, low]
+
+
+def test_mode_change_repaints_the_whole_frame(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=NOW)
+    daemon.tick_once(drv, {"mode": "marquee", "marquee_text": "hi"}, ctx, now=NOW)
+    capsys.readouterr()
+    # Back to clock in the same second: the frame text is identical to before,
+    # but marquee changed the glass, so it must be repainted in full.
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=NOW)
+    tx = _tx_after(capsys)
+    assert tx[:2] == [0x10, 0x00] and 0x14 in tx
+
+
+def test_clock_second_change_is_a_small_write(monkeypatch, capsys):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
+    capsys.readouterr()
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=datetime(2026, 6, 19, 12, 0, 2))
+    tx = _tx_after(capsys)
+    assert len(tx) == 4 and tx[-1] == 0x14                       # one cell
+

@@ -19,6 +19,12 @@ LABEL_C = [31, 17, 21, 29, 21, 17, 31]
 # A 3x3 ring in the top rows, for temperatures.
 DEGREE = [4, 10, 4, 0, 0, 0, 0]
 
+# Fade steps for a pulsing colon. The font's ':' is two 2x2 blocks of dots,
+# [0, 6, 6, 0, 6, 6, 0] (8 dots). A VFD cell has no per-cell brightness (it is
+# display-wide), so a colon "fades" by lighting fewer of its own dots:
+COLON_MID = [0, 2, 4, 0, 2, 4, 0]   # 4 dots: one diagonal of each block
+COLON_LOW = [0, 0, 2, 0, 2, 0, 0]   # 2 dots: the inner dot of each block
+
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
 
 

@@ -322,23 +322,42 @@ def test_force_raw_mode_noop_in_dry_run():
     drv._force_raw_mode()  # must not raise
 
 
-# --- show(cursor=): park the cursor block on a cell (weather colon tick) -------
-from checkout.driver import CURSOR_ON  # noqa: E402
+# --- show_changes(): rewrite only the cells that changed -----------------------
+_TOP = " 09/23/26 WED 08:33 "
+_BOT = "B" * 20
 
 
-def test_show_with_cursor_ends_by_parking_the_cursor(driver, capsys):
-    driver.show("A" * 20, "B" * 20, cursor=15)
+def test_show_changes_writes_one_changed_cell(driver, capsys):
+    driver.show_changes((_TOP, _BOT), (_TOP.replace(":", " "), _BOT))
+    assert capture_bytes(capsys) == [0x10, 16, ord(" "), CURSOR_OFF]
+
+
+def test_show_changes_writes_nothing_when_nothing_changed(driver, capsys):
+    driver.show_changes((_TOP, _BOT), (_TOP, _BOT))
+    assert capture_bytes(capsys) == []
+
+
+def test_show_changes_addresses_the_bottom_row(driver, capsys):
+    driver.show_changes((_TOP, _BOT), (_TOP, "B" * 5 + "x" + "B" * 14))
+    assert capture_bytes(capsys) == [0x10, 20 + 5, ord("x"), CURSOR_OFF]
+
+
+def test_show_changes_merges_close_cells_into_one_run(driver, capsys):
+    # 08:33 -> 08:34 with the colon off: cells 16 and 18 differ, 1 apart -> one run.
+    new = " 09/23/26 WED 08 34 "
+    driver.show_changes((_TOP, _BOT), (new, _BOT))
     data = capture_bytes(capsys)
-    assert data[:44] == [0x10, 0x00] + [ord("A")] * 20 + [0x10, 0x14] + [ord("B")] * 20
-    assert data[44:] == [0x10, 15, CURSOR_ON]
-    assert CURSOR_OFF not in data[44:]
+    assert data[:2] == [0x10, 16]
+    assert bytes(data[2:-1]).decode() == new[16:19]
+    assert data[-1] == CURSOR_OFF
 
 
-def test_show_without_cursor_is_unchanged(driver, capsys):
-    driver.show("A" * 20, "B" * 20)
-    assert capture_bytes(capsys)[-1] == CURSOR_OFF
+def test_show_changes_never_runs_across_rows(driver, capsys):
+    driver.show_changes(("A" * 20, "A" * 20), ("A" * 19 + "x", "y" + "A" * 19))
+    assert capture_bytes(capsys) == [0x10, 19, ord("x"), 0x10, 20, ord("y"), CURSOR_OFF]
 
 
-def test_show_rejects_cursor_out_of_range(driver):
-    with pytest.raises(ValueError):
-        driver.show("A", "B", cursor=40)
+def test_show_changes_falls_back_to_a_full_frame_when_cheaper(driver, capsys):
+    driver.show_changes(("A" * 20, "A" * 20), ("B" * 20, "B" * 20))
+    data = capture_bytes(capsys)
+    assert data[:2] == [0x10, 0x00] and len(data) == 45   # exactly show()'s frame
