@@ -426,7 +426,7 @@ def test_spectrum_enter_defines_seven_bar_glyphs(monkeypatch, capsys):
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
     tx = _all_tx_bytes(capsys.readouterr().out)
     assert tx.count(0x03) == 7          # 7 DefineCharacter writes (height glyphs)
-    assert ctx["spectrum_active"] is True
+    assert ctx["mode_glyphs_key"] == ("spectrum", "full", "bars")
 
 
 def test_spectrum_drains_latest_and_renders_bars(monkeypatch):
@@ -470,7 +470,7 @@ def test_spectrum_restores_user_glyphs_on_exit(monkeypatch, capsys):
     state = {"mode": "clock", "glyphs": {"0": [1, 2, 4, 8, 16, 1, 2]}}
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 1))
     tx = _all_tx_bytes(capsys.readouterr().out)
-    assert ctx["spectrum_active"] is False
+    assert ctx["mode_glyphs_key"] is None
     assert 0x03 in tx                  # user glyph re-defined (restored)
 
 
@@ -493,7 +493,7 @@ def test_spectrum_enters_with_active_style_default_bars(monkeypatch, capsys):
     ctx = _spectrum_ctx()
     ctx["spectrum_rx"] = _FakeRx([_full([7] * 20)])
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
-    assert ctx["spectrum_style"] == "bars"   # default style defined on enter
+    assert ctx["mode_glyphs_key"][2] == "bars"   # default style defined on enter
 
 
 def test_spectrum_style_change_redefines_glyph_slots(monkeypatch, capsys):
@@ -505,14 +505,14 @@ def test_spectrum_style_change_redefines_glyph_slots(monkeypatch, capsys):
     ctx["spectrum_rx"] = _FakeRx([_full([14] * 20)])
     # Enter with the default BARS style.
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
-    assert ctx["spectrum_style"] == "bars"
+    assert ctx["mode_glyphs_key"][2] == "bars"
     capsys.readouterr()  # discard the enter TX
 
     # Flip to LINE mid-spectrum: it must redefine the 7 slots with the LINE set.
     state = {"mode": "spectrum", "spectrum_style": "line"}
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 6, 19, 12, 0, 0, 250_000))
     tx = _all_tx_bytes(capsys.readouterr().out)
-    assert ctx["spectrum_style"] == "line"
+    assert ctx["mode_glyphs_key"][2] == "line"
 
     defines = _parse_defines(tx)
     assert len(defines) == 7                 # all 7 slots redefined
@@ -537,14 +537,14 @@ def test_spectrum_layout_change_redefines_glyphs_and_renders_stereo(monkeypatch)
     # Enter FULL (7 height glyphs), then switch to STEREO_V (9 glyphs: 7 + L/R).
     ctx["spectrum_rx"] = _FakeRx([_full([14] * 20)])
     daemon.tick_once(drv, {"mode": "spectrum", "spectrum_layout": "full"}, ctx, now=NOW)
-    assert ctx["spectrum_glyphs_key"] == ("full", "bars")
+    assert ctx["mode_glyphs_key"] == ("spectrum", "full", "bars")
     base_defines = drv.defines
 
     ctx["spectrum_rx"] = _FakeRx([
         {"layout": "stereo_v", "left": [7] * 19, "right": [2] * 19}])
     daemon.tick_once(drv, {"mode": "spectrum", "spectrum_layout": "stereo_v"}, ctx,
                      now=datetime(2026, 6, 19, 12, 0, 0, 250_000))
-    assert ctx["spectrum_glyphs_key"] == ("stereo_v", "bars")
+    assert ctx["mode_glyphs_key"] == ("spectrum", "stereo_v", "bars")
     assert drv.defines - base_defines == 9          # 9 glyphs defined for stereo_v
     assert ctx["spectrum_left"] == [7] * 19 and ctx["spectrum_right"] == [2] * 19
     # status mirrors the layout + per-channel data for the preview.
@@ -824,3 +824,15 @@ def test_valid_brightness_after_invalid_rewarns(monkeypatch):
     assert levels == [3, 0, 3]
     # The intervening valid value clears the dedupe, so the second bad value warns.
     assert sum("invalid brightness" in w for w in warnings) == 2
+
+
+def test_mode_glyphs_are_redefined_after_a_reset(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([])
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    first = drv.defines
+    daemon._invalidate_caches(ctx)                     # what a reset/reconnect does
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    assert drv.defines == 2 * first

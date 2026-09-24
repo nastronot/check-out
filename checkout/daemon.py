@@ -58,7 +58,7 @@ from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
 from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
 from .state import load_state, save_status
-from . import spectrum
+from . import spectrum, weather
 
 # Software scroll: each step redraws ~40 bytes at 9600 baud (~40ms on the wire),
 # so a step faster than this floor can't keep up — clamp scroll_speed_ms to it.
@@ -140,11 +140,10 @@ def _new_ctx() -> dict:
         "heartbeat": 0,            # monotonic per-tick counter (liveness, not content)
         "bad_brightness": None,    # last invalid brightness warned about (dedupe)
         "last_status_ms": None,    # wall-clock ms of the last status write (throttle)
+        # --- mode glyph sets (see mode_glyph_set) ---
+        "mode_glyphs_key": None,   # key of the mode glyph set loaded (None = user glyphs)
+        "mode_glyphs": None,       # that set's {slot: rows}, mirrored to status
         # --- spectrum analyzer ---
-        "spectrum_active": False,  # are the spectrum glyphs currently defined?
-        "spectrum_style": None,    # applied render style ("bars"|"line"|None)
-        "spectrum_layout": None,   # applied layout ("full"|"stereo_v"|"stereo_h"|None)
-        "spectrum_glyphs_key": None,  # (layout, style) of the defined glyph set
         "spectrum_heights": [0] * spectrum.NUM_BARS,  # full layout: latest 20 heights
         "spectrum_left": [0] * spectrum.STEREO_BANDS,   # stereo_v: left 19 heights
         "spectrum_right": [0] * spectrum.STEREO_BANDS,  # stereo_v: right 19 heights
@@ -171,6 +170,8 @@ def _invalidate_caches(ctx: dict) -> None:
     ctx["last_scroll"] = None
     ctx["last_code_page"] = None
     ctx["last_glyphs"] = None
+    # A reset may clear glyph RAM, so a mode's glyph set is re-sent too.
+    ctx["mode_glyphs_key"] = None
     ctx["last_emit"] = None
     # Force marquee mode to re-init the hardware ticker + re-write the bottom.
     ctx["last_marquee_text"] = None
@@ -185,6 +186,51 @@ def _apply_glyphs(driver: VFDDriver, glyphs: dict) -> None:
             driver.define_character(int(key), glyphs[key])
         except (ValueError, TypeError) as exc:
             log(f"skipping bad glyph {key!r}: {exc}")
+
+
+# --- mode glyph sets ---------------------------------------------------------
+def mode_glyph_set(mode: str, state: dict):
+    """The glyph set ``mode`` needs loaded, as ``(key, {slot: rows})``, or None.
+
+    The ONE place a mode claims glyph slots. The key names the exact set, so a
+    change of key (mode, or spectrum layout/style) triggers a redefine. A mode
+    returning None gets the user's ``state.glyphs``.
+    """
+    if mode == "spectrum":
+        layout, style = _norm_spectrum_layout(state), _norm_spectrum_style(state)
+        return ("spectrum", layout, style), spectrum.layout_glyphs(layout, style)
+    if mode == "weather":
+        return ("weather",), weather.WEATHER_GLYPHS
+    return None
+
+
+def _sync_glyphs(driver: VFDDriver, state: dict, ctx: dict, mode: str) -> None:
+    """Load the active mode's glyph set, or the user's glyphs, when it changes.
+
+    Defining characters may reset extended mode / scroll, so every define is
+    followed by initialize() + a cache invalidation (settings and the frame are
+    then re-sent). Leaving a mode set clears ``last_glyphs`` via the invalidation,
+    which makes the user-glyph branch below re-define ``state.glyphs``.
+    """
+    wanted = mode_glyph_set(mode, state)
+    key = wanted[0] if wanted else None
+    if key != ctx["mode_glyphs_key"]:
+        if wanted:
+            log(f"loading glyph set {key} (user glyphs restored on exit)")
+            for slot, rows in wanted[1].items():
+                driver.define_character(slot, rows)
+            driver.initialize()
+        _invalidate_caches(ctx)
+        ctx["mode_glyphs_key"] = key
+        ctx["mode_glyphs"] = dict(wanted[1]) if wanted else None
+    if key is None:
+        glyphs = state.get("glyphs") or {}
+        if glyphs != ctx["last_glyphs"]:
+            if glyphs:
+                _apply_glyphs(driver, glyphs)
+                driver.initialize()
+                _invalidate_caches(ctx)
+            ctx["last_glyphs"] = dict(glyphs)
 
 
 def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict) -> bool:
@@ -501,37 +547,6 @@ def _norm_spectrum_layout(state: dict) -> str:
     return layout if layout in spectrum.LAYOUTS else "full"
 
 
-def _define_spectrum_glyphs(driver: VFDDriver, ctx: dict, layout: str, style: str) -> None:
-    """Define the glyph set for ``(layout, style)`` into its slots, then re-init.
-
-    Used on spectrum ENTER and whenever the layout OR style changes mid-mode.
-    Defining characters can reset extended-mode/scroll, so re-init + invalidate
-    the setting caches afterward; records the applied (layout, style) so the next
-    tick only redefines on an actual change.
-    """
-    for slot, rows in spectrum.layout_glyphs(layout, style).items():
-        driver.define_character(slot, rows)
-    driver.initialize()
-    _invalidate_caches(ctx)
-    ctx["spectrum_glyphs_key"] = (layout, style)
-    ctx["spectrum_style"] = style
-    ctx["spectrum_layout"] = layout
-
-
-def _enter_spectrum(driver: VFDDriver, state: dict, ctx: dict) -> None:
-    """Define the glyph set for the active (layout, style) and start listening.
-
-    This OVERWRITES the user-glyph slots; the daemon re-applies ``state.glyphs``
-    when spectrum is left (see :func:`tick_once`).
-    """
-    layout = _norm_spectrum_layout(state)
-    style = _norm_spectrum_style(state)
-    log(f"entering spectrum ({layout}/{style}): defining glyphs (user glyphs restored on exit)")
-    _define_spectrum_glyphs(driver, ctx, layout, style)
-    ctx["spectrum_active"] = True
-    _ensure_spectrum_rx(ctx)
-
-
 def _store_spectrum_frame(ctx: dict, frame: dict) -> None:
     """Stash a freshly received frame's channel data into ctx (per layout)."""
     layout = frame.get("layout")
@@ -584,16 +599,13 @@ def _tick_spectrum(
     write ~21fps (the 9600-baud ceiling) — intended. If no fresh matching frame
     arrives within ``SPECTRUM_STALE_MS`` the layout's values decay toward 0
     (don't freeze)."""
+    _ensure_spectrum_rx(ctx)
     _apply_settings(driver, state, ctx, now_ms, "none", params)  # animation N/A
 
-    # A live LAYOUT or STYLE change swaps the glyph slots before rendering, so the
-    # cell mapping and the on-glass glyphs stay in sync (same invalidate-on-change
-    # pattern as v1.1.0, now keyed on (layout, style)).
+    # The glyph set for (layout, style) was loaded by _sync_glyphs this tick, so
+    # the cell mapping below and the on-glass glyphs are already in sync.
     layout = _norm_spectrum_layout(state)
     style = _norm_spectrum_style(state)
-    if (layout, style) != ctx.get("spectrum_glyphs_key"):
-        log(f"spectrum -> {layout}/{style}: redefining glyphs")
-        _define_spectrum_glyphs(driver, ctx, layout, style)
 
     rx = ctx.get("spectrum_rx")
     frame = rx.drain() if rx is not None else None
@@ -637,28 +649,8 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
 
     mode = _norm_mode(state.get("mode"))
 
-    # LEAVING spectrum: the bar height-glyphs overwrote user-glyph slots 0..6, so
-    # force section 3 below to re-define state.glyphs (restore the user's glyphs).
-    if ctx["spectrum_active"] and mode != "spectrum":
-        ctx["spectrum_active"] = False
-        ctx["spectrum_glyphs_key"] = None  # re-define the glyph set on re-entry
-        ctx["spectrum_style"] = None
-        ctx["spectrum_layout"] = None
-        ctx["last_glyphs"] = None
-        ctx["last_emit"] = None
-
-    # 3. user glyphs (re-define on change; defining may reset the display, so
-    # re-init + re-apply afterward — but only when there are glyphs to define).
-    # SKIPPED in spectrum mode: the bar glyphs own slots 0..6 there, and a stray
-    # user-glyph re-apply would clobber them.
-    if mode != "spectrum":
-        glyphs = state.get("glyphs") or {}
-        if glyphs != ctx["last_glyphs"]:
-            if glyphs:
-                _apply_glyphs(driver, glyphs)
-                driver.initialize()
-                _invalidate_caches(ctx)
-            ctx["last_glyphs"] = dict(glyphs)
+    # 3. glyphs: the active mode's own set (spectrum, weather), else the user's.
+    _sync_glyphs(driver, state, ctx, mode)
 
     # Animation is N/A in marquee/spectrum: the ticker / the bars own the rows, so
     # flash/blink/pulse don't apply meaningfully. Force "none" so a leftover
@@ -669,8 +661,6 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     # SPECTRUM: socket-fed double-height bars — its own fast path.
     # (When blank, fall through to the normal blank handling below.)
     if mode == "spectrum" and not state.get("blank"):
-        if not ctx["spectrum_active"]:
-            _enter_spectrum(driver, state, ctx)
         _tick_spectrum(driver, state, ctx, now_ms, params)
         return
 
