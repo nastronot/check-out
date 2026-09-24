@@ -477,3 +477,44 @@ audioviz (capture+FFT) --unix DGRAM socket (20 heights)--> daemon --> VFD
   (`spectrumStatusCells` → bars/line for full, per-channel cells + inverted L/R
   labels + 95-column h-res for the stereo layouts).
 
+
+## v1.4.0 — weather mode + mode glyph sets
+
+**What shipped.** A `weather` mode: `MM/DD/YY DAY HH:MM` on top (12-hour, no
+AM/PM), and `[H] 93°[L] 74°[C] 82°[R] 82%` on the bottom for a configured
+latitude/longitude. The four label glyphs are inverted letters (lit frame, dark
+letter); H and C are new, L and R are spectrum's existing labels, now shared from
+`checkout/glyphs.py` with a degree glyph. Spec:
+`docs/superpowers/specs/2026-09-23-weather-mode-design.md`; plan:
+`docs/superpowers/plans/2026-09-23-weather-mode.md`.
+
+**Why a thread, not a fourth service.** The data is one ~600-byte HTTPS call to
+Open-Meteo (no key). A separate process + systemd unit (the audioviz pattern)
+buys nothing at that size. `WeatherFetcher` runs on a daemon thread, sleeps on an
+Event until the next fetch is due, and the display loop only ever reads its
+latest reading — so a slow or dead network can never stall the glass.
+
+**Why 15 minutes, aligned.** Open-Meteo refreshes `current` every
+`interval` = 900 s and says when the reading was taken (`current.time`, local to
+the location; `utc_offset_seconds` makes it absolute). The fetcher schedules the
+next call for that time + 900 s + 60 s slack, so it fetches once per new reading
+instead of polling. Failures keep the last good reading and retry 60 s → 900 s;
+after an hour without good data the fields show ` --` so stale weather never
+reads as current. A reply for a location that changed mid-request is dropped.
+
+**The colon (`weather_colon`).** `tick` parks the hardware cursor block on the
+colon for the first half of each second — `VFDDriver.show(..., cursor=pos)` ends
+`0x10 pos 0x13` instead of `0x14` (both confirmed-safe bytes); the cursor cell
+rides on the emit tuple, so emit-diffing writes ~2×/s. `pulse` reuses the
+brightness triangle with a new `period_ms` param (phase-locked to the second);
+brightness is display-wide, so the whole panel breathes. `on` is a plain colon.
+Weather ignores the global `animation` (like marquee and spectrum). The cursor
+at a merely-positioned cell is a bench-confirm TODO.
+
+**Mode glyph sets (refactor).** Spectrum's one-off glyph swap (`spectrum_active`,
+`spectrum_glyphs_key`, `_enter_spectrum`) became `daemon.mode_glyph_set` +
+`_sync_glyphs`: any mode declares `(key, {slot: rows})`, the daemon defines it on
+a key change and restores `state.glyphs` when the mode has none. A reset or
+reconnect now re-sends the mode set too (the old code did not). `status.json`
+gains `mode_glyphs` (the loaded set, so the preview draws weather without a UI
+copy of the bitmaps), `cursor`, and `weather` (reading + fetch health).

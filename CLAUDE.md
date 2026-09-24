@@ -31,11 +31,13 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
 
 - `driver.py` — `VFDDriver`, owns **all** raw command bytes; nothing else emits bytes.
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
-- `frames/base.py` — `Frame` interface; `frames/{clock,message,ticker}.py`.
+- `frames/base.py` — `Frame` interface (`render` + optional `cursor`); `frames/{clock,message,ticker,weather}.py`.
+- `glyphs.py` — shared hand-drawn label/icon bitmaps (inverted L/R/H/C, degree).
 - `state.py` — atomic load/save of `state.json` + `status.json`.
 - `daemon.py` — the SINGLE FAST LOOP + entrypoint; diffs frames, reconnects, shuts down clean.
 - `spectrum.py` — spectrum protocol + bar rendering + DSP + `SpectrumReceiver`/`Sender` (shared).
 - `audioviz.py` — the audio capture + FFT process (separate; streams bars over a socket).
+- `weather.py` — Open-Meteo request/reply, the weather bottom line, and `WeatherFetcher`.
 
 ### Single fast loop (v0.9.0)
 The daemon runs ONE fast loop (~30Hz, `config.LOOP_HZ`), NOT a 250ms tick. Each
@@ -51,6 +53,28 @@ off elapsed wall-clock (`now_ms`): clock ticks 1/s, scroll steps at
 (~6Hz) so the mirror file isn't churned 30×/s (still far inside the 5s liveness
 window). The loop self-paces with `time.monotonic`; a slow serial write (spectrum)
 naturally paces it below `LOOP_HZ`.
+
+### Mode glyph sets (v1.4.0)
+A mode that needs its own glyphs declares them in `daemon.mode_glyph_set(mode,
+state)` → `(key, {slot: rows})`. `_sync_glyphs` defines the set when the key
+changes and restores the user's `state.glyphs` when the new mode has none; a
+reset/reconnect re-sends it. Spectrum (keyed by layout + style) and weather use
+it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it —
+**do not copy bitmaps into the UI** for a new mode.
+
+### Weather mode (v1.4.0)
+Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R] 82%`
+(four fixed 5-cell fields, ` --` when missing or ≥1 h stale). State:
+`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `pulse`).
+- **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
+  service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
+  in weather mode and fetches once per data refresh (`current.time` +
+  `interval` 900 s + 60 s), retrying 60 s → 900 s on failure. The loop never
+  waits on the network.
+- **Colon:** `tick` parks the hardware cursor on the colon for the first half of
+  each second (`show(..., cursor=)` ends `0x10 pos 0x13`); `pulse` sweeps
+  brightness 0→3→0 once a second (display-wide); `on` is a plain colon. Weather
+  ignores the global `animation`.
 
 ## Build history
 
@@ -82,7 +106,8 @@ python -m checkout.audioviz             # capture + stream bars to the daemon (s
 Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_LOOP_HZ`,
 `CHECKOUT_STATUS_HZ`, `CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`,
 `CHECKOUT_LIBRARY_PATH` (web-only), `CHECKOUT_UI_DIST`, `CHECKOUT_SPECTRUM_SOCK`,
-`CHECKOUT_DEVICES_PATH` (audioviz). `CHECKOUT_TICK_MS` is legacy (the loop now
+`CHECKOUT_DEVICES_PATH` (audioviz). Weather needs outbound HTTPS to
+`api.open-meteo.com` from the daemon. `CHECKOUT_TICK_MS` is legacy (the loop now
 uses `LOOP_HZ`; kept for `--once`).
 
 ## Serial permissions
@@ -156,3 +181,5 @@ other code here is original Python.
   (v0.3.1): yes; 12 pages, confirmed names 0–5. See "Code pages" in `docs/history.md`.
 - [x] ~~Whether extended mode exposes the library's claimed 4 brightness levels~~
   — RESOLVED (v0.6.2): yes, four levels `0x20`/`0x40`/`0x60`/`0xFF` confirmed on glass.
+- [ ] Whether `0x10 pos 0x13` shows the cursor block at a cell that was only
+  positioned (weather `tick`), and how the block looks over the colon (v1.4.0).

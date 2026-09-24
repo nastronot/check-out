@@ -45,6 +45,12 @@
   `state.json` self-coordination), so the ordering was cosmetic. `test_deploy.py`
   now asserts no unit references another checkout-* unit / `default.target` in an
   ordering key. Re-run `deploy/install.sh` to pick up the fixed units. (done)
+- **v1.4.0:** `weather` mode — date/weekday/HH:MM top line with an on/tick/pulse
+  colon (tick = hardware cursor, pulse = 1 s brightness sweep); high/low/current/
+  rain for a lat/lon on the bottom with inverted H/L/C/R label glyphs + a degree
+  glyph. Open-Meteo fetched on a daemon thread once per 15-min data refresh.
+  Spectrum's glyph swap generalised into mode glyph sets (+ re-sent after a
+  reset); `status.json` gains `cursor`, `mode_glyphs`, `weather`. (done)
 - **Phase 3:** more frames + rotation.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).
