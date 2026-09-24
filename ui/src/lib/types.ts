@@ -147,7 +147,7 @@ export interface Status {
   spectrum_level_r?: number | null;
   /** The glyph set a mode loaded (weather/spectrum); null = state.glyphs. */
   mode_glyphs?: GlyphMap | null;
-  /** Weather mode: the latest reading + fetch health; null elsewhere. */
+  /** Dynamic mode: the latest weather reading + fetch health; null elsewhere. */
   weather?: WeatherStatus | null;
   /** Dynamic + news on: per-source leads, the newest, whether an alert shows. */
   news?: NewsStatus | null;

@@ -89,7 +89,7 @@ def defaults() -> dict:
         "dynamic_colon": "tick",         # "on" | "tick" | "twinkle" | "pacman"
         "dynamic_colon_half": False,     # half speed: every colon loop takes 2 s
         "dynamic_pacman_solo": False,    # pacman colon: one sprite instead of both
-        "dynamic_pacman_sprite": "ghost",
+        "dynamic_pacman_sprite": "ghost",  # the solo sprite: "ghost" | "heart" | "pacman"
         # --- dynamic mode: news alerts (checkout/news.py) ---
         "news_enabled": False,           # poll the feeds while dynamic is on screen
         "news_topics": list(NEWS_TOPICS),   # any of "tech" | "politics" | "mississippi"
@@ -97,7 +97,7 @@ def defaults() -> dict:
         "news_gap_min": 10,              # at least this many minutes between alerts (0..60)
         "news_repeat": 1,                # extra scroll passes of the headline (0..5)
         "news_speed_ms": 250,            # headline scroll step (60..1000 ms)
-        "news_effect": "none",           # "none" | "flash" | "throb" brightness  # the solo sprite: "ghost" | "pacman"
+        "news_effect": "none",           # "none" | "flash" | "throb" brightness
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }

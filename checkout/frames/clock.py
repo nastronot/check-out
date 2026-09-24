@@ -40,7 +40,7 @@ def hh_mm(now: datetime, colon: str = ":") -> str:
     """12-hour ``HH:MM`` (no AM/PM), e.g. ``08:33`` (5 chars).
 
     ``colon`` is the one character between HH and MM, so a caller can blink or
-    animate it (weather mode) without re-deriving the layout.
+    animate it (dynamic mode) without re-deriving the layout.
     """
     return f"{_hour12(now):02d}{colon}{now.minute:02d}"
 

@@ -1,4 +1,4 @@
-"""Weather mode data: the Open-Meteo call, its reply, and the bottom line.
+"""Dynamic mode's weather: the Open-Meteo call, its reply, and the bottom line.
 
 One HTTP call returns everything the bottom line needs: the current
 temperature, plus hourly temperatures and rain amounts from which the high, the
