@@ -151,6 +151,7 @@
     { value: 'on', label: 'ON' },
     { value: 'tick', label: 'TICK' },
     { value: 'twinkle', label: 'TWINKLE' },
+    { value: 'pulse', label: 'PULSE' },
     { value: 'pacman', label: 'PACMAN' },
   ];
   const setColon = (c: DynamicColon) => patch({ dynamic_colon: c });
@@ -204,6 +205,7 @@
     on: 'A steady colon.',
     tick: 'The colon blinks every second.',
     twinkle: 'A star twinkles in place of the colon.',
+    pulse: 'The colon grows into a full bar and back, once a second.',
     pacman: 'Pacman eats the chosen sprite; Solo shows it alone (automatic when the date fills the line).',
   };
 

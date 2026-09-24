@@ -250,10 +250,11 @@ class _FakeFetcher:
 
 _WX = {"weather_lat": 41.9, "weather_lon": -87.6}
 _T = datetime(2026, 9, 23, 20, 33, 12)
-_T1 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_1])
-_T2 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_2])
-_T3 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_3])
+_T1 = chr(GLYPH_CODES[_weather.SLOT_ANIM_1])
+_T2 = chr(GLYPH_CODES[_weather.SLOT_ANIM_2])
+_T3 = chr(GLYPH_CODES[_weather.SLOT_ANIM_3])
 _TWINKLE = [" ", _T1, _T2, _T3, _T2, _T1]
+_PULSE = [_T1, _T2, _T3, _T2]
 
 
 def _top(colon, us, second=12, half=False):
@@ -267,8 +268,8 @@ def _top(colon, us, second=12, half=False):
 _MARK = chr(GLYPH_CODES[_weather.SLOT_MERIDIEM])
 
 
-def test_on_tick_twinkle_end_with_a_space_and_the_marker():
-    for colon in ("on", "tick", "twinkle"):
+def test_on_tick_twinkle_pulse_end_with_a_space_and_the_marker():
+    for colon in ("on", "tick", "twinkle", "pulse"):
         top = _top(colon, 0)
         assert len(top) == 20 and top[18:] == " " + _MARK, colon
     assert _top("on", 0) == "09/23/26 WED 08:33 " + _MARK
@@ -325,9 +326,15 @@ def test_twinkle_goes_straight_up_and_down_once_a_second():
     assert _loop("twinkle", 6) == _TWINKLE
 
 
+def test_pulse_grows_and_shrinks_once_a_second():
+    assert _loop("pulse", 4) == _PULSE
+    assert _top("pulse", 0)[15] == _T1                       # a loop starts on the two dots
+
+
 def test_half_speed_doubles_every_loop():
     assert _loop("tick", 2, half=True) == [":", " "]         # 1 s on, 1 s off
     assert _loop("twinkle", 6, half=True) == _TWINKLE
+    assert _loop("pulse", 4, half=True) == _PULSE
 
 
 def test_half_speed_leaves_on_steady():
@@ -448,3 +455,9 @@ def test_solo_switch_wins_whatever_the_width():
     from checkout.frames.dynamic import pacman_cast
     state = {"dynamic_pacman_solo": True, "dynamic_pacman_sprite": "heart"}
     assert pacman_cast(state, datetime(2026, 9, 23, 8, 33)) == "heart"
+
+
+def test_pulse_glyphs_match_the_drawn_frames():
+    assert _draw(_glyphs.PULSE_1) == [".....", ".....", "..#..", ".....", "..#..", ".....", "....."]
+    assert _draw(_glyphs.PULSE_2) == [".....", "..#..", "..#..", ".....", "..#..", "..#..", "....."]
+    assert _draw(_glyphs.PULSE_3) == ["..#..", "..#..", "..#..", ".....", "..#..", "..#..", "..#.."]

@@ -12,9 +12,11 @@ would change):
 - ``on``      — the font's standard ``:``, steady, then a space and an AM/PM
   marker glyph (the line is exactly 20 cells).
 - ``tick``    — the same, with the ``:`` blanking for half of each loop.
-  (twinkle also ends with the marker.)
+  (twinkle and pulse also end with the marker.)
 - ``twinkle`` — 6 frames straight up and down: blank, a dot, a diamond, four
   corner dots, the diamond, the dot.
+- ``pulse``   — 4 frames: the colon's two dots, a taller column, the full
+  column, the taller column; then back to the two dots.
 
 - ``pacman``  — ``9/23/26 WED 8:33`` (no leading zeros, one space between
   fields) left-aligned, and in the last two cells pacman eating the chosen
@@ -53,15 +55,16 @@ _US_PER_S = 1_000_000
 
 _BLANK = " "
 _MARK = chr(GLYPH_CODES[weather.SLOT_MERIDIEM])   # AM or PM, per the loaded glyph
-_TWINKLE_1 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_1])
-_TWINKLE_2 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_2])
-_TWINKLE_3 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_3])
+_ANIM_1 = chr(GLYPH_CODES[weather.SLOT_ANIM_1])
+_ANIM_2 = chr(GLYPH_CODES[weather.SLOT_ANIM_2])
+_ANIM_3 = chr(GLYPH_CODES[weather.SLOT_ANIM_3])
 
 # The frames of each animated colon, spread evenly across the loop. Each loop
 # wraps back to its first frame, so every frame is the same length.
 _LOOPS = {
     "tick": (":", _BLANK),
-    "twinkle": (_BLANK, _TWINKLE_1, _TWINKLE_2, _TWINKLE_3, _TWINKLE_2, _TWINKLE_1),
+    "twinkle": (_BLANK, _ANIM_1, _ANIM_2, _ANIM_3, _ANIM_2, _ANIM_1),
+    "pulse": (_ANIM_1, _ANIM_2, _ANIM_3, _ANIM_2),
 }
 
 

@@ -26,6 +26,12 @@ TWINKLE_DOT = [0, 0, 0, 4, 0, 0, 0]          # twinkle: a single centre dot
 TWINKLE_DIAMOND = [0, 0, 4, 10, 4, 0, 0]     # twinkle: a small diamond around it
 TWINKLE_CORNERS = [0, 0, 10, 0, 10, 0, 0]    # twinkle: four corner dots
 
+# Dynamic clock colon animation (pulse): a centre column that grows out from
+# the colon's two dots and back, like a level meter.
+PULSE_1 = [0, 0, 4, 0, 4, 0, 0]              # pulse: the colon's two dots
+PULSE_2 = [0, 4, 4, 0, 4, 4, 0]              # pulse: two dots each way
+PULSE_3 = [4, 4, 4, 0, 4, 4, 4]              # pulse: the full column
+
 # AM / PM markers for the on/tick clock: the letter stacked over an M.
 AM = [14, 17, 31, 17, 10, 21, 21]
 PM = [14, 17, 15, 1, 10, 21, 21]

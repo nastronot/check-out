@@ -20,10 +20,10 @@ export type MarqueeBottom = 'static';
 /** Per-row content source for message rows. */
 export type ScrollSource = 'message' | 'clock';
 
-/** Dynamic time feature: steady colon, blinking colon, the twinkle animation,
- *  or the pacman layout. dynamic_colon_half runs tick / twinkle / pacman at half
+/** Dynamic time feature: steady colon, blinking colon, the twinkle / pulse animations,
+ *  or the pacman layout. dynamic_colon_half runs tick / twinkle / pulse / pacman at half
  *  speed (2 s loops). */
-export type DynamicColon = 'on' | 'tick' | 'twinkle' | 'pacman';
+export type DynamicColon = 'on' | 'tick' | 'twinkle' | 'pulse' | 'pacman';
 /** Pacman colon: the sprite shown alone when solo (also forced automatically
  *  when the date/time is as wide as it gets). */
 export type DynamicPacmanSprite = 'ghost' | 'heart' | 'pacman';

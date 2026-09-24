@@ -77,7 +77,7 @@ BEFORE its stamp), not the calendar day; C is the current reading. The rain
 field uses the fewest digits that fit 3 cells: `.04` / `1.2` / ` 42`. Both lines are always centered
 (`DynamicFrame.align`; a frame's `align` overrides the Justify setting), so the UI
 hides Justify in weather. State:
-`weather_lat`, `weather_lon`, `dynamic_colon` (`on` | `tick` | `twinkle` | `pacman`),
+`weather_lat`, `weather_lon`, `dynamic_colon` (`on` | `tick` | `twinkle` | `pulse` | `pacman`),
 `dynamic_colon_half` (bool), `dynamic_pacman_solo` (bool) +
 `dynamic_pacman_sprite` (`ghost` | `heart` | `pacman`, remembered while solo
 is off);
@@ -90,13 +90,15 @@ the earlier `weather_pacman` key and development colon names migrate on load.
 - **Colon:** the colon cell changes CHARACTER, one frame list per setting
   (`frames/dynamic.py` `_LOOPS`), spread evenly over a 1 s loop (2 s with
   `dynamic_colon_half`), locked to the wall clock: `on` = the font's standard `:`,
-  steady; `tick` = `:` then blank. On/tick/twinkle end the line with a space
+  steady; `tick` = `:` then blank. On/tick/twinkle/pulse end the line with a space
   and the AM/PM marker (exactly 20 cells); `twinkle` = 6 frames straight up and
-  down (dot, diamond, four corner dots). Every feature keeps the 5 labels in
+  down (dot, diamond, four corner dots); `pulse` = 4 frames: the colon's two
+  dots, a taller centre column, the full column, the taller column (glyph slots
+  5-7 are shared, `SLOT_ANIM_1..3`). Every feature keeps the 5 labels in
   slots 0-4 and loads its own glyphs above them via `weather.glyph_set(colon)`
-  (key `("dynamic", family)`): on/tick 6/9 (marker), twinkle 9/9 (3 frames +
+  (key `("dynamic", family)`): on/tick 6/9 (marker), twinkle / pulse 9/9 (3 frames +
   marker), pacman duo 9/9, pacman solo 7/9. The AM/PM marker (on,
-  tick, twinkle) is ONE slot (8) loaded with AM or PM — the key names which
+  tick, twinkle, pulse) is ONE slot (8) loaded with AM or PM — the key names which
   (`clock-am`, `twinkle-pm`…), so it reloads at noon/midnight. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
   between fields; 15-18 cells) left-aligned, then two sprite cells (18-19).
