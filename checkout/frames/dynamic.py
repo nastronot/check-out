@@ -36,11 +36,14 @@ Only the colon cell changes, so the daemon's cell-diff writes one cell.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from .. import weather
 from ..config import COLS
 from ..driver import GLYPH_CODES
+from ..news import Headline
+from . import news_alert
 from .base import Frame
 from .clock import compact_date_time, short_date_time
 
@@ -124,14 +127,93 @@ def pacman_top(state: dict, now: datetime) -> str:
     return compact_date_time(now).ljust(COLS - 2) + cells
 
 
+@dataclass
+class _Alert:
+    headline: Headline
+    started_ms: int
+    speed_ms: int
+    ends_ms: int
+
+
+def _ms(now: datetime) -> int:
+    return int(now.timestamp() * 1000)
+
+
 class DynamicFrame(Frame):
+    """Time + weather, interrupted by NEWS ALERTs.
+
+    ``fetcher`` is the weather fetcher, ``news`` the news fetcher (both run on
+    background threads). :meth:`tick` — called by the daemon every loop —
+    points them at what to fetch and starts / ends alerts; :meth:`render` and
+    :meth:`brightness` then draw whichever screen is current.
+    """
+
     name = "dynamic"
     align = "center"  # always centered; the bottom line fills all 20 cells anyway
 
-    def __init__(self, fetcher) -> None:
+    def __init__(self, fetcher, news=None) -> None:
         self.fetcher = fetcher
+        self.news = news
+        self._alert: _Alert | None = None
+
+    # --- driving the fetchers and alerts ------------------------------------------
+    def tick(self, now: datetime, state: dict, active: bool = True) -> None:
+        """Configure the fetchers; end a finished alert, start a pending one.
+
+        ``active`` is whether dynamic is the mode on screen: outside it nothing
+        is fetched and any alert ends.
+        """
+        self.fetcher.set_location(weather.location(state) if active else None)
+        if self.news is None:
+            return
+        enabled = active and bool(state.get("news_enabled"))
+        interval_s = int(state.get("news_interval_min", 5)) * 60
+        self.news.set_config(state.get("news_sources") if enabled else None, interval_s)
+        if not enabled:
+            self._alert = None
+            return
+        if self._alert is not None and _ms(now) >= self._alert.ends_ms:
+            self._alert = None
+        if self._alert is None:
+            pending = self.news.take_alert()
+            if pending is not None:
+                self._start(pending, now, state)
+
+    def show_latest(self, now: datetime, state: dict | None = None) -> bool:
+        """Play the alert for the newest headline now; False if there is none."""
+        latest = self.news.latest() if self.news is not None else None
+        if latest is None:
+            return False
+        self._start(latest, now, state or {})
+        return True
+
+    def alerting(self, now: datetime) -> bool:
+        return self._alert is not None and _ms(now) < self._alert.ends_ms
+
+    def _start(self, headline: Headline, now: datetime, state: dict) -> None:
+        speed = int(state.get("news_speed_ms", 250))
+        repeat = int(state.get("news_repeat", 1))
+        started = _ms(now)
+        self._alert = _Alert(headline, started, speed,
+                             started + news_alert.duration_ms(headline.title, repeat, speed))
+
+    # --- drawing ---------------------------------------------------------------------
+    def brightness(self, now: datetime, state: dict, base: int) -> int | None:
+        if not self.alerting(now):
+            return None
+        elapsed = _ms(now) - self._alert.started_ms
+        effect = state.get("news_effect")
+        if effect == "flash":
+            return news_alert.flash_level(elapsed, base)
+        if effect == "throb":
+            return news_alert.throb_level(elapsed)
+        return None
 
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
+        if self.alerting(now):
+            a = self._alert
+            return news_alert.banner(), news_alert.window(
+                a.headline.title, _ms(now) - a.started_ms, a.speed_ms)
         if colon_mode(state) == "pacman":
             top = pacman_top(state, now)
         else:

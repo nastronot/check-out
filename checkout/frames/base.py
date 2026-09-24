@@ -26,3 +26,9 @@ class Frame(abc.ABC):
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
         """Return logical (top, bottom) strings for the given time/state."""
         raise NotImplementedError
+
+    def brightness(self, now: datetime, state: dict, base: int) -> int | None:
+        """A brightness level (0..3) this frame wants right now, overriding the
+        animation; None = no opinion (the default). ``base`` is the level the
+        user set, for effects that return to it."""
+        return None

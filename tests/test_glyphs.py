@@ -37,3 +37,14 @@ def test_label_glyph_returns_a_copy():
     g = glyphs.label_glyph("H")
     g[0] = 0
     assert glyphs.LABEL_H[0] == 31
+
+
+def test_bar_lights_whole_columns():
+    assert glyphs.bar(4) == [8] * 7
+    assert glyphs.bar(2, 3, 4, 5) == [30] * 7
+
+
+def test_news_banner_bars_match_the_drawn_slots():
+    # {g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7} as drawn in the glyph editor
+    assert [r[0] for r in glyphs.NEWS_BANNER_LEFT] == [30, 14, 12, 8]
+    assert [r[0] for r in glyphs.NEWS_BANNER_RIGHT] == [2, 6, 14, 15]

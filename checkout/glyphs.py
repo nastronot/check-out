@@ -39,6 +39,17 @@ PACMAN_OPEN = [0, 14, 28, 24, 28, 14, 0]    # faces left, mouth open
 HEART_FULL = [0, 10, 31, 31, 14, 4, 0]      # heart, filled
 HEART_EMPTY = [0, 10, 21, 17, 10, 4, 0]     # heart, outline
 
+def bar(*columns: int) -> list[int]:
+    """A full-height bar lighting the given columns (1 = leftmost .. 5)."""
+    row = sum(1 << (c - 1) for c in columns)
+    return [row] * 7
+
+
+# NEWS ALERT banner: bars that fill in toward the words, drawn in the glyph editor
+# as {g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}.
+NEWS_BANNER_LEFT = [bar(2, 3, 4, 5), bar(2, 3, 4), bar(3, 4), bar(4)]
+NEWS_BANNER_RIGHT = [bar(2), bar(2, 3), bar(2, 3, 4), bar(1, 2, 3, 4)]
+
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
 
 
