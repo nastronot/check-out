@@ -38,6 +38,111 @@ def test_message_empty():
     assert MessageFrame().render(NOW, {"message": ""}) == ("", "")
 
 
+# --- message rows: per-row source, scroll and direction (merged scroll mode) ---
+from datetime import timedelta  # noqa: E402
+
+from checkout.frames.message import SCROLL_FLOOR_MS  # noqa: E402
+
+EPOCH = datetime.fromtimestamp(0)
+
+
+def _msg(state, ms=0, now=None):
+    """Render like the daemon does: the frame, then fit/align to 20 cells."""
+    now = (now or EPOCH) + timedelta(milliseconds=ms)
+    return render_lines(*MessageFrame().render(now, state),
+                        top_align=state.get("align_top", "center"),
+                        bottom_align=state.get("align_bottom", "center"))
+
+
+def test_scroll_top_only_left():
+    state = {
+        "message": "A LONG MESSAGE THAT SCROLLS ACROSS THE TOP ROW",
+        "scroll_top": True, "scroll_bottom": False,
+        "scroll_dir_top": "left", "scroll_speed_ms": 100,
+    }
+    top0, bottom0 = _msg(state, 0)
+    top1, _ = _msg(state, 300)  # +3 steps
+    assert len(top0) == 20 and top0 != top1   # top scrolls
+    assert bottom0 == " " * 20                  # bottom static + empty
+
+
+def test_scroll_direction_reverses_offset():
+    state = {"message": "0123456789ABCDEFGHIJKLMNOPQRST", "scroll_top": True,
+             "scroll_dir_top": "left", "scroll_speed_ms": 100}
+    left = _msg({**state, "scroll_dir_top": "left"}, 300)[0]
+    right = _msg({**state, "scroll_dir_top": "right"}, 300)[0]
+    base = _msg(state, 0)[0]
+    assert left != right          # opposite directions diverge
+    assert left != base and right != base
+
+
+def test_scroll_both_rows_independent():
+    state = {
+        "message": "TOP LINE IS LONG ENOUGH TO SCROLL\nBOTTOM LINE ALSO LONG ENOUGH",
+        "scroll_top": True, "scroll_bottom": True,
+        "scroll_dir_top": "left", "scroll_dir_bottom": "right", "scroll_speed_ms": 100,
+    }
+    top, bottom = _msg(state, 500)
+    assert len(top) == 20 and len(bottom) == 20
+    assert top.strip() and bottom.strip()
+
+
+def test_scroll_speed_clamped_to_floor():
+    # A 1ms request can't outrun the floor: it advances at SCROLL_FLOOR_MS.
+    state = {"message": "X" * 40 + "Y", "scroll_top": True, "scroll_dir_top": "left",
+             "scroll_speed_ms": 1}
+    assert _msg(state, SCROLL_FLOOR_MS - 1)[0] == _msg(state, 0)[0]
+
+
+def test_clock_source_row_shows_time_and_ticks():
+    state = {"message": "IGNORED TOP\nIGNORED BOTTOM",
+             "scroll_top_source": "clock", "scroll_bottom_source": "message"}
+    top0, bottom0 = _msg(state, now=datetime(2026, 6, 19, 12, 0, 0))
+    top1, _ = _msg(state, now=datetime(2026, 6, 19, 12, 0, 1))
+    assert top0.strip() == "12:00:00 PM"   # clock TIME line, not the message
+    assert top1.strip() == "12:00:01 PM"   # ticks each second
+    assert bottom0.strip() == "IGNORED BOTTOM"
+
+
+def test_clock_top_scrolling_message_bottom():
+    state = {
+        "message": "\nA LONG BOTTOM MESSAGE THAT SCROLLS ACROSS THE ROW",
+        "scroll_top_source": "clock", "scroll_bottom_source": "message",
+        "scroll_bottom": True, "scroll_dir_bottom": "left", "scroll_speed_ms": 100,
+    }
+    now = datetime(2026, 6, 19, 12, 0, 0)
+    top, b0 = _msg(state, 0, now)
+    b1 = _msg(state, 300, now)[1]
+    assert top.strip() == "12:00:00 PM"
+    assert len(b0) == 20 and b0 != b1  # bottom message scrolls
+
+
+def test_static_single_line_still_word_wraps():
+    # Neither row scrolls, no line break: the old message-mode wrap is kept.
+    state = {"message": "the quick brown fox jumps over"}
+    assert [r.strip() for r in _msg(state)] == ["the quick brown fox", "jumps over"]
+
+
+def test_scrolling_single_line_stays_on_the_top_row():
+    state = {"message": "the quick brown fox jumps over", "scroll_top": True,
+             "scroll_speed_ms": 100}
+    top, bottom = _msg(state)
+    assert top.startswith("the quick brown fox ")
+    assert bottom.strip() == ""
+
+
+def test_single_line_under_a_clock_top_goes_to_the_bottom_row():
+    state = {"message": "HELLO", "scroll_top_source": "clock"}
+    top, bottom = _msg(state, now=datetime(2026, 6, 19, 12, 0, 0))
+    assert top.strip() == "12:00:00 PM"
+    assert bottom.strip() == "HELLO"
+
+
+def test_static_rows_keep_their_alignment():
+    state = {"message": "HI\nTHERE", "align_top": "left", "align_bottom": "right"}
+    assert _msg(state) == ("HI".ljust(20), "THERE".rjust(20))
+
+
 def test_ticker_short_message_does_not_scroll():
     top, bottom = TickerFrame().render(NOW, {"message": "hi", "scroll_speed_ms": 300})
     assert top == "hi".ljust(20)

@@ -1,6 +1,8 @@
 // Mirrors checkout/state.py — keep in sync with the daemon's schema.
 
-export type Mode = 'clock' | 'message' | 'scroll' | 'marquee' | 'spectrum' | 'weather';
+/** 'scroll' merged into 'message' (v1.4.0); 'marquee' is still valid but its
+ *  button is hidden in the UI. */
+export type Mode = 'clock' | 'message' | 'marquee' | 'spectrum' | 'weather';
 /** Spectrum audio source: the mic, or a PipeWire/Pulse monitor of playback. */
 export type AudioSource = 'mic' | 'system';
 /** Spectrum render style: filled bars, or a single-row line per band (the peak). */
@@ -136,7 +138,7 @@ export interface LibraryMessage {
   id: string;
   name: string;
   message: string;
-  mode: 'message' | 'scroll';
+  mode: 'message';
   align_top: Align;
   align_bottom: Align;
   brightness: Brightness;

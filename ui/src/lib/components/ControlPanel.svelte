@@ -20,7 +20,11 @@
   export let status: Status | null = null;
   export let patch: (p: Partial<AppState>) => void;
 
-  const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee', 'spectrum', 'weather'];
+  // 'marquee' is HIDDEN (v1.4.0), not removed: the hardware ticker scrolls only
+  // the top row at one fixed speed, which message mode's software scroll does
+  // better. Its daemon path and its panel below still work — add it back here to
+  // show the button again. ('scroll' merged into 'message' in v1.4.0.)
+  const MODES: Mode[] = ['clock', 'message', 'spectrum', 'weather'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
   const ALIGNS: Align[] = ['left', 'center', 'right'];
 
@@ -189,14 +193,14 @@
       </div>
     </div>
 
-    <!-- Message (drives message + scroll modes) -->
-    {#if state.mode === 'message' || state.mode === 'scroll'}
+    <!-- Message (per-row source, scroll and direction below) -->
+    {#if state.mode === 'message'}
       <div class="field">
         <span class="field__label">
           Message
-          <!-- Budget warning is MESSAGE-only: in SCROLL mode long text is the
-               point (it scrolls), so length is never flagged there. -->
-          {#if state.mode === 'message'}
+          <!-- Budget warning only while nothing scrolls: when a row scrolls,
+               long text is the point, so length is never flagged. -->
+          {#if !state.scroll_top && !state.scroll_bottom}
             {#if budget.hasNewline}
               <span class="budget">
                 <span class:over={budget.topOver}>top {budget.top}/20</span>
@@ -218,8 +222,8 @@
         <span class="field__hint">
           Press <kbd>Enter</kbd> for a line break (splits top/bottom). Use
           <code>{'{g0}'}</code>…<code>{'{g8}'}</code> for custom glyphs (light up
-          once defined).{#if state.mode === 'scroll'} In SCROLL mode each line can
-          scroll independently (below); long lines scroll, short ones sit aligned.{/if}
+          once defined). Each row can scroll on its own (below); a single line
+          with nothing scrolling word-wraps across both rows.
         </span>
       </div>
     {/if}
@@ -256,7 +260,7 @@
       <p class="tip">
         Hardware ticker: top row only, fixed speed, 45-char buffer. The bottom row
         is static — changing it briefly interrupts the top scroll. For a live
-        clock/news ticker, use <strong>SCROLL</strong>.
+        clock/news ticker, use <strong>MESSAGE</strong>.
       </p>
     {/if}
 
@@ -525,12 +529,12 @@
     </div>
     {/if}
 
-    <!-- SCROLL: per-row content source + scroll + direction + speed. The
-         flexible, news-ready mode: each row picks a source (Message|Clock, room
-         for more) and, for a Message row, whether/how it scrolls. -->
-    {#if state.mode === 'scroll'}
+    <!-- MESSAGE ROWS: per-row content source + scroll + direction + speed. Each
+         row picks a source (Message|Clock, room for more) and, for a Message
+         row, whether/how it scrolls. (Was the separate SCROLL mode.) -->
+    {#if state.mode === 'message'}
       <div class="field">
-        <span class="field__label">Scroll rows</span>
+        <span class="field__label">Rows</span>
         <div class="scroll-rows">
           <!-- TOP row -->
           <div class="scroll-row">

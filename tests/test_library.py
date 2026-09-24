@@ -141,3 +141,11 @@ def test_glyph_rows_masked_to_low_5_bits(client):
         "/api/library/glyphs", json={"name": "full", "rows": [255, 255, 0, 0, 0, 0, 0]}
     ).json()
     assert item["rows"][0] == 31  # 0xFF & 0x1F
+
+
+def test_saved_scroll_messages_recall_as_message():
+    # "scroll" merged into "message" in v1.4.0; old library items still recall.
+    from web import library as lib
+
+    patch = lib.message_to_state_patch({"mode": "scroll", "message": "HI"})
+    assert patch["mode"] == "message"

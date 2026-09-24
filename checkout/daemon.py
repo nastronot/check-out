@@ -54,16 +54,12 @@ from .driver import (
 # Invalid/unknown brightness values are coerced to this index once (one warning).
 _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
-from .frames.clock import ClockFrame, clock_time
+from .frames.clock import ClockFrame
 from .frames.message import MessageFrame
 from .frames.weather import WeatherFrame, colon_mode
-from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
+from .renderer import WIDTH, fit_line, render_lines, ticker_window
 from .state import load_state, save_status
 from . import spectrum, weather
-
-# Software scroll: each step redraws ~40 bytes at 9600 baud (~40ms on the wire),
-# so a step faster than this floor can't keep up — clamp scroll_speed_ms to it.
-SCROLL_FLOOR_MS = 60
 
 # status.json write throttle (ms between writes) derived from config.STATUS_HZ:
 # the fast loop runs ~30Hz but the status mirror is refreshed at most this often.
@@ -78,8 +74,8 @@ MARQUEE_PREVIEW_STEP_MS = 150
 # so they decay toward 0 each tick (don't freeze on the last frame).
 SPECTRUM_STALE_MS = 200
 
-# Static frames, keyed by name. "scroll" + "marquee" are handled specially in
-# the tick (they need per-row offsets / the hardware ticker), not via a Frame.
+# Frames, keyed by name. "marquee" is handled specially in the tick (the
+# hardware ticker), not via a Frame; "message" covers the old "scroll" mode.
 # Weather's fetcher lives on its frame so tests can swap in a threadless one.
 WEATHER_FRAME = WeatherFrame(weather.WeatherFetcher(log=lambda m: log(m)))
 FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), WEATHER_FRAME)}
@@ -87,8 +83,8 @@ DEFAULT_FRAME = "clock"
 
 
 def _norm_mode(mode) -> str:
-    """Legacy mode "ticker" is the old single-line top scroll — now "scroll"."""
-    return "scroll" if mode == "ticker" else mode
+    """Legacy modes "scroll" and "ticker" are now the merged "message" mode."""
+    return "message" if mode in ("scroll", "ticker") else mode
 
 _ALIGNMENTS = ("left", "center", "right")
 
@@ -439,60 +435,6 @@ def _apply_settings(
         ctx["last_code_page"] = code_page
 
 
-def _scroll_offset(now_ms: int, speed_ms, scroll: bool, direction) -> int | None:
-    """Per-row software-scroll offset, or None for a static (non-scrolling) row.
-
-    Direction reverses the stepping: "left" advances the offset (text moves left,
-    new chars enter from the right); "right" decrements it (text moves right).
-    """
-    if not scroll:
-        return None
-    step = max(SCROLL_FLOOR_MS, int(speed_ms or 300))
-    raw = now_ms // step
-    return -raw if direction == "right" else raw
-
-
-def _scroll_row(
-    state: dict, now: datetime, now_ms: int, which: str, text: str, speed
-) -> str:
-    """Render one row of mode "scroll" per its content source.
-
-    ``source`` (``scroll_{which}_source``) selects what the row shows:
-      - "clock"   -> the live TIME line (HH:MM:SS AM/PM), refreshed each second,
-                     statically aligned (no software scroll). (TODO: a date-vs-time
-                     sub-choice; defaults to time.)
-      - "message" -> ``text`` (this row of the message), which scrolls left/right
-                     per ``scroll_{which}`` + ``scroll_dir_{which}`` or sits aligned.
-    EXTENSION POINT: a future "news" source renders here the same way.
-    """
-    source = state.get(f"scroll_{which}_source", "message")
-    align = _align(state.get(f"align_{which}"))
-    if source == "clock":
-        return render_line(clock_time(now), align=align)
-    offset = _scroll_offset(
-        now_ms, speed, bool(state.get(f"scroll_{which}")),
-        state.get(f"scroll_dir_{which}"),
-    )
-    return render_line(text, align=align, offset=offset)
-
-
-def render_scroll(state: dict, now_ms: int, now: datetime | None = None) -> tuple[str, str]:
-    """Render mode "scroll": each row picks a content SOURCE (message|clock) and,
-    for "message", independently scrolls left/right or sits aligned. The flexible,
-    news-ready mode. Glyph cells count as one. ``now`` is needed for a clock row."""
-    now = now or datetime.now()
-    msg = apply_glyph_placeholders(state.get("message") or "")
-    if "\n" in msg:
-        ltop, _, lbottom = msg.partition("\n")
-    else:
-        ltop, lbottom = msg, ""
-    speed = state.get("scroll_speed_ms", 300)
-    return (
-        _scroll_row(state, now, now_ms, "top", ltop, speed),
-        _scroll_row(state, now, now_ms, "bottom", lbottom, speed),
-    )
-
-
 def _tick_marquee(driver: VFDDriver, state: dict, ctx: dict, now, now_ms: int) -> None:
     """Drive marquee mode: hardware ticker on the top, STATIC bottom row.
 
@@ -722,15 +664,12 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         top, bottom = _BLANK_LINE, _BLANK_LINE
         emit: tuple = ("blank",)
     else:
-        if mode == "scroll":
-            top, bottom = render_scroll(state, now_ms, now)
-        else:
-            frame = FRAMES.get(mode, FRAMES[DEFAULT_FRAME])
-            top, bottom = render_lines(
-                *frame.render(now, state),
-                top_align=_align(state.get("align_top")),
-                bottom_align=_align(state.get("align_bottom")),
-            )
+        frame = FRAMES.get(mode, FRAMES[DEFAULT_FRAME])
+        top, bottom = render_lines(
+            *frame.render(now, state),
+            top_align=_align(state.get("align_top")),
+            bottom_align=_align(state.get("align_bottom")),
+        )
         emit = resolve_emit(now_ms, animation, params, top, bottom)
 
     # 5. display settings (brightness incl. blink/pulse, scroll mode, code page).

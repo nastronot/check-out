@@ -108,101 +108,16 @@ def test_pulse_distinct_from_blink_and_flash():
     assert blink_levels == {0, 3}  # blink only snaps between MIN and the base
 
 
-# --- software scroll (mode "scroll") -----------------------------------------
-def test_render_scroll_top_only_left():
-    state = {
-        "message": "A LONG MESSAGE THAT SCROLLS ACROSS THE TOP ROW",
-        "scroll_top": True,
-        "scroll_bottom": False,
-        "scroll_dir_top": "left",
-        "scroll_speed_ms": 100,
-    }
-    top0, bottom0 = daemon.render_scroll(state, 0)
-    top1, _ = daemon.render_scroll(state, 300)  # +3 steps
-    assert len(top0) == 20 and top0 != top1   # top scrolls
-    assert bottom0 == " " * 20                  # bottom static + empty
-
-
-def test_render_scroll_direction_reverses_offset():
-    state = {
-        "message": "0123456789ABCDEFGHIJKLMNOPQRST",
-        "scroll_top": True,
-        "scroll_dir_top": "left",
-        "scroll_speed_ms": 100,
-    }
-    left = daemon.render_scroll({**state, "scroll_dir_top": "left"}, 300)[0]
-    right = daemon.render_scroll({**state, "scroll_dir_top": "right"}, 300)[0]
-    base = daemon.render_scroll(state, 0)[0]
-    assert left != right          # opposite directions diverge
-    assert left != base and right != base
-
-
-def test_render_scroll_both_rows_independent():
-    state = {
-        "message": "TOP LINE IS LONG ENOUGH TO SCROLL\nBOTTOM LINE ALSO LONG ENOUGH",
-        "scroll_top": True,
-        "scroll_bottom": True,
-        "scroll_dir_top": "left",
-        "scroll_dir_bottom": "right",
-        "scroll_speed_ms": 100,
-    }
-    top, bottom = daemon.render_scroll(state, 500)
-    assert len(top) == 20 and len(bottom) == 20
-    assert top.strip() and bottom.strip()
-
-
-def test_scroll_speed_clamped_to_floor():
-    # A 1ms request can't outrun the floor: it advances at SCROLL_FLOOR_MS.
-    state = {"message": "X" * 40, "scroll_top": True, "scroll_dir_top": "left",
-             "scroll_speed_ms": 1}
-    # Within one floor window the offset is identical (no per-1ms stepping).
-    a = daemon.render_scroll(state, daemon.SCROLL_FLOOR_MS - 1)[0]
-    b = daemon.render_scroll(state, 0)[0]
-    assert a == b
-
-
-def test_render_scroll_clock_source_shows_time_and_ticks(monkeypatch):
-    # A row whose source is "clock" shows the TIME line and updates each second.
-    state = {
-        "message": "IGNORED TOP\nIGNORED BOTTOM",
-        "scroll_top_source": "clock",
-        "scroll_bottom_source": "message",
-    }
-    t0 = datetime(2026, 6, 19, 12, 0, 0)
-    t1 = datetime(2026, 6, 19, 12, 0, 1)
-    top0, bottom0 = daemon.render_scroll(state, 0, t0)
-    top1, _ = daemon.render_scroll(state, 0, t1)
-    assert top0.strip() == "12:00:00 PM"   # clock TIME line, not the message
-    assert top1.strip() == "12:00:01 PM"   # ticks each second
-    assert bottom0.strip() == "IGNORED BOTTOM"  # message row unaffected
-
-
-def test_render_scroll_mixed_clock_top_scrolling_message_bottom():
-    # Top clock (static, refreshed) + bottom scrolling message both render 20-wide.
-    state = {
-        "message": "\nA LONG BOTTOM MESSAGE THAT SCROLLS ACROSS THE ROW",
-        "scroll_top_source": "clock",
-        "scroll_bottom_source": "message",
-        "scroll_bottom": True,
-        "scroll_dir_bottom": "left",
-        "scroll_speed_ms": 100,
-    }
-    now = datetime(2026, 6, 19, 12, 0, 0)
-    b0 = daemon.render_scroll(state, 0, now)[1]
-    b1 = daemon.render_scroll(state, 300, now)[1]
-    top = daemon.render_scroll(state, 0, now)[0]
-    assert top.strip() == "12:00:00 PM"
-    assert len(b0) == 20 and b0 != b1  # bottom message scrolls
-
-
-def test_legacy_ticker_mode_renders_as_scroll(monkeypatch):
-    monkeypatch.setattr(daemon, "save_status", lambda s: None)
-    drv = _CountingDriver()
-    ctx = daemon._new_ctx()
-    # mode "ticker" (legacy) must drive the scroll path, not crash / blank.
-    state = {"mode": "ticker", "message": "X" * 40, "scroll_top": True}
-    daemon.tick_once(drv, state, ctx, now=NOW)
-    assert drv.shows == 1
+def test_legacy_ticker_and_scroll_modes_render_as_message(monkeypatch):
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    for legacy in ("ticker", "scroll"):
+        drv = _CountingDriver()
+        # Legacy modes must drive the merged message path, not crash / blank.
+        state = {"mode": legacy, "message": "X" * 40, "scroll_top": True}
+        daemon.tick_once(drv, state, daemon._new_ctx(), now=NOW)
+        assert drv.shows == 1, legacy
+        assert written[-1]["top"].strip() == "X" * 20, legacy
 
 
 # --- marquee (hardware ticker) -----------------------------------------------
@@ -379,16 +294,20 @@ def test_fast_loop_clock_emits_once_per_second_and_throttles_status(monkeypatch)
 def test_fast_loop_scroll_steps_on_elapsed_time(monkeypatch):
     """Scroll advances by ELAPSED time (now_ms // speed), independent of how many
     fast iterations happen — so it steps at scroll_speed_ms, not the loop rate."""
+    from datetime import timedelta
+
+    from checkout.frames.message import MessageFrame
+
     state = {
-        "mode": "scroll",
+        "mode": "message",
         "message": "A LONG SCROLLING MESSAGE ACROSS THE TOP ROW OF THE DISPLAY",
         "scroll_top": True, "scroll_dir_top": "left", "scroll_speed_ms": 200,
     }
+    t0 = datetime.fromtimestamp(0)
     # Two instants in the SAME 200ms window render identically; crossing the
     # window boundary advances the window.
-    a = daemon.render_scroll(state, 0)[0]
-    b = daemon.render_scroll(state, 199)[0]
-    c = daemon.render_scroll(state, 200)[0]
+    a, b, c = (MessageFrame().render(t0 + timedelta(milliseconds=ms), state)[0]
+               for ms in (0, 199, 200))
     assert a == b      # same step window
     assert a != c      # advanced after speed_ms elapsed
 

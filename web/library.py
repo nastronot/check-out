@@ -28,7 +28,8 @@ from checkout.state import atomic_write_json
 # Reasonable caps so the file can't grow unbounded.
 MAX_ITEMS = 200
 GLYPH_ROWS = 7
-_MODES = ("message", "scroll")
+# Saved messages are always mode "message" ("scroll" merged into it in v1.4.0;
+# older items saved as "scroll" still recall, as "message").
 _ALIGNS = ("left", "center", "right")
 
 
@@ -92,9 +93,7 @@ def add_message(payload: dict) -> dict:
     library = load_library()
     if len(library["messages"]) >= MAX_ITEMS:
         raise LibraryError(f"message library is full (max {MAX_ITEMS})")
-    mode = payload.get("mode", "message")
-    if mode not in _MODES:
-        mode = "message"
+    mode = "message"
     item = {
         "id": uuid.uuid4().hex,
         "name": _clean_name(payload.get("name")),
@@ -135,7 +134,7 @@ def message_to_state_patch(item: dict) -> dict:
     refs light up — this is the one bridge from library to live state.
     """
     return {
-        "mode": item.get("mode", "message"),
+        "mode": "message",
         "message": item.get("message", ""),
         "align_top": item.get("align_top", "center"),
         "align_bottom": item.get("align_bottom", "center"),

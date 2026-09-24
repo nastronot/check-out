@@ -47,7 +47,7 @@ def test_marquee_and_scroll_fields_default(state_path):
     assert loaded["marquee_bottom_text"] == ""
     assert loaded["scroll_top_source"] == "message"
     assert loaded["scroll_bottom_source"] == "message"
-    assert loaded["scroll_top"] is True
+    assert loaded["scroll_top"] is False   # off by default since the v1.4.0 merge
     assert loaded["scroll_bottom"] is False
     assert loaded["scroll_dir_top"] == "left"
     assert loaded["scroll_dir_bottom"] == "left"
@@ -144,15 +144,21 @@ def test_audio_decay_zero_passes_through(state_path):
     assert state.load_state()["audio_decay"] == 0.0
 
 
-def test_legacy_ticker_mode_migrates_to_scroll(state_path):
+def test_legacy_ticker_and_scroll_modes_migrate_to_message(state_path):
     import json
 
-    state_path.write_text(json.dumps({"mode": "ticker", "message": "X"}))
+    for legacy in ("ticker", "scroll"):
+        state_path.write_text(json.dumps({"mode": legacy, "message": "X"}))
+        loaded = state.load_state()
+        assert loaded["mode"] == "message", legacy   # merged in v1.4.0
+        assert loaded["message"] == "X"
+        # And it self-heals on disk (written back as "message").
+        assert json.loads(state_path.read_text())["mode"] == "message"
+
+
+def test_scroll_is_off_by_default(state_path):
     loaded = state.load_state()
-    assert loaded["mode"] == "scroll"  # legacy "ticker" -> "scroll"
-    assert loaded["message"] == "X"
-    # And it self-heals on disk (written back as "scroll").
-    assert json.loads(state_path.read_text())["mode"] == "scroll"
+    assert loaded["scroll_top"] is False and loaded["scroll_bottom"] is False
 
 
 def test_marquee_mode_round_trips(state_path):

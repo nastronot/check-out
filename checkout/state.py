@@ -37,7 +37,7 @@ def _now_iso() -> str:
 def defaults() -> dict:
     """A fresh state dict with every key at its default value."""
     return {
-        "mode": "clock",                 # "clock"|"message"|"scroll"|"marquee"|"spectrum"|"weather"
+        "mode": "clock",                 # "clock"|"message"|"marquee"|"spectrum"|"weather"
         "message": "",                   # text for message / scroll modes
         "align_top": "center",           # "left" | "center" | "right" — line 1
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
@@ -56,7 +56,7 @@ def defaults() -> dict:
         # _SCROLL_SOURCES later without reshaping the schema).
         "scroll_top_source": "message",     # "message" | "clock" (future: "news")
         "scroll_bottom_source": "message",  # "message" | "clock" (future: "news")
-        "scroll_top": True,              # scroll the top row (when source "message")
+        "scroll_top": False,             # scroll the top row (when source "message")
         "scroll_bottom": False,          # scroll the bottom row (when source "message")
         "scroll_dir_top": "left",        # "left" | "right"
         "scroll_dir_bottom": "left",     # "left" | "right"
@@ -122,9 +122,9 @@ def _backfill(data: dict) -> dict:
         merged["brightness"] = normalize_brightness(merged["brightness"])
     except ValueError:
         merged["brightness"] = _DEFAULT_BRIGHTNESS
-    # Legacy mode "ticker" is the old single-line top scroll — now "scroll".
-    if merged.get("mode") == "ticker":
-        merged["mode"] = "scroll"
+    # Legacy modes "ticker" and "scroll" are now the merged "message" mode.
+    if merged.get("mode") in ("ticker", "scroll"):
+        merged["mode"] = "message"
     # Marquee bottom is static-only now (live clock-bottom stops the hardware
     # scroll). Normalize any value (incl. legacy "clock") to "static".
     if merged.get("marquee_bottom") != "static":
@@ -245,7 +245,7 @@ def load_state() -> dict:
         return state
     state = _backfill(data)
     # Self-heal a migrated legacy value (brightness "dim"/"bright" -> int, or
-    # mode "ticker" -> "scroll") by writing it back so the file converges.
+    # mode "ticker"/"scroll" -> "message") by writing it back so the file converges.
     if (data.get("brightness") != state["brightness"]
             or data.get("mode") != state["mode"]):
         save_state(state)
