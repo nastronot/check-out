@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
-from .glyphs import (COLON_BURST_BIG, COLON_BURST_SMALL, COLON_DOT, COLON_THIN,
+from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
                      COLON_TWIST_L, COLON_TWIST_R, DEGREE, LABEL_C, LABEL_H,
                      LABEL_L, LABEL_R)
 
@@ -28,14 +28,22 @@ STALE_S = 3600          # a reading this old shows " --" (never pass old data as
 FETCH_SLACK_S = 60      # fetch this long after the API's next refresh is due
 HTTP_TIMEOUT_S = 10
 
-# weather_colon values: a steady colon, an on/off tick, or an animated loop —
-# throb / burst once a second, throb2 / burst2 (half speed) once every 2 seconds.
-COLON_MODES = ("on", "tick", "throb", "throb2", "burst", "burst2")
+# weather_colon values: a steady colon, an on/off tick, or an animated loop
+# (wiggle, twinkle). weather_colon_half doubles every loop's length.
+COLON_MODES = ("on", "tick", "wiggle", "twinkle")
+# Names used while v1.4.0 was built -> (final name, half speed); state.py migrates.
+LEGACY_COLON_MODES = {
+    "pulse": ("wiggle", False),
+    "throb": ("wiggle", False),
+    "throb2": ("wiggle", True),
+    "burst": ("twinkle", False),
+    "burst2": ("twinkle", True),
+}
 
 # Weather's glyph set (loaded on entry by the daemon's mode-glyph swap). All 9
-# slots: 5 labels, the dot + thin colons, and two PEAK frames for the animation.
-# Throb and burst share one frame order and differ only in the peak frames, so
-# switching between them redefines just slots 7 and 8.
+# slots: 5 labels, the dot + thin colons, and two PEAK frames for the animation
+# (wiggle's twists or twinkle's bursts), so switching between the two animations
+# redefines just slots 7 and 8.
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
  SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
 _BASE_GLYPHS = {
@@ -48,16 +56,16 @@ _BASE_GLYPHS = {
     SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
 }
 _PEAKS = {
-    "throb": (COLON_TWIST_R, COLON_TWIST_L),
-    "burst": (COLON_BURST_SMALL, COLON_BURST_BIG),
+    "wiggle": (COLON_TWIST_R, COLON_TWIST_L),
+    "twinkle": (COLON_TWINKLE_SMALL, COLON_TWINKLE_BIG),
 }
 
 
 def glyph_set(colon: str) -> tuple[str, dict[int, list[int]]]:
-    """``(family, {slot: rows})`` for a weather_colon value. on/tick/throb*
-    share the throb set (so switching among them redefines nothing); burst*
-    loads the burst peaks."""
-    family = "burst" if colon.startswith("burst") else "throb"
+    """``(family, {slot: rows})`` for a weather_colon value. on/tick/wiggle
+    share the wiggle set (so switching among them redefines nothing); twinkle
+    loads the twinkle peaks."""
+    family = "twinkle" if colon == "twinkle" else "wiggle"
     peak_a, peak_b = _PEAKS[family]
     return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}
 

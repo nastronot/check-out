@@ -571,3 +571,32 @@ daemon's glyph-set key became `("weather", family)`, so the existing key-change
 mechanism redefines two slots on a throb ↔ burst switch and nothing among
 on/tick/throb/throb2. `throb2` / `burst2` run the same 12 frames over 2 s
 (~167 ms each), phase-locked to even seconds.
+
+**Wiggle, twinkle and a half-speed switch.** Throb became `wiggle` (same 12
+alternating frames). Burst became `twinkle` and now runs straight up and down —
+blank, dot, thin, small burst, big burst, small burst, thin, dot — instead of
+alternating (its glyphs renamed `COLON_TWINKLE_SMALL/BIG`). The /2 buttons became
+one `weather_colon_half` switch that doubles the loop of tick, wiggle and twinkle
+(tick at half speed is 1 s on, 1 s off). Each setting is now just a frame list in
+`frames/weather.py` `_LOOPS`, spread over the loop. Development names migrate on
+load: `pulse`/`throb` → wiggle, `burst` → twinkle, and the `*2` forms also set
+half speed.
+
+## v1.4.0 — message and scroll merged; marquee hidden
+
+**Message + scroll.** The two modes were near-duplicates: scroll already did
+everything message did except word-wrap. `MessageFrame` now carries scroll's
+per-row source (message | clock), scroll and direction, and keeps the wrap for a
+single line when nothing scrolls. One improvement fell out: a single line under a
+clock top row now shows on the bottom row (the old scroll mode dropped it). The
+daemon's special scroll path (`render_scroll`, `_scroll_row`) is gone — message is
+an ordinary frame. Static rows return logical strings (the renderer aligns them);
+a scrolling row returns its exact 20-cell window, which `fit_line` passes through
+unchanged. Legacy `scroll`/`ticker` states and saved library items load as
+`message`, and scroll now defaults to off so a message never starts scrolling by
+surprise.
+
+**Marquee hidden, not removed.** The hardware ticker scrolls only the top row at
+one fixed speed, and writing the bottom row interrupts it; message mode's
+software scroll does both rows at any speed. The button is dropped from the UI's
+`MODES` list with a comment; the daemon path, state keys and panel still work.

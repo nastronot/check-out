@@ -779,7 +779,7 @@ def test_mode_glyph_sets_round_trip_spectrum_weather_clock(monkeypatch, capsys):
     daemon.tick_once(drv, {"mode": "weather", "glyphs": user}, ctx,
                      now=datetime(2026, 6, 19, 12, 0, 1))
     defines = _parse_defines(_all_tx_bytes(capsys.readouterr().out))
-    assert ctx["mode_glyphs_key"] == ("weather", "throb")
+    assert ctx["mode_glyphs_key"] == ("weather", "wiggle")
     assert len(defines) == len(weather.glyph_set("tick")[1])
 
     capsys.readouterr()
@@ -878,7 +878,7 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
-    for colon in ("on", "tick", "throb", "throb2", "burst", "burst2"):
+    for colon in ("on", "tick", "wiggle", "twinkle"):
         _, _, state = _weather_setup(monkeypatch, colon=colon)
         drv = VFDDriver(dry_run=True)
         ctx = daemon._new_ctx()
@@ -893,11 +893,11 @@ def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsy
         assert 0x04 not in tx, colon                             # no brightness writes
 
 
-def test_weather_throb_steps_the_colon_glyphs(monkeypatch, capsys):
+def test_weather_wiggle_steps_the_colon_glyphs(monkeypatch, capsys):
     from checkout import weather as wx
     from checkout.driver import GLYPH_CODES
 
-    _, _, state = _weather_setup(monkeypatch, colon="throb")
+    _, _, state = _weather_setup(monkeypatch, colon="wiggle")
     drv = VFDDriver(dry_run=True)
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 999_000))
@@ -940,22 +940,22 @@ def test_clock_second_change_is_a_small_write(monkeypatch, capsys):
     assert len(tx) == 4 and tx[-1] == 0x14                       # one cell
 
 
-def test_switching_throb_and_burst_redefines_only_the_peak_slots(monkeypatch):
+def test_switching_wiggle_and_twinkle_redefines_only_the_peak_slots(monkeypatch):
     from checkout import glyphs
 
     _, _, state = _weather_setup(monkeypatch, colon="tick")
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("weather", "throb")
-    for colon in ("on", "throb", "throb2"):         # same set: nothing redefined
+    assert ctx["mode_glyphs_key"] == ("weather", "wiggle")
+    for colon in ("on", "wiggle"):                  # same set: nothing redefined
         drv.defined.clear()
         daemon.tick_once(drv, {**state, "weather_colon": colon}, ctx, now=NOW)
         assert drv.defined == {}, colon
-    daemon.tick_once(drv, {**state, "weather_colon": "burst"}, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("weather", "burst")
-    assert drv.defined[7] == glyphs.COLON_BURST_SMALL
-    assert drv.defined[8] == glyphs.COLON_BURST_BIG
+    daemon.tick_once(drv, {**state, "weather_colon": "twinkle"}, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"] == ("weather", "twinkle")
+    assert drv.defined[7] == glyphs.COLON_TWINKLE_SMALL
+    assert drv.defined[8] == glyphs.COLON_TWINKLE_BIG
 
 
 class _RecordingDefines(_CountingDriver):

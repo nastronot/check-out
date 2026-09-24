@@ -109,14 +109,13 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
         weather.SLOT_DEGREE: glyphs.DEGREE,
         weather.SLOT_COLON_DOT: glyphs.COLON_DOT, weather.SLOT_COLON_THIN: glyphs.COLON_THIN,
     }
-    throb = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWIST_R,
-             weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWIST_L}
-    burst = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_BURST_SMALL,
-             weather.SLOT_COLON_PEAK_B: glyphs.COLON_BURST_BIG}
-    for colon in ("on", "tick", "throb", "throb2"):
-        assert weather.glyph_set(colon) == ("throb", throb), colon
-    for colon in ("burst", "burst2"):
-        assert weather.glyph_set(colon) == ("burst", burst), colon
+    wiggle = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWIST_R,
+              weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWIST_L}
+    twinkle = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWINKLE_SMALL,
+               weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWINKLE_BIG}
+    for colon in ("on", "tick", "wiggle"):
+        assert weather.glyph_set(colon) == ("wiggle", wiggle), colon
+    assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
 
 
 # --- WeatherFetcher ------------------------------------------------------------

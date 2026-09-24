@@ -44,7 +44,7 @@ The daemon runs ONE fast loop (~30Hz, `config.LOOP_HZ`), NOT a 250ms tick. Each
 iteration: mtime-gates `state.json` (re-parse only when it changed — a single
 `os.stat`), computes the active frame, and **emit-diffs** to the serial port
 (writes only when the frame changed). Looping fast is free for normal modes
-(clock/message/scroll/marquee touch the port only on content change) because
+(clock/message/marquee touch the port only on content change) because
 emit-diffing decouples loop rate from write rate; it's what gives `spectrum` its
 frame rate — one code path, no mode-transition seam. Per-mode timing is driven
 off elapsed wall-clock (`now_ms`): clock ticks 1/s, scroll steps at
@@ -65,23 +65,34 @@ it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it �
 ### Weather mode (v1.4.0)
 Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R] 82%`
 (four fixed 5-cell fields, ` --` when missing or ≥1 h stale). State:
-`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `throb` | `throb2` | `burst` | `burst2`; legacy
-`pulse` → `throb`).
+`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle`), `weather_colon_half`
+(bool; development names `pulse`/`throb*`/`burst*` migrate on load).
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
   service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
   in weather mode and fetches once per data refresh (`current.time` +
   `interval` 900 s + 60 s), retrying 60 s → 900 s on failure. The loop never
   waits on the network.
-- **Colon:** the colon cell changes CHARACTER — `on` = the thin one-column
-  colon (`COLON_THIN`); `tick` = thin colon then space each half second;
-  `throb` / `burst` = a 12-frame loop once a second (blank, dot, thin, peak A,
-  thin, dot, blank, dot, thin, peak B, thin, dot — then back to blank, so it runs
-  evenly); `throb2` / `burst2` = the same over 2 s. The peaks (slots 7/8) are
-  twist-R/L for throb, burst small/big for burst — `weather.glyph_set(colon)`
-  picks them, and the glyph-set key `("weather", family)` redefines only on a
-  throb ↔ burst switch. 5 labels + dot + thin + 2 peaks fill all 9 slots.
+- **Colon:** the colon cell changes CHARACTER, one frame list per setting
+  (`frames/weather.py` `_LOOPS`), spread evenly over a 1 s loop (2 s with
+  `weather_colon_half`), locked to the wall clock: `on` = steady thin colon
+  (`COLON_THIN`); `tick` = thin, blank; `wiggle` = 12 frames, twists alternating
+  sides; `twinkle` = 8 frames straight up and down through two burst sizes.
+  Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
+  `weather.glyph_set(colon)` picks them and the key `("weather", family)`
+  redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
+  fill all 9 slots.
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
+
+### Message mode (v1.4.0: scroll merged in) · marquee hidden
+`message` is the one text mode (`frames/message.py`): each row picks a source
+(message | clock) and may scroll left/right at `scroll_speed_ms`; a single line
+with nothing scrolling word-wraps across both rows. The old `scroll` mode was a
+near-duplicate — legacy `scroll`/`ticker` states and library items load as
+`message`. **Marquee is hidden, not removed:** its button is dropped from the UI
+mode list (`ControlPanel.svelte` `MODES`) because the hardware ticker scrolls
+only the top row at one fixed speed; its daemon path, state keys and panel still
+work — add `'marquee'` back to `MODES` to restore it.
 
 ### Cell-diff writes (v1.4.0)
 When the glass holds a known frame (`last_emit` is a show), the daemon calls

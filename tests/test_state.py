@@ -296,6 +296,7 @@ def test_weather_defaults(state_path):
     s = state.load_state()
     assert s["weather_lat"] is None and s["weather_lon"] is None
     assert s["weather_colon"] == "tick"
+    assert s["weather_colon_half"] is False
 
 
 @pytest.mark.parametrize("lat,lon,expected", [
@@ -315,10 +316,15 @@ def test_weather_coords_coerce(state_path, lat, lon, expected):
 
 def test_weather_colon_validates(state_path):
     import json
-    for colon in ("on", "tick", "throb", "throb2", "burst", "burst2"):
+    for colon in ("on", "tick", "wiggle", "twinkle"):
         state_path.write_text(json.dumps({"weather_colon": colon}))
         assert state.load_state()["weather_colon"] == colon
-    state_path.write_text(json.dumps({"weather_colon": "pulse"}))   # renamed in v1.4.0
-    assert state.load_state()["weather_colon"] == "throb"
-    state_path.write_text(json.dumps({"weather_colon": "wiggle"}))
+    # Names used during v1.4.0 development map to the final ones (+ half speed).
+    for old, new, half in (("pulse", "wiggle", False), ("throb", "wiggle", False),
+                           ("throb2", "wiggle", True), ("burst", "twinkle", False),
+                           ("burst2", "twinkle", True)):
+        state_path.write_text(json.dumps({"weather_colon": old}))
+        s = state.load_state()
+        assert (s["weather_colon"], s["weather_colon_half"]) == (new, half), old
+    state_path.write_text(json.dumps({"weather_colon": "wobble"}))
     assert state.load_state()["weather_colon"] == "tick"

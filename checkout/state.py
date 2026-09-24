@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 
 from . import config
 from .driver import normalize_brightness
-from .weather import COLON_MODES
+from .weather import COLON_MODES, LEGACY_COLON_MODES
 
 # Default brightness index (3 = Maximum) — bright out of the box.
 _DEFAULT_BRIGHTNESS = 3
@@ -84,7 +84,8 @@ def defaults() -> dict:
         # --- weather (mode "weather") ---
         "weather_lat": None,             # decimal degrees, -90..90, or null
         "weather_lon": None,             # decimal degrees, -180..180, or null
-        "weather_colon": "tick",         # "on" (steady) | "tick" (blink) | "throb"
+        "weather_colon": "tick",         # "on" | "tick" | "wiggle" | "twinkle"
+        "weather_colon_half": False,     # half speed: tick/wiggle/twinkle loop in 2 s
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -147,8 +148,10 @@ def _backfill(data: dict) -> dict:
     # Weather location: a number in range, else null (the UI may send strings or "").
     merged["weather_lat"] = _coord(merged.get("weather_lat"), 90.0)
     merged["weather_lon"] = _coord(merged.get("weather_lon"), 180.0)
-    if merged.get("weather_colon") == "pulse":    # renamed to "throb" in v1.4.0
-        merged["weather_colon"] = "throb"
+    legacy = LEGACY_COLON_MODES.get(merged.get("weather_colon"))
+    if legacy:  # a name used while v1.4.0 was built (e.g. throb2 -> wiggle + half)
+        merged["weather_colon"], merged["weather_colon_half"] = legacy
+    merged["weather_colon_half"] = bool(merged.get("weather_colon_half"))
     if merged.get("weather_colon") not in COLON_MODES:
         merged["weather_colon"] = "tick"
     return merged

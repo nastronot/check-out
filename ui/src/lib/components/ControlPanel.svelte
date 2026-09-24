@@ -153,12 +153,11 @@
   const COLONS: { value: WeatherColon; label: string }[] = [
     { value: 'on', label: 'ON' },
     { value: 'tick', label: 'TICK' },
-    { value: 'throb', label: 'THROB' },
-    { value: 'throb2', label: 'THROB/2' },
-    { value: 'burst', label: 'BURST' },
-    { value: 'burst2', label: 'BURST/2' },
+    { value: 'wiggle', label: 'WIGGLE' },
+    { value: 'twinkle', label: 'TWINKLE' },
   ];
   const setColon = (c: WeatherColon) => patch({ weather_colon: c });
+  const setColonHalf = (e: Event) => patch({ weather_colon_half: checked(e) });
   $: weatherLine = weatherSummary(status?.weather);
 
   const DIRS: ScrollDir[] = ['left', 'right'];
@@ -423,11 +422,21 @@
             >
           {/each}
         </div>
+        <label class="switch colon-half" class:disabled={state.weather_colon === 'on'}>
+          <input
+            type="checkbox"
+            checked={state.weather_colon_half}
+            disabled={state.weather_colon === 'on'}
+            on:change={setColonHalf}
+          />
+          <span class="switch__track"></span>
+          <span class="switch__label">Half speed</span>
+        </label>
         <span class="field__hint">
           <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
-          on and off every second. <strong>Throb</strong> / <strong>Burst</strong>
-          = a 12-frame colon animation once a second (twists / bursts);
-          <strong>/2</strong> = the same at half speed (2 s).
+          on and off every second. <strong>Wiggle</strong> = the colon twists
+          one way, then the other. <strong>Twinkle</strong> = it grows into a
+          burst and back. <strong>Half speed</strong> stretches each loop to 2 s.
         </span>
       </div>
 
@@ -643,6 +652,10 @@
   }
 
   /* lat | lon | Save — three equal columns across the field. */
+  .colon-half {
+    margin-top: 10px;
+  }
+
   .coords {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

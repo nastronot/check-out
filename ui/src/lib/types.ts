@@ -24,9 +24,9 @@ export type MarqueeBottom = 'static';
  */
 export type ScrollSource = 'message' | 'clock';
 
-/** Weather colon: steady, blinking each second, or an animated loop — throb /
- *  burst once a second, throb2 / burst2 (half speed) every 2 seconds. */
-export type WeatherColon = 'on' | 'tick' | 'throb' | 'throb2' | 'burst' | 'burst2';
+/** Weather colon: steady, blinking, or an animated loop (wiggle / twinkle).
+ *  weather_colon_half runs tick / wiggle / twinkle at half speed (2 s loops). */
+export type WeatherColon = 'on' | 'tick' | 'wiggle' | 'twinkle';
 
 /** status.weather — the latest reading (°F / %) and fetch health. */
 export interface WeatherStatus {
@@ -83,6 +83,7 @@ export interface AppState {
   weather_lat: number | null;
   weather_lon: number | null;
   weather_colon: WeatherColon;
+  weather_colon_half: boolean;
   command: CommandRef;
   updated_at?: string;
 }

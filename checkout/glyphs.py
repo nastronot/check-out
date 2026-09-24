@@ -22,11 +22,11 @@ DEGREE = [4, 10, 4, 0, 0, 0, 0]
 # Weather clock colons, drawn by hand. A VFD cell has no per-cell brightness
 # (it is display-wide), so the colon animates by changing its dots instead.
 COLON_THIN = [0, 4, 4, 0, 4, 4, 0]      # the on/tick colon: centre column, 4 dots
-COLON_DOT = [0, 0, 4, 0, 4, 0, 0]       # throb: the two inner dots only
-COLON_TWIST_R = [0, 12, 4, 0, 4, 6, 0]  # throb: top hooks right, bottom hooks left
-COLON_TWIST_L = [0, 6, 4, 0, 4, 12, 0]  # throb: the mirror (top left, bottom right)
-COLON_BURST_SMALL = [0, 14, 4, 0, 4, 14, 0]  # burst: a bar caps each dot
-COLON_BURST_BIG = [4, 14, 4, 0, 4, 14, 4]    # burst: each dot a small plus
+COLON_DOT = [0, 0, 4, 0, 4, 0, 0]       # the two inner dots only
+COLON_TWIST_R = [0, 12, 4, 0, 4, 6, 0]  # wiggle: top hooks right, bottom hooks left
+COLON_TWIST_L = [0, 6, 4, 0, 4, 12, 0]  # wiggle: the mirror (top left, bottom right)
+COLON_TWINKLE_SMALL = [0, 14, 4, 0, 4, 14, 0]  # twinkle: a bar caps each dot
+COLON_TWINKLE_BIG = [4, 14, 4, 0, 4, 14, 4]    # twinkle: each dot a small plus
 
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
 

@@ -9,14 +9,16 @@ the colon CHARACTER — never the hardware cursor (an underline on this glass th
 stays on across writes) and never brightness (display-wide, so the whole panel
 would change):
 
-- ``on``    — a steady thin colon (one centre column of dots, a weather glyph).
-- ``tick``  — the thin colon for the first half of each second, a space for the
-  second.
-- ``throb`` / ``burst`` — a 12-frame loop once a second: blank, dots, thin,
-  peak A, thin, dots, blank, dots, thin, peak B, thin, dots (then blank again).
-  The two share the order; weather's glyph set puts throb's twists or burst's
-  bursts in the peak slots (``weather.glyph_set``).
-- ``throb2`` / ``burst2`` — the same loops at half speed (2 seconds).
+- ``on``      — a steady thin colon (one centre column of dots, a weather glyph).
+- ``tick``    — the thin colon, then a space: on for half the loop, off for half.
+- ``wiggle``  — 12 frames: blank, dot, thin, twist-R, thin, dot, blank, dot, thin,
+  twist-L, thin, dot (then blank again) — the twists alternate sides.
+- ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
+  big burst, small burst, thin, dot.
+
+Each loop takes 1 second, or 2 with ``weather_colon_half`` (half speed), and is
+locked to the wall clock (a 2 s loop starts on even seconds). Wiggle's twists and
+twinkle's bursts share the two PEAK glyph slots (``weather.glyph_set``).
 
 Only the colon cell changes, so the daemon's cell-diff writes one cell.
 """
@@ -39,15 +41,14 @@ _THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _PEAK_A = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_A])
 _PEAK_B = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_B])
 
-# throb/burst: these 12 frames, evenly spaced across the loop (~83 ms apiece at
-# full speed). The loop wraps from the last dot back to the first blank, so there
-# is one blank between loops and every frame is the same length.
-_LOOP_STEPS = (
-    _BLANK, _DOT, _THIN, _PEAK_A, _THIN, _DOT,
-    _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT,
-)
-# Loop length in seconds per animated colon mode.
-_LOOP_SECONDS = {"throb": 1, "burst": 1, "throb2": 2, "burst2": 2}
+# The frames of each animated colon, spread evenly across the loop. Each loop
+# wraps back to its first frame, so every frame is the same length.
+_LOOPS = {
+    "tick": (_THIN, _BLANK),
+    "wiggle": (_BLANK, _DOT, _THIN, _PEAK_A, _THIN, _DOT,
+               _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT),
+    "twinkle": (_BLANK, _DOT, _THIN, _PEAK_A, _PEAK_B, _PEAK_A, _THIN, _DOT),
+}
 
 
 def colon_mode(state: dict) -> str:
@@ -58,16 +59,13 @@ def colon_mode(state: dict) -> str:
 
 def colon_char(state: dict, now: datetime) -> str:
     """The character in the colon's cell at ``now``."""
-    mode = colon_mode(state)
-    if mode == "tick":
-        return _THIN if now.microsecond < _US_PER_S // 2 else _BLANK
-    if mode in _LOOP_SECONDS:
-        # Phase within the loop, locked to the wall clock (a 2 s loop starts on
-        # even seconds).
-        seconds = _LOOP_SECONDS[mode]
-        phase_us = (now.second % seconds) * _US_PER_S + now.microsecond
-        return _LOOP_STEPS[phase_us * len(_LOOP_STEPS) // (seconds * _US_PER_S)]
-    return _THIN
+    frames = _LOOPS.get(colon_mode(state))
+    if frames is None:
+        return _THIN  # on
+    seconds = 2 if state.get("weather_colon_half") else 1
+    # Phase within the loop, locked to the wall clock.
+    phase_us = (now.second % seconds) * _US_PER_S + now.microsecond
+    return frames[phase_us * len(frames) // (seconds * _US_PER_S)]
 
 
 class WeatherFrame(Frame):

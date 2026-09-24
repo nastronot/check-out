@@ -1,8 +1,9 @@
 """TickerFrame — horizontally scroll a long message across the top line.
 
-This is a SOFTWARE scroll (a moving window over the text). NOTE: as of v0.7.3 the
-daemon drives software scrolling via ``daemon.render_scroll`` (mode "scroll" —
-2-line, per-row direction, speed floor), not this single-line frame. TickerFrame
+This is a SOFTWARE scroll (a moving window over the text). NOTE: the daemon
+drives software scrolling through ``MessageFrame`` (mode "message" — per-row
+source, direction and speed floor; the old "scroll" mode merged into it in
+v1.4.0), not this single-line frame. TickerFrame
 is retained as a small pure component (and its tests document the window
 behaviour the scroll mode reuses through ``renderer.ticker_window``).
 
