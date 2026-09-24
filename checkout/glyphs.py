@@ -29,6 +29,10 @@ COLON_TWIST_L = [0, 6, 4, 0, 4, 12, 0]  # wiggle: the mirror (top left, bottom r
 COLON_TWINKLE_SMALL = [0, 14, 4, 0, 4, 14, 0]  # twinkle: a bar caps each dot
 COLON_TWINKLE_BIG = [4, 14, 4, 0, 4, 14, 4]    # twinkle: each dot a small plus
 
+# AM / PM markers for the on/tick clock: the letter stacked over an M.
+AM = [14, 17, 31, 17, 27, 21, 17]
+PM = [14, 17, 15, 1, 27, 21, 17]
+
 # Pacman sprites (the weather clock's pacman colon mode), two frames each.
 GHOST_A = [0, 14, 31, 11, 31, 21, 0]        # eyes right (pacman's height)
 GHOST_B = [0, 14, 31, 21, 31, 21, 0]        # eyes centred

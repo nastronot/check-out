@@ -135,8 +135,11 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
               weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWIST_L}
     twinkle = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWINKLE_SMALL,
                weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWINKLE_BIG}
-    for colon in ("on", "tick", "wiggle"):
-        assert weather.glyph_set(colon) == ("wiggle", wiggle), colon
+    assert weather.glyph_set("wiggle") == ("wiggle", wiggle)
+    labels5 = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
+    ampm = {**labels5, weather.SLOT_AM: glyphs.AM, weather.SLOT_PM: glyphs.PM}
+    for colon in ("on", "tick"):
+        assert weather.glyph_set(colon) == ("ampm", ampm), colon
     assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
     labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
     pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}

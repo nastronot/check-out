@@ -264,8 +264,31 @@ def _top(colon, us, second=12, half=False):
     return DynamicFrame(_FakeFetcher()).render(now, state)[0]
 
 
-def test_weather_top_is_the_short_clock():
-    assert _top("on", 0) == "09/23/26 WED 08:33"   # the font's standard colon
+_AM = chr(GLYPH_CODES[_weather.SLOT_AM])
+_PM = chr(GLYPH_CODES[_weather.SLOT_PM])
+
+
+def test_on_shows_the_clock_then_a_space_and_the_meridiem_glyph():
+    assert _top("on", 0) == "09/23/26 WED 08:33 " + _PM     # 20:33 -> PM, 20 cells
+
+
+def _meridiem(hour, colon="on"):
+    state = {**_WX, "dynamic_colon": colon}
+    return DynamicFrame(_FakeFetcher()).render(_T.replace(hour=hour), state)[0][19]
+
+
+def test_meridiem_glyph_follows_the_hour():
+    assert [_meridiem(h) for h in (0, 11, 12, 23)] == [_AM, _AM, _PM, _PM]
+    assert _meridiem(9, "tick") == _AM
+
+
+def test_wiggle_and_twinkle_have_no_meridiem():
+    assert len(_top("wiggle", 0)) == 18 and len(_top("twinkle", 0)) == 18
+
+
+def test_ampm_glyphs_match_the_drawn_frames():
+    assert _draw(_glyphs.AM) == [".###.", "#...#", "#####", "#...#", "##.##", "#.#.#", "#...#"]
+    assert _draw(_glyphs.PM) == [".###.", "#...#", "####.", "#....", "##.##", "#.#.#", "#...#"]
 
 
 def test_weather_without_location_asks_for_one():

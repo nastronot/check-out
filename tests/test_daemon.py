@@ -779,7 +779,7 @@ def test_mode_glyph_sets_round_trip_spectrum_weather_clock(monkeypatch, capsys):
     daemon.tick_once(drv, {"mode": "dynamic", "glyphs": user}, ctx,
                      now=datetime(2026, 6, 19, 12, 0, 1))
     defines = _parse_defines(_all_tx_bytes(capsys.readouterr().out))
-    assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
+    assert ctx["mode_glyphs_key"] == ("dynamic", "ampm")
     assert len(defines) == len(weather.glyph_set("tick")[1])
 
     capsys.readouterr()
@@ -828,7 +828,7 @@ def test_weather_status_reports_glyphs_and_weather(monkeypatch):
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
     assert s["mode"] == "dynamic"
-    assert set(s["mode_glyphs"]) == {str(n) for n in range(9)}
+    assert set(s["mode_glyphs"]) == {str(n) for n in range(7)}   # labels + AM + PM
     assert s["weather"]["error"] is None
 
 
@@ -869,9 +869,9 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
     daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=200_000))
     assert _tx_after(capsys) == []                               # unchanged: silent
     daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
-    assert _tx_after(capsys) == [0x10, 16, ord(" "), 0x14]       # colon off
+    assert _tx_after(capsys) == [0x10, 15, ord(" "), 0x14]       # colon off (20-cell line)
     daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
-    assert _tx_after(capsys) == [0x10, 16, ord(":"), 0x14]       # colon on
+    assert _tx_after(capsys) == [0x10, 15, ord(":"), 0x14]       # colon on
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
@@ -944,11 +944,12 @@ def test_switching_wiggle_and_twinkle_redefines_only_the_peak_slots(monkeypatch)
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"] == ("dynamic", "ampm")
+    drv.defined.clear()
+    daemon.tick_once(drv, {**state, "dynamic_colon": "on"}, ctx, now=NOW)
+    assert drv.defined == {}                         # on/tick share the am/pm set
+    daemon.tick_once(drv, {**state, "dynamic_colon": "wiggle"}, ctx, now=NOW)
     assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
-    for colon in ("on", "wiggle"):                  # same set: nothing redefined
-        drv.defined.clear()
-        daemon.tick_once(drv, {**state, "dynamic_colon": colon}, ctx, now=NOW)
-        assert drv.defined == {}, colon
     daemon.tick_once(drv, {**state, "dynamic_colon": "twinkle"}, ctx, now=NOW)
     assert ctx["mode_glyphs_key"] == ("dynamic", "twinkle")
     assert drv.defined[7] == glyphs.COLON_TWINKLE_SMALL
@@ -966,7 +967,7 @@ class _RecordingDefines(_CountingDriver):
 
 
 def test_weather_is_always_centered_whatever_the_saved_alignment(monkeypatch):
-    written, _, state = _weather_setup(monkeypatch, colon="on")
+    written, _, state = _weather_setup(monkeypatch, colon="wiggle")   # an 18-cell line
     state = {**state, "align_top": "left", "align_bottom": "right"}
     daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(),
                      now=datetime(2026, 9, 23, 20, 33, 12))

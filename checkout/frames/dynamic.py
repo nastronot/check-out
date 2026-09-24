@@ -9,8 +9,9 @@ the colon CHARACTER — never the hardware cursor (an underline on this glass th
 stays on across writes) and never brightness (display-wide, so the whole panel
 would change):
 
-- ``on``      — the font's standard ``:``, steady.
-- ``tick``    — the standard ``:``, then a blank: on for half the loop, off for half.
+- ``on``      — the font's standard ``:``, steady, then a space and an AM/PM
+  marker glyph (the line is exactly 20 cells).
+- ``tick``    — the same, with the ``:`` blanking for half of each loop.
 - ``wiggle``  — 12 frames: blank, dot, thin, twist-R, thin, dot, blank, dot, thin,
   twist-L, thin, dot (then blank again) — the twists alternate sides.
 - ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
@@ -48,6 +49,8 @@ NO_LOCATION = "SET LOCATION"
 _US_PER_S = 1_000_000
 
 _BLANK = " "
+_AM = chr(GLYPH_CODES[weather.SLOT_AM])
+_PM = chr(GLYPH_CODES[weather.SLOT_PM])
 _DOT = chr(GLYPH_CODES[weather.SLOT_COLON_DOT])
 _THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _PEAK_A = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_A])
@@ -133,6 +136,8 @@ class DynamicFrame(Frame):
             top = pacman_top(state, now)
         else:
             top = short_date_time(now, colon=colon_char(state, now))
+            if colon_mode(state) in ("on", "tick"):
+                top += " " + (_AM if now.hour < 12 else _PM)
         if weather.location(state) is None:
             return top, NO_LOCATION
         return top, weather.bottom_line(self.fetcher.latest(), now.timestamp())

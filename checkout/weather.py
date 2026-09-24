@@ -21,9 +21,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
-from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
+from .glyphs import (AM, COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
                      COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
-                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN,
+                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN, PM,
                      mirror)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
@@ -58,6 +58,9 @@ LEGACY_COLON_MODES = {
 # chosen sprite's two frames, 7/8 hold pacman (duo only); WHICH bitmaps sit in
 # 5/6 depends on the cast (see glyph_set), so the frame code never changes.
 SLOT_SPRITE_A, SLOT_SPRITE_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
+# on/tick show the font's colon and an AM/PM marker, so their set is the labels
+# plus these two (switching to an animated colon loads that set instead).
+SLOT_AM, SLOT_PM = 5, 6
 _LABEL_GLYPHS = {
     SLOT_HIGH: LABEL_H,
     SLOT_LOW: LABEL_L,
@@ -93,9 +96,10 @@ _PEAKS = {
 def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[int]]]:
     """``(family, {slot: rows})`` for a dynamic_colon value — and, for pacman,
     the CAST from ``pacman_cast``: "duo-<sprite>" (pacman eating the sprite) or
-    "<sprite>" (solo). on/tick/wiggle share the wiggle set (so switching among
-    them redefines nothing); twinkle loads the twinkle peaks; each pacman cast
+    "<sprite>" (solo). on/tick load the AM/PM markers; wiggle loads its twists; twinkle loads the twinkle peaks; each pacman cast
     loads its own sprite frames, and the family names it."""
+    if colon in ("on", "tick"):
+        return "ampm", {**_LABEL_GLYPHS, SLOT_AM: AM, SLOT_PM: PM}
     if colon == "pacman":
         solo = not cast.startswith("duo-")
         sprite = cast.removeprefix("duo-")

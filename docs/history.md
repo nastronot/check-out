@@ -726,3 +726,8 @@ against its number.
 **Leading zeros stay on on/tick/wiggle/twinkle** (a change removing them was
 reverted): those four use the zero-padded `09/24/26 THU 12:09`; only pacman's
 layout drops leading zeros.
+
+**AM/PM on on/tick.** On and tick append a space and an AM or PM marker —
+hand-drawn glyphs, the letter stacked over an M — making the top line exactly 20
+cells (`09/24/26 THU 12:11 ` + marker). They load their own glyph set (the five
+labels + AM + PM); wiggle, twinkle and pacman are unchanged.
