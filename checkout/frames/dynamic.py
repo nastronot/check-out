@@ -161,6 +161,7 @@ class DynamicFrame(Frame):
         self.news = news
         self._alert: _Alert | None = None
         self._last_start_ms: int | None = None   # when the last alert started (the gap)
+        self._shown: _Alert | None = None        # the last alert played (kept after it ends)
 
     # --- driving the fetchers and alerts ------------------------------------------
     def tick(self, now: datetime, state: dict, active: bool = True) -> None:
@@ -211,6 +212,23 @@ class DynamicFrame(Frame):
         text = f"{source.name if source else headline.source.upper()}: {headline.title}"
         self._alert = _Alert(headline, text, started, speed, repeat,
                              started + news_alert.duration_ms(text, repeat, speed))
+        self._shown = self._alert
+
+    def shown(self) -> dict | None:
+        """The last headline played on the glass, with its link, for status.json
+        (the waybar panel opens it). Kept after the alert ends and outside dynamic;
+        None until the first alert since the daemon started."""
+        if self._shown is None:
+            return None
+        h = self._shown.headline
+        source = SOURCES.get(h.source)
+        return {
+            "source": h.source,
+            "outlet": source.name if source else h.source.upper(),
+            "title": h.title,
+            "link": h.link if h.link.startswith(("https://", "http://")) else None,
+            "shown_at": datetime.fromtimestamp(self._shown.started_ms / 1000).astimezone().isoformat(),
+        }
 
     # --- drawing ---------------------------------------------------------------------
     def brightness(self, now: datetime, state: dict, base: int) -> int | None:

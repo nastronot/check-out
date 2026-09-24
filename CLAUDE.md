@@ -154,7 +154,10 @@ character leaves at the left (`news_alert._tape`), then back to time/weather.
 `news_effect` flash/throb goes through the generic `Frame.brightness` hook. The
 `show_news` command (UI **Show latest**) plays the newest lead. Headlines are
 cleaned to ASCII. The stdlib XML parser is used deliberately: expat ≥ 2.4.1
-refuses entity bombs and external entities (tests pin it).
+refuses entity bombs and external entities (tests pin it). `status.json`
+`news_shown` (v1.7.0) is the last headline PLAYED: outlet, title, link (http(s)
+only), `shown_at`. It is kept in every mode until the daemon restarts; the waybar
+panel reads it via `/api/status` for its **Read** button.
 
 ### UI caching (v1.4.0)
 `web/app.py` `_UIFiles` serves `index.html` as `Cache-Control: no-cache` and

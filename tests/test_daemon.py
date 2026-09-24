@@ -1041,6 +1041,7 @@ def _news_setup(monkeypatch, effect="none", **fake):
     monkeypatch.setattr(daemon.DYNAMIC_FRAME, "news", news)
     monkeypatch.setattr(daemon.DYNAMIC_FRAME, "_alert", None)
     monkeypatch.setattr(daemon.DYNAMIC_FRAME, "_last_start_ms", None)   # no gap carried over
+    monkeypatch.setattr(daemon.DYNAMIC_FRAME, "_shown", None)
     state = {**state, "news_enabled": True, "news_topics": ["politics"], "news_interval_min": 5,
              "news_repeat": 0, "news_speed_ms": 100, "news_effect": effect}
     return written, news, state
@@ -1089,6 +1090,27 @@ def test_status_reports_news_while_it_is_on(monkeypatch):
     assert written[-1]["news"]["alerting"] is False
     daemon.tick_once(_CountingDriver(), {**state, "news_enabled": False}, daemon._new_ctx(), now=_T)
     assert written[-1]["news"] is None
+
+
+def test_status_keeps_the_last_headline_shown_with_its_link(monkeypatch):
+    head = _Headline("bbc", "A story", "https://www.bbc.co.uk/news/1", 1.0)
+    written, news, state = _news_setup(monkeypatch)
+    ctx = daemon._new_ctx()
+    daemon.tick_once(_CountingDriver(), state, ctx, now=_T - timedelta(seconds=1))
+    assert written[-1]["news_shown"] is None                   # nothing played yet
+    news.alert = head
+    daemon.tick_once(_CountingDriver(), state, ctx, now=_T)
+    shown = written[-1]["news_shown"]
+    assert (shown["outlet"], shown["title"], shown["link"]) == ("BBC", "A story", head.link)
+    later = _T + timedelta(hours=1)                            # alert over, other mode
+    daemon.tick_once(_CountingDriver(), {**state, "mode": "clock"}, ctx, now=later)
+    assert written[-1]["news_shown"]["title"] == "A story"
+
+
+def test_status_drops_a_link_that_is_not_a_web_address(monkeypatch):
+    written, _, state = _news_setup(monkeypatch, alert=_HEAD)     # link "b1"
+    daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=_T)
+    assert written[-1]["news_shown"]["link"] is None
 
 
 def test_leaving_dynamic_ends_an_alert(monkeypatch):

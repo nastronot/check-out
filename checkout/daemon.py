@@ -409,6 +409,8 @@ def _write_status(
                             if ctx["mode_glyphs"] else None),
             # News: per-source leads + errors and whether an alert is showing.
             "news": _news_status(state, now_ms),
+            # The last headline played, with its link (kept in every mode).
+            "news_shown": DYNAMIC_FRAME.shown(),
             "weather": (DYNAMIC_FRAME.fetcher.status()
                         if _norm_mode(state.get("mode")) == "dynamic" else None),
             "last_command_id": ctx["last_command_id"],
