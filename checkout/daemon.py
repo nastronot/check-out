@@ -200,7 +200,7 @@ def mode_glyph_set(mode: str, state: dict):
         layout, style = _norm_spectrum_layout(state), _norm_spectrum_style(state)
         return ("spectrum", layout, style), spectrum.layout_glyphs(layout, style)
     if mode == "weather":
-        family, glyphs = weather.glyph_set(colon_mode(state))
+        family, glyphs = weather.glyph_set(colon_mode(state), state.get("weather_pacman"))
         return ("weather", family), glyphs
     return None
 

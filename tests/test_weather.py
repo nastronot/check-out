@@ -117,10 +117,16 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
         assert weather.glyph_set(colon) == ("wiggle", wiggle), colon
     assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
     labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
-    pacman = {**labels, weather.SLOT_GHOST_A: glyphs.GHOST_A,
-              weather.SLOT_GHOST_B: glyphs.GHOST_B,
-              weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
-    assert weather.glyph_set("pacman") == ("pacman", pacman)
+    pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
+    duo = {**labels, weather.SLOT_GHOST_A: glyphs.GHOST_A,
+           weather.SLOT_GHOST_B: glyphs.GHOST_B, **pacs}
+    assert weather.glyph_set("pacman") == ("pacman", duo)
+    assert weather.glyph_set("pacman", "both") == ("pacman", duo)
+    # Solo ghost looks the other way: frames g1 <-> g2 instead of g0 <-> g1.
+    solo_ghost = {**labels, weather.SLOT_GHOST_A: glyphs.GHOST_B,
+                  weather.SLOT_GHOST_B: glyphs.GHOST_C}
+    assert weather.glyph_set("pacman", "ghost") == ("pacman-ghost", solo_ghost)
+    assert weather.glyph_set("pacman", "pacman") == ("pacman-pacman", {**labels, **pacs})
 
 
 # --- WeatherFetcher ------------------------------------------------------------

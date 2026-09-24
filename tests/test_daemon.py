@@ -986,3 +986,19 @@ def test_message_still_honours_the_saved_alignment(monkeypatch):
     daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=NOW)
     assert written[-1]["top"] == "HI".ljust(20)
     assert written[-1]["bottom"] == "THERE".rjust(20)
+
+
+def test_pacman_solo_choice_loads_its_own_ghost_frames(monkeypatch):
+    from checkout import glyphs, weather as wx
+
+    _, _, state = _weather_setup(monkeypatch, colon="pacman")
+    drv = _RecordingDefines()
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, {**state, "weather_pacman": "both"}, ctx, now=NOW)
+    assert drv.defined[wx.SLOT_GHOST_A] == glyphs.GHOST_A
+    drv.defined.clear()
+    daemon.tick_once(drv, {**state, "weather_pacman": "ghost"}, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"] == ("weather", "pacman-ghost")
+    assert drv.defined[wx.SLOT_GHOST_A] == glyphs.GHOST_B
+    assert drv.defined[wx.SLOT_GHOST_B] == glyphs.GHOST_C
+

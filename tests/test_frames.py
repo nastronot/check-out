@@ -402,6 +402,7 @@ def test_pacman_colon_is_steady():
 def test_pacman_glyphs_match_the_drawn_frames():
     assert _draw(_glyphs.GHOST_A) == [".....", ".###.", "#####", "##.#.", "#####", "#.#.#", "....."]
     assert _draw(_glyphs.GHOST_B) == [".....", ".###.", "#####", "#.#.#", "#####", "#.#.#", "....."]
+    assert _draw(_glyphs.GHOST_C) == [".....", ".###.", "#####", ".#.##", "#####", "#.#.#", "....."]
     assert _draw(_glyphs.PACMAN_CLOSED) == [".....", ".###.", "#####", "...##", "#####", ".###.", "....."]
     assert _draw(_glyphs.PACMAN_OPEN) == [".....", ".###.", "..###", "...##", "..###", ".###.", "....."]
 

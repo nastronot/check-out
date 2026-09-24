@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
 from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
-                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B,
+                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C,
                      LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
@@ -49,8 +49,9 @@ LEGACY_COLON_MODES = {
 # redefines just slots 7 and 8.
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
  SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
-# Pacman needs 4 sprite frames, so its set uses slots 5-8 for them instead of
-# the colon glyphs (and its time colon is the font's ':').
+# Pacman needs up to 4 sprite frames, so its set uses slots 5-8 for them instead
+# of the colon glyphs (and its time colon is the font's ':'). The ghost is always
+# "slot A frame, then slot B frame"; WHICH bitmaps sit there depends on solo.
 SLOT_GHOST_A, SLOT_GHOST_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
 _LABEL_GLYPHS = {
     SLOT_HIGH: LABEL_H,
@@ -64,12 +65,13 @@ _BASE_GLYPHS = {
     SLOT_COLON_DOT: COLON_DOT,
     SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
 }
-_PACMAN_GLYPHS = {
-    **_LABEL_GLYPHS,
-    SLOT_GHOST_A: GHOST_A,
-    SLOT_GHOST_B: GHOST_B,
-    SLOT_PAC_A: PACMAN_CLOSED,
-    SLOT_PAC_B: PACMAN_OPEN,
+_PAC_FRAMES = {SLOT_PAC_A: PACMAN_CLOSED, SLOT_PAC_B: PACMAN_OPEN}
+# weather_pacman -> the sprite frames it loads. Duo's ghost glances right
+# (A <-> centred); the solo ghost glances left (centred <-> C).
+_PACMAN_SPRITE_GLYPHS = {
+    "both": {SLOT_GHOST_A: GHOST_A, SLOT_GHOST_B: GHOST_B, **_PAC_FRAMES},
+    "ghost": {SLOT_GHOST_A: GHOST_B, SLOT_GHOST_B: GHOST_C},
+    "pacman": dict(_PAC_FRAMES),
 }
 _PEAKS = {
     "wiggle": (COLON_TWIST_R, COLON_TWIST_L),
@@ -77,12 +79,17 @@ _PEAKS = {
 }
 
 
-def glyph_set(colon: str) -> tuple[str, dict[int, list[int]]]:
-    """``(family, {slot: rows})`` for a weather_colon value. on/tick/wiggle
-    share the wiggle set (so switching among them redefines nothing); twinkle
-    loads the twinkle peaks; pacman loads the sprites in place of the colons."""
+def glyph_set(colon: str, pacman: str = "both") -> tuple[str, dict[int, list[int]]]:
+    """``(family, {slot: rows})`` for a weather_colon value (and, for pacman,
+    the weather_pacman sprite choice). on/tick/wiggle share the wiggle set (so
+    switching among them redefines nothing); twinkle loads the twinkle peaks;
+    pacman loads its sprites in place of the colons — a different set per solo
+    choice, so the family names it."""
     if colon == "pacman":
-        return "pacman", dict(_PACMAN_GLYPHS)
+        if pacman not in _PACMAN_SPRITE_GLYPHS:
+            pacman = "both"
+        family = "pacman" if pacman == "both" else f"pacman-{pacman}"
+        return family, {**_LABEL_GLYPHS, **_PACMAN_SPRITE_GLYPHS[pacman]}
     family = "twinkle" if colon == "twinkle" else "wiggle"
     peak_a, peak_b = _PEAKS[family]
     return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}

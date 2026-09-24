@@ -636,3 +636,9 @@ or day shifts everything after it right by one. The longest case,
 
 **Pacman solo.** A solo sprite always sits in the far-right cell (19), whichever
 one is chosen.
+
+**Solo ghost frames.** The duo ghost alternates `GHOST_A`/`GHOST_B` (eyes right,
+centred); the solo ghost alternates `GHOST_B`/`GHOST_C` (centred, left). Rather
+than a third ghost slot (the slots are full in duo), each `weather_pacman`
+choice loads its own frames into the same slots — `glyph_set(colon, pacman)`
+with a per-choice family key — so the frame code never changes.

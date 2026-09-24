@@ -20,7 +20,8 @@ would change):
   5-cell field) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
   swapping between two frames. The time colon is the steady font
   ``:`` (the sprites need the colon's glyph slots). Solo (``weather_pacman`` =
-  ghost | pacman) shows just one, in the far-right cell.
+  ghost | pacman) shows just one, in the far-right cell; the solo ghost glances
+  the other way (its own two frames, loaded by ``weather.glyph_set``).
 
 Each loop takes 1 second, or 2 with ``weather_colon_half`` (half speed), and is
 locked to the wall clock (a 2 s loop starts on even seconds). Wiggle's twists and
