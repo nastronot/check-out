@@ -16,14 +16,20 @@ configured latitude/longitude:
 dark); `°` is a degree glyph. All are defined in code, on demand, when the mode
 is entered — never read from the user's `state.json` glyph slots.
 
-The colon in `HH:MM` **ticks**: the hardware cursor block sits on the colon's
-cell for the first half of every second and is off for the second half, standing
-in for the hidden seconds.
+The colon in `HH:MM` stands in for the hidden seconds. A state setting
+`weather_colon` picks one of three behaviours:
+
+| Value | Behaviour |
+|---|---|
+| `on` | Solid: a plain colon, no cursor, no animation. |
+| `tick` (default) | The hardware cursor block sits on the colon's cell for the first half of every second and is off for the second half. |
+| `pulse` | Display brightness sweeps up and back down once per second. Brightness is a whole-display setting on this hardware, so the whole panel breathes, not only the colon. |
 
 ## Decisions (from the user)
 
 - Location is latitude + longitude only (no geocoding).
-- The colon ticks via the hardware cursor.
+- The colon has three settings: on (solid), tick (cursor on/off), pulse
+  (brightness up and down once per second).
 - Fetch only as often as the data changes: Open-Meteo refreshes `current` every
   900 s, so fetch every 15 minutes, aligned to its refresh.
 - Glyphs are coded independently; the mockup's slots may disappear.
@@ -120,6 +126,12 @@ Replaces the spectrum-only `spectrum_active` enter/exit logic.
   `bottom_line(...)` or `SET LOCATION` (no lat/lon). `cursor` returns the index
   of the `:` in the aligned top line while `now.microsecond < 500_000`, else
   `None`.
+- `cursor` only names a cell when `weather_colon` is `tick`.
+- `pulse` reuses the existing `animation_brightness` triangle with
+  `step_ms = 1000 // 6` (one 0→3→0 sweep per second), phase-locked to the
+  wall-clock second. In weather mode the colon setting owns brightness
+  animation; the global `animation` is forced to `none` there (the same rule
+  marquee and spectrum already follow).
 - `VFDDriver.show(top, bottom, cursor=None)`: with a cursor, the buffer ends
   `0x10 <pos> 0x13` instead of `0x14`. Bytes stay within the confirmed set.
 - The emit tuple carries the cursor, so emit-diffing writes ~2×/s in weather.
@@ -129,12 +141,13 @@ Replaces the spectrum-only `spectrum_active` enter/exit logic.
 ### 6. State, status, web, UI
 
 - `state.json`: `weather_lat`, `weather_lon` (float or null; out-of-range or junk
-  -> null in `_backfill`).
+  -> null in `_backfill`); `weather_colon` (`on`|`tick`|`pulse`, junk -> `tick`).
 - `status.json`: `glyphs`, `cursor` (cell or null), `weather`
   (`{reading…, observed_at, fetched_at, error}` or null).
 - Web: no new endpoints — `PUT /api/state` already carries the new keys.
 - UI: `weather` in `MODES`; a Weather panel with lat/lon number inputs (debounced
-  patch, like marquee text) and a last-updated/error readout; `VfdPreview`
+  patch, like marquee text), an On / Tick / Pulse colon toggle, and a
+  last-updated/error readout; `VfdPreview`
   decodes glyphs from `status.glyphs` (falls back to state glyphs) and draws the
   cursor block at `status.cursor`.
 
@@ -161,8 +174,9 @@ The clock (top line) never depends on the network.
 - `driver`: `show(..., cursor=n)` bytes end `0x10 n 0x13`; default unchanged.
 - `daemon`: glyph-set swap on spectrum↔weather↔clock (define, restore user
   glyphs); existing spectrum tests pass; weather emit toggles cursor at the
-  half-second; colon index follows `align_top`.
-- `state`: lat/lon backfill + range checks. UI: `npm run verify`.
+  half-second only in `tick`; `on` never sets a cursor; `pulse` sweeps 0→3→0
+  within one second; colon index follows `align_top`.
+- `state`: lat/lon backfill + range checks; `weather_colon` coercion. UI: `npm run verify`.
 - No test touches the real network.
 
 ## Out of scope
