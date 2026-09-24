@@ -24,7 +24,11 @@ from datetime import datetime, timezone
 
 from . import config
 from .driver import normalize_brightness
+from .news import SOURCES as _NEWS_SOURCE_MAP
 from .weather import COLON_MODES, LEGACY_COLON_MODES, PACMAN_SPRITES
+
+NEWS_SOURCES = tuple(_NEWS_SOURCE_MAP)
+NEWS_EFFECTS = ("none", "flash", "throb")
 
 # Default brightness index (3 = Maximum) — bright out of the box.
 _DEFAULT_BRIGHTNESS = 3
@@ -87,7 +91,14 @@ def defaults() -> dict:
         "dynamic_colon": "tick",         # "on" | "tick" | "twinkle" | "pacman"
         "dynamic_colon_half": False,     # half speed: every colon loop takes 2 s
         "dynamic_pacman_solo": False,    # pacman colon: one sprite instead of both
-        "dynamic_pacman_sprite": "ghost",  # the solo sprite: "ghost" | "pacman"
+        "dynamic_pacman_sprite": "ghost",
+        # --- dynamic mode: news alerts (checkout/news.py) ---
+        "news_enabled": False,           # poll the feeds while dynamic is on screen
+        "news_sources": list(NEWS_SOURCES),  # any of "ap" | "bbc" | "nyt"
+        "news_interval_min": 5,          # minutes between checks (1..60)
+        "news_repeat": 1,                # extra scroll passes of the headline (0..5)
+        "news_speed_ms": 250,            # headline scroll step (60..1000 ms)
+        "news_effect": "none",           # "none" | "flash" | "throb" brightness  # the solo sprite: "ghost" | "pacman"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -184,6 +195,19 @@ def _backfill(data: dict) -> dict:
     merged["dynamic_pacman_solo"] = bool(merged.get("dynamic_pacman_solo"))
     if merged.get("dynamic_pacman_sprite") not in PACMAN_SPRITES:
         merged["dynamic_pacman_sprite"] = "ghost"
+    # News settings: known sources (order kept, no repeats), clamped numbers.
+    merged["news_enabled"] = bool(merged.get("news_enabled"))
+    sources = merged.get("news_sources")
+    if isinstance(sources, list):
+        merged["news_sources"] = [s for i, s in enumerate(sources)
+                                  if s in NEWS_SOURCES and s not in sources[:i]]
+    else:
+        merged["news_sources"] = list(NEWS_SOURCES)
+    merged["news_interval_min"] = _clamp_int(merged.get("news_interval_min"), 5, 1, 60)
+    merged["news_repeat"] = _clamp_int(merged.get("news_repeat"), 1, 0, 5)
+    merged["news_speed_ms"] = _clamp_int(merged.get("news_speed_ms"), 250, 60, 1000)
+    if merged.get("news_effect") not in NEWS_EFFECTS:
+        merged["news_effect"] = "none"
     if merged.get("dynamic_colon") not in COLON_MODES:
         merged["dynamic_colon"] = "tick"
     return merged
@@ -198,6 +222,16 @@ def _coord(value, limit: float) -> float | None:
     except (TypeError, ValueError):
         return None
     return v if math.isfinite(v) and -limit <= v <= limit else None
+
+
+def _clamp_int(value, default: int, lo: int, hi: int) -> int:
+    """Coerce ``value`` to an int in ``[lo, hi]``, falling back to ``default``."""
+    if isinstance(value, bool):
+        return default
+    try:
+        return max(lo, min(hi, int(value)))
+    except (TypeError, ValueError):
+        return default
 
 
 def _clamp_float(value, default: float, lo: float, hi: float) -> float:

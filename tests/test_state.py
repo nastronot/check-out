@@ -385,3 +385,28 @@ def test_new_dynamic_keys_win_over_old_ones(state_path):
     import json
     state_path.write_text(json.dumps({"dynamic_colon": "tick", "weather_colon": "pacman"}))
     assert state.load_state()["dynamic_colon"] == "tick"
+
+
+# --- news (dynamic mode) ------------------------------------------------------------
+def test_news_defaults(state_path):
+    s = state.load_state()
+    assert s["news_enabled"] is False
+    assert s["news_sources"] == ["ap", "bbc", "nyt"]
+    assert (s["news_interval_min"], s["news_repeat"], s["news_speed_ms"]) == (5, 1, 250)
+    assert s["news_effect"] == "none"
+
+
+@pytest.mark.parametrize("field,given,expected", [
+    ("news_enabled", 1, True),
+    ("news_sources", ["nyt", "cnn", "ap", "nyt"], ["nyt", "ap"]),   # known, order kept, no dupes
+    ("news_sources", [], []),
+    ("news_sources", "ap", ["ap", "bbc", "nyt"]),                    # junk -> default
+    ("news_interval_min", 0, 1), ("news_interval_min", 999, 60), ("news_interval_min", "7", 7),
+    ("news_repeat", -1, 0), ("news_repeat", 9, 5), ("news_repeat", "x", 1),
+    ("news_speed_ms", 10, 60), ("news_speed_ms", 5000, 1000),
+    ("news_effect", "throb", "throb"), ("news_effect", "strobe", "none"),
+])
+def test_news_settings_coerce(state_path, field, given, expected):
+    import json
+    state_path.write_text(json.dumps({field: given}))
+    assert state.load_state()[field] == expected
