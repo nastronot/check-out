@@ -667,8 +667,8 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         frame = FRAMES.get(mode, FRAMES[DEFAULT_FRAME])
         top, bottom = render_lines(
             *frame.render(now, state),
-            top_align=_align(state.get("align_top")),
-            bottom_align=_align(state.get("align_bottom")),
+            top_align=frame.align or _align(state.get("align_top")),
+            bottom_align=frame.align or _align(state.get("align_bottom")),
         )
         emit = resolve_emit(now_ms, animation, params, top, bottom)
 

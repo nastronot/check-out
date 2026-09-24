@@ -18,6 +18,10 @@ class Frame(abc.ABC):
     #: Stable identifier matched against ``state["mode"]``.
     name: str = "frame"
 
+    #: A fixed alignment for both lines, or None to use the state's
+    #: ``align_top`` / ``align_bottom`` (the Justify control).
+    align: str | None = None
+
     @abc.abstractmethod
     def render(self, now: datetime, state: dict) -> tuple[str, str]:
         """Return logical (top, bottom) strings for the given time/state."""

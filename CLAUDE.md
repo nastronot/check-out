@@ -64,7 +64,9 @@ it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it �
 
 ### Weather mode (v1.4.0)
 Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R] 82%`
-(four fixed 5-cell fields, ` --` when missing or ≥1 h stale). State:
+(four fixed 5-cell fields, ` --` when missing or ≥1 h stale). Both lines are always centered
+(`WeatherFrame.align`; a frame's `align` overrides the Justify setting), so the UI
+hides Justify in weather. State:
 `weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle`), `weather_colon_half`
 (bool; development names `pulse`/`throb*`/`burst*` migrate on load).
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a

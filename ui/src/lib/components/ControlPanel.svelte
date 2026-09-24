@@ -445,8 +445,9 @@
 
     <!-- Per-line alignment. In MARQUEE the top row is the hardware ticker (it
          controls its own layout), so Line 1 justify is hidden; Line 2 (the
-         static bottom) still justifies. N/A in SPECTRUM (both rows are bars). -->
-    {#if state.mode !== 'spectrum'}
+         static bottom) still justifies. N/A in SPECTRUM (both rows are bars) and
+         WEATHER (always centered: WeatherFrame.align). -->
+    {#if state.mode !== 'spectrum' && state.mode !== 'weather'}
     <div class="field">
       <span class="field__label">Justify</span>
       <div class="align-rows">

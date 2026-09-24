@@ -70,6 +70,7 @@ def colon_char(state: dict, now: datetime) -> str:
 
 class WeatherFrame(Frame):
     name = "weather"
+    align = "center"  # always centered; the bottom line fills all 20 cells anyway
 
     def __init__(self, fetcher) -> None:
         self.fetcher = fetcher

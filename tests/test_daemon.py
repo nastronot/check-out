@@ -966,3 +966,23 @@ class _RecordingDefines(_CountingDriver):
     def define_character(self, slot, rows):
         self.defined[slot] = list(rows)
 
+
+
+def test_weather_is_always_centered_whatever_the_saved_alignment(monkeypatch):
+    written, _, state = _weather_setup(monkeypatch, colon="on")
+    state = {**state, "align_top": "left", "align_bottom": "right"}
+    daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(),
+                     now=datetime(2026, 9, 23, 20, 33, 12))
+    top = written[-1]["top"]
+    assert top.startswith(" ") and top.endswith(" ")      # 18 chars, centered
+    assert top.strip().startswith("09/23/26")
+
+
+def test_message_still_honours_the_saved_alignment(monkeypatch):
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    state = {"mode": "message", "message": "HI\nTHERE", "align_top": "left",
+             "align_bottom": "right"}
+    daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=NOW)
+    assert written[-1]["top"] == "HI".ljust(20)
+    assert written[-1]["bottom"] == "THERE".rjust(20)
