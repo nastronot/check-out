@@ -30,10 +30,11 @@ process. The constraint — two lines, twenty characters — is the aesthetic.
 - **Code pages** — 12 selectable character sets.
 - **Stereo spectrum analyzer** — a real-time audio analyzer in three layouts
   (Full / Stereo-V / Stereo-H) × two styles (Bars / Line).
-- **Weather clock** — `MM/DD/YY DAY HH:MM` over today's high / low / current /
-  chance of rain for a latitude + longitude (Open-Meteo, no API key, fetched once
-  per 15-minute update). The colon stands in for seconds: steady, blinking on
-  and off, or an animated wiggle or twinkle (once a second, or at half speed).
+- **Weather clock** — `MM/DD/YY DAY HH:MM` over the current temperature and the
+  next 24 hours' high, low and chance of rain for a latitude + longitude
+  (Open-Meteo, no API key, fetched once per 15-minute update). The colon stands
+  in for seconds: steady, blinking, an animated wiggle or twinkle, or a pacman
+  layout with a ghost and pacman beside the time (full or half speed).
 - **Web control surface** — a Svelte single-page app over a FastAPI backend with a
   **live pixel-accurate phosphor preview** of the glass.
 

@@ -7,15 +7,17 @@ import pytest
 from checkout import weather
 from checkout.driver import GLYPH_CODES
 
-# The reply probed live on 2026-09-23 (Chicago), trimmed to used fields.
+# The reply shape probed live on 2026-09-23 (Chicago): current + the next 24
+# hourly values starting at the current hour. Values trimmed/chosen for the test.
+_TEMPS = [82.0, 85.5, 92.6, 90.1] + [80.0] * 19 + [74.2]
+_RAIN = [0, 10, 82, 40] + [5] * 20
 PAYLOAD = {
     "utc_offset_seconds": -18000,
     "current": {"time": "2026-09-23T20:45", "interval": 900, "temperature_2m": 82.4},
-    "daily": {
-        "time": ["2026-09-23"],
-        "temperature_2m_max": [92.6],
-        "temperature_2m_min": [74.2],
-        "precipitation_probability_max": [82],
+    "hourly": {
+        "time": [f"2026-09-2{3 + (20 + h) // 24}T{(20 + h) % 24:02d}:00" for h in range(24)],
+        "temperature_2m": _TEMPS,
+        "precipitation_probability": _RAIN,
     },
 }
 # 20:45 local at UTC-5 is 01:45 UTC the next day.
@@ -24,7 +26,7 @@ OBSERVED = datetime(2026, 9, 24, 1, 45, tzinfo=timezone.utc).timestamp()
 H, L, C, R, DEG = (chr(GLYPH_CODES[s]) for s in range(5))
 
 
-def test_parse_reads_the_used_fields():
+def test_parse_takes_high_low_rain_over_the_next_24_hours():
     r = weather.parse(PAYLOAD, fetched_at=OBSERVED + 30)
     assert (r.high, r.low, r.current, r.rain) == (92.6, 74.2, 82.4, 82.0)
     assert r.observed_at == OBSERVED
@@ -32,24 +34,29 @@ def test_parse_reads_the_used_fields():
     assert r.fetched_at == OBSERVED + 30
 
 
-@pytest.mark.parametrize("bad", [{}, {"current": {}}, {**PAYLOAD, "daily": {}}, [] ])
+@pytest.mark.parametrize("bad", [{}, {"current": {}}, {**PAYLOAD, "hourly": {}}, [] ])
 def test_parse_rejects_malformed_replies(bad):
     with pytest.raises(ValueError):
         weather.parse(bad, fetched_at=0)
 
 
-def test_parse_keeps_null_values_as_none():
-    p = {**PAYLOAD, "daily": {**PAYLOAD["daily"], "precipitation_probability_max": [None]}}
-    assert weather.parse(p, 0).rain is None
+def test_parse_skips_null_hours_and_is_none_when_all_are_null():
+    some = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"],
+                                  "precipitation_probability": [None, 30] + [None] * 22}}
+    assert weather.parse(some, 0).rain == 30.0
+    none = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"],
+                                  "precipitation_probability": [None] * 24}}
+    assert weather.parse(none, 0).rain is None
 
 
 def test_build_url_asks_only_for_the_used_fields():
     url = weather.build_url(41.8781, -87.6298)
     assert url.startswith("https://api.open-meteo.com/v1/forecast?")
     for part in ("latitude=41.8781", "longitude=-87.6298", "current=temperature_2m",
-                 "temperature_unit=fahrenheit", "timezone=auto", "forecast_days=1"):
+                 "hourly=temperature_2m,precipitation_probability", "forecast_hours=24",
+                 "temperature_unit=fahrenheit", "timezone=auto"):
         assert part in url
-    assert "precipitation_probability_max" in url
+    assert "daily=" not in url and "forecast_days" not in url
 
 
 def test_next_fetch_follows_the_data_refresh():
@@ -293,3 +300,10 @@ def test_thread_survives_an_unexpected_error_and_logs_it():
     assert second.wait(2)
     f.stop()
     assert any("bug" in m for m in logged)
+
+
+def test_non_finite_hours_are_skipped():
+    temps = [float("nan"), 70.0, float("inf"), 60.0] + [65.0] * 20
+    p = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"], "temperature_2m": temps}}
+    r = weather.parse(p, OBSERVED)
+    assert (r.high, r.low) == (70.0, 60.0)

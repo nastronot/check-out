@@ -657,3 +657,11 @@ decision: the frame draws from it and the daemon's `mode_glyph_set` (now given
 `now`) loads glyphs from it, so drawing and defining never disagree. Crossing
 the width boundary changes the glyph set, which reloads the sprite slots (one
 repaint).
+
+**Rolling 24 hours.** High, low and rain were the calendar day's (`daily`,
+`forecast_days=1`), so at 11:45 PM they described a day that was almost over —
+an 82% rain chance could be a storm that passed at 3 PM. They are now the max /
+min / max of the next 24 hourly values (`hourly=temperature_2m,
+precipitation_probability&forecast_hours=24`, which starts at the current hour;
+~1.1 KB reply, up from ~600 bytes). Hours with no value, or a non-finite one, are
+skipped. Current is unchanged.

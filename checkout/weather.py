@@ -1,7 +1,9 @@
 """Weather mode data: the Open-Meteo call, its reply, and the bottom line.
 
-One HTTP call returns everything the bottom line needs (current temperature,
-today's high/low and highest rain chance). Open-Meteo refreshes ``current``
+One HTTP call returns everything the bottom line needs: the current
+temperature, plus the next 24 hourly temperatures and rain chances, from which
+the high, low and rain figures are taken — a ROLLING 24 hours from now, not the
+calendar day (so late at night it is about tomorrow, not the day that is ending). Open-Meteo refreshes ``current``
 every ``interval`` seconds (900 = 15 min), so the fetcher (below) fetches once
 per refresh instead of polling. Nothing here touches the serial port.
 """
@@ -130,10 +132,11 @@ def build_url(lat: float, lon: float) -> str:
         "latitude": f"{lat:.4f}",
         "longitude": f"{lon:.4f}",
         "current": "temperature_2m",
-        "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+        # 24 hourly steps starting at the current hour (~1.1 KB reply).
+        "hourly": "temperature_2m,precipitation_probability",
+        "forecast_hours": 24,
         "temperature_unit": "fahrenheit",
         "timezone": "auto",
-        "forecast_days": 1,
     }, safe=",")
     return f"{API_URL}?{query}"
 
@@ -147,20 +150,32 @@ def _num(value) -> float | None:
     return v if math.isfinite(v) else None
 
 
+def _extreme(values, pick) -> float | None:
+    """``pick`` (max/min) of the finite values, or None if there are none."""
+    finite = [v for v in (_num(x) for x in values) if v is not None]
+    return pick(finite) if finite else None
+
+
 def parse(payload: dict, fetched_at: float) -> Reading:
     """Turn a reply into a Reading; raise ValueError if it is malformed.
+
+    High / low / rain are the max / min / max over the next 24 hourly values
+    (hours with no value are skipped).
 
     ``current.time`` is local to the location (``timezone=auto``), so the reply's
     ``utc_offset_seconds`` converts it to an absolute instant.
     """
     try:
-        cur, daily = payload["current"], payload["daily"]
+        cur, hourly = payload["current"], payload["hourly"]
+        temps, rain = hourly["temperature_2m"], hourly["precipitation_probability"]
+        if not temps or not rain:
+            raise ValueError("no hourly values")
         local = datetime.fromisoformat(cur["time"]).replace(tzinfo=timezone.utc)
         return Reading(
-            high=_num(daily["temperature_2m_max"][0]),
-            low=_num(daily["temperature_2m_min"][0]),
+            high=_extreme(temps, max),
+            low=_extreme(temps, min),
             current=_num(cur["temperature_2m"]),
-            rain=_num(daily["precipitation_probability_max"][0]),
+            rain=_extreme(rain, max),
             observed_at=local.timestamp() - int(payload.get("utc_offset_seconds", 0)),
             interval_s=int(cur.get("interval", 900)),
             fetched_at=fetched_at,
