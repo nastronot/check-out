@@ -31,7 +31,7 @@ from .poller import Poller
 @dataclass(frozen=True)
 class Source:
     key: str
-    name: str            # short label for the UI
+    name: str            # the OUTLET, as the ticker cites it ("PHORONIX: ...")
     url: str
     pick: str            # "first" (the feed's own order) | "newest" (by publish time)
     strip_suffix: str = ""
@@ -55,16 +55,41 @@ SOURCES: dict[str, Source] = {
     "wired": Source("wired", "WIRED", "https://www.wired.com/feed/rss", pick="first",     # ~28
                     exclude=r"\b(coupons?|promo codes?|deals?)\b"),
     "hill": Source("hill", "HILL", "https://thehill.com/homenews/feed/", pick="first"),   # ~15 (main feed: ~80)
-    # "AI" = Ars Technica's AI section: the best signal-to-noise of those compared
+    # Ars Technica's AI section: the best signal-to-noise of those compared
     # (The Decoder ~9/day, TechCrunch AI ~14/day, MIT Tech Review ~1/day).
-    "ai": Source("ai", "AI", "https://arstechnica.com/ai/feed/", pick="first"),          # ~4
-    # "LINUX" = Phoronix, the most-read Linux news site (9to5Linux ~5/day is
-    # release-only; LWN's items are paywalled).
-    "linux": Source("linux", "LINUX", "https://www.phoronix.com/rss.php", pick="first"), # ~9
+    "ai": Source("ai", "ARS", "https://arstechnica.com/ai/feed/", pick="first"),        # ~4
+    # Phoronix, the most-read Linux news site (9to5Linux ~5/day is release-only;
+    # LWN's items are paywalled).
+    "linux": Source("linux", "PHORONIX", "https://www.phoronix.com/rss.php", pick="first"),  # ~9
+    # Section feeds in EDITORIAL order: only a change of lead story alerts, far
+    # rarer than their post counts.
+    "nyt_tech": Source("nyt_tech", "NYT",
+                       "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+                       pick="first"),                                                    # ~9 posts
+    "bbc_tech": Source("bbc_tech", "BBC", "https://feeds.bbci.co.uk/news/technology/rss.xml",
+                       pick="first"),                                                    # ~6 posts
+    "nyt_politics": Source("nyt_politics", "NYT",
+                           "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
+                           pick="first"),                                                # ~38 posts
 }
 
-# A fresh setup watches only the outlets with true lead stories (+ AP).
-DEFAULT_SOURCES = ("ap", "bbc", "nyt")
+# What the UI offers: topics, each backed by quiet, curated feeds. The other
+# sources above stay available to code (a ticker, a future topic) but are off.
+TOPICS: dict[str, tuple[str, ...]] = {
+    "tech": ("nyt_tech", "bbc_tech", "linux"),
+    "politics": ("nyt_politics",),
+    "mississippi": ("mt",),
+}
+
+
+def sources_for(topics) -> list[str]:
+    """The source keys behind the chosen topics, in order, without repeats."""
+    out: list[str] = []
+    for topic in topics or []:
+        for src in TOPICS.get(topic, ()):
+            if src not in out:
+                out.append(src)
+    return out
 
 
 @dataclass(frozen=True)

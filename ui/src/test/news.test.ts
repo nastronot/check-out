@@ -47,6 +47,6 @@ describe('newsSummary review fixes', () => {
     expect(s).toMatch(/^NYT · Court blocks ban · \d{1,2}:\d{2}/);
   });
   it('says so when no sources are selected', () => {
-    expect(newsSummary({ sources: {}, latest: null, error: null, alerting: false }, 0)).toMatch(/no sources/i);
+    expect(newsSummary({ sources: {}, latest: null, error: null, alerting: false }, 0)).toMatch(/no topics/i);
   });
 });

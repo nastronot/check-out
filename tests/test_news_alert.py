@@ -37,8 +37,8 @@ class _News:
 
 
 STATE = {"mode": "dynamic", "weather_lat": 41.9, "weather_lon": -87.6,
-         "dynamic_colon": "on", "news_enabled": True, "news_sources": ["bbc"],
-         "news_interval_min": 5, "news_repeat": 1, "news_speed_ms": 250,
+         "dynamic_colon": "on", "news_enabled": True, "news_topics": ["politics"],
+         "news_interval_min": 5, "news_gap_min": 10, "news_repeat": 1, "news_speed_ms": 250,
          "news_effect": "none"}
 
 
@@ -116,13 +116,13 @@ def test_a_pending_alert_takes_over_the_screen_then_the_clock_returns():
 def test_news_off_means_no_polling_and_no_alert():
     f = _frame(alert=HEAD)
     f.tick(T0, {**STATE, "news_enabled": False})
-    assert f.news.config == (None, 300) and not f.alerting(T0)
+    assert f.news.config[0] is None and not f.alerting(T0)
 
 
 def test_polling_follows_the_settings():
     f = _frame()
-    f.tick(T0, {**STATE, "news_sources": ["ap", "nyt"], "news_interval_min": 2})
-    assert f.news.config == (["ap", "nyt"], 120)
+    f.tick(T0, {**STATE, "news_topics": ["mississippi", "tech"], "news_interval_min": 2})
+    assert f.news.config == (["mt", "nyt_tech", "bbc_tech", "linux"], 120)
 
 
 def test_leaving_dynamic_or_turning_news_off_ends_an_alert():
@@ -154,5 +154,36 @@ def test_brightness_hook_follows_the_effect_only_during_an_alert():
 def test_the_ticker_cites_each_source_by_its_label():
     f = _frame(alert=Headline("linux", "Kernel 7.0 lands", "l1", 1.0))
     f.tick(T0, STATE)
-    assert f.render(_at(250 * 20), STATE)[1] == "LINUX: Kernel 7.0 la"
+    assert f.render(_at(250 * 20), STATE)[1] == "PHORONIX: Kernel 7.0"   # the outlet
+
+
+# --- the gap between alerts ---------------------------------------------------------
+def test_a_new_lead_inside_the_gap_waits_for_it_then_plays():
+    f = _frame(alert=HEAD)
+    f.tick(T0, STATE)                                  # alert 1 at 12:00
+    second = Headline("nyt_politics", "Second story", "n2", 2.0)
+    f.news.alert = second
+    f.tick(T0 + timedelta(minutes=3), STATE)
+    assert not f.alerting(T0 + timedelta(minutes=3))   # inside the 10-minute gap: held
+    assert f.news.alert is second                      # ...and not consumed
+    f.tick(T0 + timedelta(minutes=10), STATE)
+    assert f.alerting(T0 + timedelta(minutes=10))
+    assert f.render(T0 + timedelta(minutes=10, seconds=5), STATE)[1].startswith("NYT: Second")
+
+
+def test_no_gap_means_back_to_back_is_allowed():
+    f = _frame(alert=HEAD)
+    f.tick(T0, {**STATE, "news_gap_min": 0})
+    end = T0 + timedelta(milliseconds=na.duration_ms("BBC: " + HEAD.title, 1, 250))
+    f.news.alert = Headline("mt", "Local", "m1", 3.0)
+    f.tick(end, {**STATE, "news_gap_min": 0})
+    assert f.alerting(end)
+
+
+def test_show_latest_ignores_the_gap():
+    f = _frame(alert=HEAD, latest=Headline("mt", "Local", "m1", 3.0))
+    f.tick(T0, STATE)
+    later = T0 + timedelta(minutes=1)
+    f.tick(later, STATE)
+    assert f.show_latest(later, STATE) and f.alerting(later)
 

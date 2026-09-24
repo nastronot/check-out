@@ -18,7 +18,7 @@
     DynamicColon,
     DynamicPacmanSprite,
     NewsEffect,
-    NewsSource,
+    NewsTopic,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -166,29 +166,25 @@
   const setSprite = (p: DynamicPacmanSprite) => patch({ dynamic_pacman_sprite: p });
   $: weatherLine = weatherSummary(status?.weather);
 
-  // news alerts (dynamic): sources are a multi-select; numbers patch on change.
-  const NEWS_SOURCES: { value: NewsSource; label: string }[] = [
-    { value: 'ap', label: 'AP' },
-    { value: 'bbc', label: 'BBC' },
-    { value: 'nyt', label: 'NYT' },
-    { value: 'mt', label: 'MT' },
-    { value: 'wired', label: 'WIRED' },
-    { value: 'hill', label: 'HILL' },
-    { value: 'ai', label: 'AI' },
-    { value: 'linux', label: 'LINUX' },
+  // news alerts (dynamic): topics are a multi-select; numbers patch on change.
+  const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
+    { value: 'tech', label: 'TECH' },
+    { value: 'politics', label: 'POLITICS' },
+    { value: 'mississippi', label: 'MISSISSIPPI' },
   ];
   const NEWS_EFFECTS: { value: NewsEffect; label: string }[] = [
     { value: 'none', label: 'NONE' },
     { value: 'flash', label: 'FLASH' },
     { value: 'throb', label: 'THROB' },
   ];
-  function toggleNewsSource(src: NewsSource): void {
-    const cur = state?.news_sources ?? [];
-    const next = cur.includes(src) ? cur.filter((s) => s !== src) : [...cur, src];
-    patch({ news_sources: next });
+  function toggleNewsTopic(t: NewsTopic): void {
+    const cur = state?.news_topics ?? [];
+    const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
+    patch({ news_topics: next });
   }
   const setNewsEnabled = (e: Event) => patch({ news_enabled: checked(e) });
   const setNewsInterval = (e: Event) => patch({ news_interval_min: num(e) });
+  const setNewsGap = (e: Event) => patch({ news_gap_min: num(e) });
   const setNewsRepeat = (e: Event) => patch({ news_repeat: num(e) });
   const setNewsSpeed = (e: Event) => patch({ news_speed_ms: num(e) });
   const setNewsEffect = (x: NewsEffect) => patch({ news_effect: x });
@@ -201,7 +197,7 @@
       showingLatest = false;
     }
   }
-  $: newsLine = newsSummary(status?.news, state?.news_sources.length);
+  $: newsLine = newsSummary(status?.news, state?.news_topics.length);
 
   // One line per colon choice: only the selected one is explained.
   const COLON_HINTS: Record<DynamicColon, string> = {
@@ -532,26 +528,27 @@
           >
         </div>
         {#if state.news_enabled}
-          <div class="seg sources" aria-label="news sources">
-            {#each NEWS_SOURCES as src}
+          <div class="seg" aria-label="news topics">
+            {#each NEWS_TOPICS as t}
               <button
                 type="button"
-                aria-pressed={state.news_sources.includes(src.value)}
-                on:click={() => toggleNewsSource(src.value)}>{src.label}</button
+                aria-pressed={state.news_topics.includes(t.value)}
+                on:click={() => toggleNewsTopic(t.value)}>{t.label}</button
               >
             {/each}
           </div>
           <div class="ctl-row">
-            <span class="ctl-row__name">Every</span>
+            <span class="ctl-row__name">Check</span>
             <input type="number" min="1" max="60" value={state.news_interval_min} on:change={setNewsInterval} />
+            <span class="ctl-row__name">Gap</span>
+            <input type="number" min="0" max="60" value={state.news_gap_min} on:change={setNewsGap} />
             <span class="field__hint">min</span>
-            <span class="ctl-row__name">Repeat</span>
-            <input type="number" min="0" max="5" value={state.news_repeat} on:change={setNewsRepeat} />
           </div>
           <div class="ctl-row">
             <span class="ctl-row__name">Speed</span>
             <input type="number" min="60" max="1000" step="10" value={state.news_speed_ms} on:change={setNewsSpeed} />
-            <span class="field__hint">ms per step</span>
+            <span class="ctl-row__name">Repeat</span>
+            <input type="number" min="0" max="5" value={state.news_repeat} on:change={setNewsRepeat} />
           </div>
           <div class="ctl-row">
             <span class="ctl-row__name">Effect</span>
@@ -667,8 +664,4 @@
     opacity: 0.4;
   }
 
-  /* eight source toggles: a full-width row that wraps to two lines if narrow */
-  .seg.sources {
-    flex-wrap: wrap;
-  }
 </style>

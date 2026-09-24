@@ -2,7 +2,8 @@ import type { NewsStatus } from './types';
 
 // Same labels as checkout/news.py SOURCES (they also prefix the ticker).
 const LABEL: Record<string, string> = {
-  ap: 'AP', bbc: 'BBC', nyt: 'NYT', mt: 'MT', wired: 'WIRED', hill: 'HILL', ai: 'AI', linux: 'LINUX',
+  ap: 'AP', bbc: 'BBC', nyt: 'NYT', mt: 'MT', wired: 'WIRED', hill: 'HILL', ai: 'ARS',
+  linux: 'PHORONIX', nyt_tech: 'NYT', bbc_tech: 'BBC', nyt_politics: 'NYT',
 };
 const label = (key: string) => LABEL[key] ?? key.toUpperCase();
 
@@ -10,9 +11,9 @@ const time = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 /** One line for the News section: the newest headline (source · title · time),
- *  or what went wrong. `selected` is how many sources are ticked. */
+ *  or what went wrong. `selected` is how many topics are ticked. */
 export function newsSummary(n: NewsStatus | null | undefined, selected?: number): string {
-  if (selected === 0) return 'No sources selected.';
+  if (selected === 0) return 'No topics selected.';
   if (n?.error && !n.latest) return `Fetch failed: ${n.error}`;
   if (!n?.latest) return 'Waiting for the first headlines…';
   const failed = Object.entries(n.sources)

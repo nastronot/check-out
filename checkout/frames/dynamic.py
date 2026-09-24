@@ -43,6 +43,7 @@ from .. import weather
 from ..config import COLS
 from ..driver import GLYPH_CODES
 from ..news import SOURCES, Headline
+from ..news import sources_for as news_sources_for
 from . import news_alert
 from .base import Frame
 from .clock import compact_date_time, short_date_time
@@ -157,6 +158,7 @@ class DynamicFrame(Frame):
         self.fetcher = fetcher
         self.news = news
         self._alert: _Alert | None = None
+        self._last_start_ms: int | None = None   # when the last alert started (the gap)
 
     # --- driving the fetchers and alerts ------------------------------------------
     def tick(self, now: datetime, state: dict, active: bool = True) -> None:
@@ -169,14 +171,20 @@ class DynamicFrame(Frame):
         if self.news is None:
             return
         enabled = active and bool(state.get("news_enabled"))
-        interval_s = int(state.get("news_interval_min", 5)) * 60
-        self.news.set_config(state.get("news_sources") if enabled else None, interval_s)
+        interval_s = int(state.get("news_interval_min", 2)) * 60
+        sources = news_sources_for(state.get("news_topics")) if enabled else None
+        self.news.set_config(sources, interval_s)
         if not enabled:
             self._alert = None
             return
         if self._alert is not None and _ms(now) >= self._alert.ends_ms:
             self._alert = None
-        if self._alert is None:
+        # Nothing new -> nothing shown. A new lead inside the gap WAITS (it isn't
+        # taken), so when the gap ends the newest one plays — a burst of changes
+        # collapses into one alert.
+        gap_ms = int(state.get("news_gap_min", 10)) * 60_000
+        gap_over = self._last_start_ms is None or _ms(now) - self._last_start_ms >= gap_ms
+        if self._alert is None and gap_over:
             pending = self.news.take_alert()
             if pending is not None:
                 self._start(pending, now, state)
@@ -196,6 +204,7 @@ class DynamicFrame(Frame):
         speed = int(state.get("news_speed_ms", 250))
         repeat = int(state.get("news_repeat", 1))
         started = _ms(now)
+        self._last_start_ms = started
         source = SOURCES.get(headline.source)
         text = f"{source.name if source else headline.source.upper()}: {headline.title}"
         self._alert = _Alert(headline, text, started, speed, repeat,

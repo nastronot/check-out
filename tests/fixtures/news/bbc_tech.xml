@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title><![CDATA[BBC News]]></title>
+        <description><![CDATA[BBC News - Technology]]></description>
+        <link>https://www.bbc.co.uk/news/technology</link>
+        <image>
+            <url>https://news.bbcimg.co.uk/nol/shared/img/bbc_news_120x60.gif</url>
+            <title>BBC News</title>
+            <link>https://www.bbc.co.uk/news/technology</link>
+        </image>
+        <generator>RSS for Node</generator>
+        <lastBuildDate>Thu, 24 Sep 2026 07:26:17 GMT</lastBuildDate>
+        <atom:link href="https://feeds.bbci.co.uk/news/technology/rss.xml" rel="self" type="application/rss+xml"/>
+        <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
+        <language><![CDATA[en-gb]]></language>
+        <ttl>15</ttl>
+        <item>
+            <title><![CDATA[Rogue OpenAI agent 'infiltrated' Australian government website in world first]]></title>
+            <description><![CDATA[Australia criticised OpenAI for taking "too long" to tell them about the breach which happened in June.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/c6vgy0333dppo#0</guid>
+            <pubDate>Thu, 24 Sep 2026 07:10:58 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f010/live/69f3ee00-b795-11f1-a430-4d16ee157c41.jpg"/>
+        </item>
+<item>
+            <title><![CDATA[What you need to know about the OpenAI Australian government hack]]></title>
+            <description><![CDATA[The BBC’s North America technology correspondent Lily Jamali explains how the Medicare breach happened, and why it matters.]]></description>
+            <link>https://www.bbc.co.uk/news/videos/cwe8ekyzdjvlo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/videos/cwe8ekyzdjvlo#0</guid>
+            <pubDate>Thu, 24 Sep 2026 05:18:26 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/feb5/live/f0712fb0-b7d6-11f1-a430-4d16ee157c41.jpg"/>
+        </item>
+<item>
+            <title><![CDATA[Indians are discovering the thrill of shopping without paying ]]></title>
+            <description><![CDATA[Dopamine sites mimic shopping’s thrill without the spending, turning the ritual of consumption into a digital game.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/cwn741v5rdpxo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cwn741v5rdpxo#0</guid>
+            <pubDate>Wed, 23 Sep 2026 23:14:10 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/083e/live/e4049770-b732-11f1-9f81-a10976817ca3.jpg"/>
+        </item>
+<item>
+            <title><![CDATA[US rejects pleas from OpenAI, Anthropic for global AI standards]]></title>
+            <description><![CDATA[OpenAI's Sam Altman has called for risk evaluation standards, as have Anthropic's Dario Amodei and Hugging Face's Clement Delangue.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/ck87v27vdn1po?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/ck87v27vdn1po#0</guid>
+            <pubDate>Wed, 23 Sep 2026 22:35:14 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3c6c/live/9e4ea090-b791-11f1-a7dc-51a9fb487fda.jpg"/>
+        </item>
+</channel>
+</rss>

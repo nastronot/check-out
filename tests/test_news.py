@@ -23,7 +23,8 @@ def _ts(*args):
 
 
 # --- parsing ---------------------------------------------------------------------
-@pytest.mark.parametrize("key", ["ap", "bbc", "nyt", "mt", "hill", "ai", "linux"])
+@pytest.mark.parametrize("key", ["ap", "bbc", "nyt", "mt", "hill", "ai", "linux",
+                                 "nyt_tech", "bbc_tech", "nyt_politics"])
 def test_parse_reads_every_item(key):
     items = news.parse_rss(_feed(key), news.SOURCES[key])
     assert len(items) == 4
@@ -270,9 +271,11 @@ def test_ap_search_only_matches_article_pages_not_topic_hubs():
 
 # --- more sources (time-ordered feeds: their lead is their newest post) ----------
 def test_every_source_has_a_short_label_and_a_known_pick():
+    # The label is the OUTLET — it prefixes the ticker ("PHORONIX: ...").
     assert {k: s.name for k, s in news.SOURCES.items()} == {
         "ap": "AP", "bbc": "BBC", "nyt": "NYT", "mt": "MT", "wired": "WIRED",
-        "hill": "HILL", "ai": "AI", "linux": "LINUX"}
+        "hill": "HILL", "ai": "ARS", "linux": "PHORONIX",
+        "nyt_tech": "NYT", "bbc_tech": "BBC", "nyt_politics": "NYT"}
     assert all(s.pick in ("first", "newest") for s in news.SOURCES.values())
 
 
@@ -282,6 +285,13 @@ def test_wired_coupon_posts_are_dropped():
     assert news.lead(items, news.SOURCES["wired"].pick).title.startswith("Meta Pinky Promises")
 
 
-def test_the_default_selection_is_the_original_three():
-    assert news.DEFAULT_SOURCES == ("ap", "bbc", "nyt")
+def test_topics_map_to_curated_feeds():
+    assert news.TOPICS == {
+        "tech": ("nyt_tech", "bbc_tech", "linux"),
+        "politics": ("nyt_politics",),
+        "mississippi": ("mt",),
+    }
+    assert news.sources_for(["mississippi", "tech"]) == ["mt", "nyt_tech", "bbc_tech", "linux"]
+    assert news.sources_for(["weather", "tech", "tech"]) == ["nyt_tech", "bbc_tech", "linux"]
+    assert news.sources_for([]) == []
 

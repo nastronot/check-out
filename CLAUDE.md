@@ -136,20 +136,19 @@ with equal buttons, `.seg--sm` is the compact inline variant; `.ctl-row` +
 value at the right of a field label; hints (`.field__hint`) are one short line.
 
 ### News alerts (v1.5.0)
-Dynamic mode, `news_enabled`: `NewsFetcher` polls the selected sources every
-`news_interval_min` for each source's **lead story** (BBC/NYT: first item;
-AP via Google News RSS — AP blocks its own feeds — newest by `pubDate`). MT,
-WIRED, HILL, AI (Ars Technica AI) and LINUX (Phoronix) are time-ordered feeds, so
-their "lead" is their newest post; a per-source `exclude` regex drops Wired's
-coupon/deal posts. Default selection: AP, BBC, NYT. The
-first lead per source is recorded silently; a later new lead (by link, never a
-repeat) becomes the pending alert, newest wins, no backlog. `DynamicFrame.tick`
-starts it: top = `{g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}` (7 bar glyphs,
-glyph key `("dynamic", "news")`), bottom = `SOURCE: headline` scrolling in from
+Dynamic mode, `news_enabled`: the UI offers TOPICS (`news_topics`), each backed
+by curated feeds (`news.TOPICS`): **tech** = NYT Technology + BBC Technology
+(editorial order) + Phoronix; **politics** = NYT Politics (editorial);
+**mississippi** = Mississippi Today. Other outlets (AP, BBC/NYT top, Wired, The
+Hill, Ars AI) stay in `news.SOURCES`, unused by the UI. `NewsFetcher` polls every
+`news_interval_min` (default 2) for each feed's **lead story**; the first lead per
+feed is recorded silently, a later new lead becomes the pending alert, newest wins.
+**Budget:** `news_gap_min` (default 10 → at most 6 an hour): a new lead inside the
+gap waits (not taken) and the newest plays when it ends; nothing new → nothing
+shown. The top shows `{g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}` (7 bar glyphs,
+glyph key `("dynamic", "news")`), the bottom `OUTLET: headline` scrolling in from
 off the right edge, 1 + `news_repeat` passes 6 spaces apart, ending once the last
 character leaves at the left (`news_alert._tape`), then back to time/weather.
-AP is searched as `site:apnews.com/article` — plain `site:apnews.com` also returns
-AP topic hubs, which surfaced as a headline reading just "Donald Trump".
 `news_effect` flash/throb goes through the generic `Frame.brightness` hook. The
 `show_news` command (UI **Show latest**) plays the newest lead. Headlines are
 cleaned to ASCII. The stdlib XML parser is used deliberately: expat ≥ 2.4.1

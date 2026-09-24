@@ -24,11 +24,10 @@ from datetime import datetime, timezone
 
 from . import config
 from .driver import normalize_brightness
-from .news import DEFAULT_SOURCES as NEWS_DEFAULT_SOURCES
-from .news import SOURCES as _NEWS_SOURCE_MAP
+from .news import TOPICS as _NEWS_TOPIC_MAP
 from .weather import COLON_MODES, LEGACY_COLON_MODES, PACMAN_SPRITES
 
-NEWS_SOURCES = tuple(_NEWS_SOURCE_MAP)
+NEWS_TOPICS = tuple(_NEWS_TOPIC_MAP)
 NEWS_EFFECTS = ("none", "flash", "throb")
 
 # Default brightness index (3 = Maximum) — bright out of the box.
@@ -93,8 +92,9 @@ def defaults() -> dict:
         "dynamic_pacman_sprite": "ghost",
         # --- dynamic mode: news alerts (checkout/news.py) ---
         "news_enabled": False,           # poll the feeds while dynamic is on screen
-        "news_sources": list(NEWS_DEFAULT_SOURCES),  # keys of news.SOURCES
-        "news_interval_min": 5,          # minutes between checks (1..60)
+        "news_topics": list(NEWS_TOPICS),   # any of "tech" | "politics" | "mississippi"
+        "news_interval_min": 2,          # minutes between checks (1..60)
+        "news_gap_min": 10,              # at least this many minutes between alerts (0..60)
         "news_repeat": 1,                # extra scroll passes of the headline (0..5)
         "news_speed_ms": 250,            # headline scroll step (60..1000 ms)
         "news_effect": "none",           # "none" | "flash" | "throb" brightness  # the solo sprite: "ghost" | "pacman"
@@ -193,15 +193,18 @@ def _backfill(data: dict) -> dict:
     merged["dynamic_pacman_solo"] = bool(merged.get("dynamic_pacman_solo"))
     if merged.get("dynamic_pacman_sprite") not in PACMAN_SPRITES:
         merged["dynamic_pacman_sprite"] = "ghost"
-    # News settings: known sources (order kept, no repeats), clamped numbers.
+    # News settings: known topics (order kept, no repeats), clamped numbers.
+    # "news_sources" (outlet toggles) was replaced by topics — dropped.
+    merged.pop("news_sources", None)
     merged["news_enabled"] = bool(merged.get("news_enabled"))
-    sources = merged.get("news_sources")
-    if isinstance(sources, list):
-        merged["news_sources"] = [s for i, s in enumerate(sources)
-                                  if s in NEWS_SOURCES and s not in sources[:i]]
+    topics = merged.get("news_topics")
+    if isinstance(topics, list):
+        merged["news_topics"] = [t for i, t in enumerate(topics)
+                                 if t in NEWS_TOPICS and t not in topics[:i]]
     else:
-        merged["news_sources"] = list(NEWS_DEFAULT_SOURCES)
-    merged["news_interval_min"] = _clamp_int(merged.get("news_interval_min"), 5, 1, 60)
+        merged["news_topics"] = list(NEWS_TOPICS)
+    merged["news_interval_min"] = _clamp_int(merged.get("news_interval_min"), 2, 1, 60)
+    merged["news_gap_min"] = _clamp_int(merged.get("news_gap_min"), 10, 0, 60)
     merged["news_repeat"] = _clamp_int(merged.get("news_repeat"), 1, 0, 5)
     merged["news_speed_ms"] = _clamp_int(merged.get("news_speed_ms"), 250, 60, 1000)
     if merged.get("news_effect") not in NEWS_EFFECTS:

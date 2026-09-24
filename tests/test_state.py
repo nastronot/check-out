@@ -391,17 +391,18 @@ def test_new_dynamic_keys_win_over_old_ones(state_path):
 def test_news_defaults(state_path):
     s = state.load_state()
     assert s["news_enabled"] is False
-    assert s["news_sources"] == ["ap", "bbc", "nyt"]
-    assert (s["news_interval_min"], s["news_repeat"], s["news_speed_ms"]) == (5, 1, 250)
+    assert s["news_topics"] == ["tech", "politics", "mississippi"]
+    assert (s["news_interval_min"], s["news_gap_min"]) == (2, 10)
+    assert (s["news_repeat"], s["news_speed_ms"]) == (1, 250)
     assert s["news_effect"] == "none"
 
 
 @pytest.mark.parametrize("field,given,expected", [
     ("news_enabled", 1, True),
-    ("news_sources", ["nyt", "cnn", "ap", "nyt"], ["nyt", "ap"]),   # known, order kept, no dupes
-    ("news_sources", ["mt", "linux"], ["mt", "linux"]),
-    ("news_sources", [], []),
-    ("news_sources", "ap", ["ap", "bbc", "nyt"]),                    # junk -> default
+    ("news_topics", ["mississippi", "sports", "tech", "tech"], ["mississippi", "tech"]),
+    ("news_topics", [], []),
+    ("news_topics", "tech", ["tech", "politics", "mississippi"]),    # junk -> default
+    ("news_gap_min", -5, 0), ("news_gap_min", 999, 60),
     ("news_interval_min", 0, 1), ("news_interval_min", 999, 60), ("news_interval_min", "7", 7),
     ("news_repeat", -1, 0), ("news_repeat", 9, 5), ("news_repeat", "x", 1),
     ("news_speed_ms", 10, 60), ("news_speed_ms", 5000, 1000),
@@ -417,3 +418,10 @@ def test_news_settings_coerce(state_path, field, given, expected):
 def test_an_infinite_number_cannot_break_loading(state_path, field):
     state_path.write_text('{"%s": Infinity}' % field)
     assert isinstance(state.load_state()[field], int)
+
+
+def test_the_old_outlet_list_is_dropped(state_path):
+    import json
+    state_path.write_text(json.dumps({"news_sources": ["ap"]}))
+    assert "news_sources" not in state.load_state()
+

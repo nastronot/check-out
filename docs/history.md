@@ -788,3 +788,13 @@ Decoder, TechCrunch AI and MIT Tech Review for signal-to-noise) and LINUX
 (Phoronix, the most-read Linux news site). All five order by time, so every new
 post alerts; volumes measured 2026-09-24 are noted beside each source. Sources
 gained an `exclude` title filter, used to drop Wired's coupon and deal posts.
+
+**Topics and a budget, to avoid being inundated.** Measured volumes showed that
+time-ordered feeds alert on every post (Wired ~28/day, The Hill ~38, WLBT ~53),
+while editorial section feeds only alert when their lead story changes. The UI
+now offers three topics backed by quiet feeds — tech (NYT Technology, BBC
+Technology, Phoronix), politics (NYT Politics), mississippi (Mississippi Today) —
+checked every 2 minutes, with at least 10 minutes between alerts (≤ 6 an hour).
+A lead that arrives inside the gap waits and the newest plays when the gap ends;
+Show latest ignores the gap. The ticker cites the outlet (`PHORONIX: …`,
+`ARS: …`). `news_sources` gave way to `news_topics`.

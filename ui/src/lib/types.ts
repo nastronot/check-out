@@ -40,8 +40,9 @@ export interface WeatherStatus {
   error: string | null;
 }
 
-/** News alert source keys (checkout/news.py SOURCES) and brightness effect. */
-export type NewsSource = 'ap' | 'bbc' | 'nyt' | 'mt' | 'wired' | 'hill' | 'ai' | 'linux';
+/** News alert brightness effect. */
+/** News topics offered in the UI; each is backed by curated feeds (news.TOPICS). */
+export type NewsTopic = 'tech' | 'politics' | 'mississippi';
 export type NewsEffect = 'none' | 'flash' | 'throb';
 
 /** status.news — each source's lead story + error, the newest lead, alert flag. */
@@ -101,8 +102,9 @@ export interface AppState {
   dynamic_pacman_sprite: DynamicPacmanSprite;
   // dynamic: news alerts
   news_enabled: boolean;
-  news_sources: NewsSource[];
+  news_topics: NewsTopic[];
   news_interval_min: number;
+  news_gap_min: number;
   news_repeat: number;
   news_speed_ms: number;
   news_effect: NewsEffect;

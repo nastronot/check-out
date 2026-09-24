@@ -1040,7 +1040,8 @@ def _news_setup(monkeypatch, effect="none", **fake):
     news = _FakeNews(**fake)
     monkeypatch.setattr(daemon.DYNAMIC_FRAME, "news", news)
     monkeypatch.setattr(daemon.DYNAMIC_FRAME, "_alert", None)
-    state = {**state, "news_enabled": True, "news_sources": ["bbc"], "news_interval_min": 5,
+    monkeypatch.setattr(daemon.DYNAMIC_FRAME, "_last_start_ms", None)   # no gap carried over
+    state = {**state, "news_enabled": True, "news_topics": ["politics"], "news_interval_min": 5,
              "news_repeat": 0, "news_speed_ms": 100, "news_effect": effect}
     return written, news, state
 
