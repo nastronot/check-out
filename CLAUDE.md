@@ -63,7 +63,7 @@ it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it �
 **do not copy bitmaps into the UI** for a new mode.
 
 ### Weather mode (v1.4.0)
-Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R].40"`
+Top `M/D/YY DAY H:MM` (12-hour, no AM/PM, no leading zeros — `clock.compact_date_time` for every time feature); bottom `[H] 93°[L] 74°[C] 82°[R].40"`
 (four fixed 5-cell fields, ` --` when missing or ≥1 h stale). H / L are the max / min and R the rain
 TOTAL in inches over a **rolling 24 hours from now** (`hourly` with
 `forecast_hours=25`, first value dropped: each hourly amount covers the hour

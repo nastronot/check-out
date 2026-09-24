@@ -869,9 +869,9 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
     daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=200_000))
     assert _tx_after(capsys) == []                               # unchanged: silent
     daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
-    assert _tx_after(capsys) == [0x10, 16, ord(" "), 0x14]       # colon off
+    assert _tx_after(capsys) == [0x10, 15, ord(" "), 0x14]       # colon off
     daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
-    assert _tx_after(capsys) == [0x10, 16, ord(":"), 0x14]       # colon on
+    assert _tx_after(capsys) == [0x10, 15, ord(":"), 0x14]       # colon on
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
@@ -905,7 +905,7 @@ def test_weather_wiggle_steps_the_colon_glyphs(monkeypatch, capsys):
             2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 24))
         tx = _tx_after(capsys)
         if tx:                                   # a repeat of the last cell writes nothing
-            assert tx[:2] == [0x10, 16] and tx[-1] == 0x14 and len(tx) == 4
+            assert tx[:2] == [0x10, 15] and tx[-1] == 0x14 and len(tx) == 4
             cells.append(tx[2])
     dot, thin = GLYPH_CODES[wx.SLOT_COLON_DOT], GLYPH_CODES[wx.SLOT_COLON_THIN]
     twr, twl = GLYPH_CODES[wx.SLOT_COLON_PEAK_A], GLYPH_CODES[wx.SLOT_COLON_PEAK_B]
@@ -971,8 +971,7 @@ def test_weather_is_always_centered_whatever_the_saved_alignment(monkeypatch):
     daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(),
                      now=datetime(2026, 9, 23, 20, 33, 12))
     top = written[-1]["top"]
-    assert top.startswith(" ") and top.endswith(" ")      # 18 chars, centered
-    assert top.strip().startswith("09/23/26")
+    assert top == "  9/23/26 WED 8:33  "                 # 16 chars, centred
 
 
 def test_message_still_honours_the_saved_alignment(monkeypatch):

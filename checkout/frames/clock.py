@@ -26,31 +26,12 @@ def _hour12(now: datetime) -> int:
     return now.hour % 12 or 12
 
 
-def numeric_date(now: datetime) -> str:
-    """``MM/DD/YY``, e.g. ``09/23/26`` (8 chars)."""
-    return f"{now.month:02d}/{now.day:02d}/{now.year % 100:02d}"
-
-
 def weekday(now: datetime) -> str:
     """3-letter weekday, e.g. ``WED``."""
     return _DAYS[now.weekday()]
 
 
-def hh_mm(now: datetime, colon: str = ":") -> str:
-    """12-hour ``HH:MM`` (no AM/PM), e.g. ``08:33`` (5 chars).
-
-    ``colon`` is the one character between HH and MM, so a caller can blink or
-    animate it (weather mode) without re-deriving the layout.
-    """
-    return f"{_hour12(now):02d}{colon}{now.minute:02d}"
-
-
-def short_date_time(now: datetime, colon: str = ":") -> str:
-    """``MM/DD/YY DAY HH:MM`` (12-hour, no AM/PM), e.g. ``09/23/26 WED 08:33``."""
-    return f"{numeric_date(now)} {weekday(now)} {hh_mm(now, colon)}"
-
-
-def compact_date_time(now: datetime) -> str:
+def compact_date_time(now: datetime, colon: str = ":") -> str:
     """``M/D/YY DAY H:MM`` without leading zeros, e.g. ``9/23/26 WED 8:33``.
 
     Month, day and hour drop their leading zero (the year and minutes keep
@@ -58,7 +39,7 @@ def compact_date_time(now: datetime) -> str:
     day or hour shifts what follows right by one. 15-18 chars (longest:
     ``12/31/26 THU 12:59``)."""
     return (f"{now.month}/{now.day}/{now.year % 100:02d} "
-            f"{weekday(now)} {_hour12(now)}:{now.minute:02d}")
+            f"{weekday(now)} {_hour12(now)}{colon}{now.minute:02d}")
 
 
 def clock_date(now: datetime) -> str:

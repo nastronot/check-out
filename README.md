@@ -30,7 +30,7 @@ process. The constraint — two lines, twenty characters — is the aesthetic.
 - **Code pages** — 12 selectable character sets.
 - **Stereo spectrum analyzer** — a real-time audio analyzer in three layouts
   (Full / Stereo-V / Stereo-H) × two styles (Bars / Line).
-- **Weather clock** — `MM/DD/YY DAY HH:MM` over the current temperature and the
+- **Dynamic clock** — `M/D/YY DAY H:MM` over the current temperature and the
   next 24 hours' high, low and rain total (inches) for a latitude + longitude
   (Open-Meteo, no API key, fetched once per 15-minute update). The colon stands
   in for seconds: steady, blinking, an animated wiggle or twinkle, or a pacman
