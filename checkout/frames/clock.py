@@ -51,11 +51,14 @@ def short_date_time(now: datetime, colon: str = ":") -> str:
 
 
 def compact_date_time(now: datetime) -> str:
-    """``M/D/YY DAYH:MM`` — no leading zeros on month, day or hour, and no space
-    before the time, e.g. ``9/23/26 WED8:33`` (14-17 chars; the year and the
-    minutes keep their zero)."""
+    """``M/D/YY DAY HH:MM`` without leading zeros, e.g. ``9/23/26 WED  8:33``.
+
+    Month, day and hour drop their leading zero (the year and minutes keep
+    theirs). The time is a fixed 5-cell field, right-aligned, so a 1-digit hour
+    leaves two spaces after the day; a 2-digit month or day shifts what follows
+    right by one. 15-18 chars (longest: ``12/31/26 THU 12:59``)."""
     return (f"{now.month}/{now.day}/{now.year % 100:02d} "
-            f"{weekday(now)}{_hour12(now)}:{now.minute:02d}")
+            f"{weekday(now)} {_hour12(now):>2}:{now.minute:02d}")
 
 
 def clock_date(now: datetime) -> str:

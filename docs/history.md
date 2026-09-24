@@ -627,3 +627,9 @@ date/time became compact — `9/23/26 WED8:33`, no leading zeros on month, day o
 hour and no space before the time — left-aligned in the first 18 cells. The
 longest case, `12/31/26 THU11:59`, is 17 cells, so it always fits. The other
 colon modes keep the zero-padded, centred `09/23/26 WED 08:33`.
+
+**Pacman spacing.** The space before the time came back, with the time as a
+fixed 5-cell right-aligned field: `9/23/26 WED  8:33` (two spaces for a 1-digit
+hour), `9/23/26 WED 10:33`. The date keeps no leading zeros, so a 2-digit month
+or day shifts everything after it right by one. The longest case,
+`12/31/26 THU 12:59`, is exactly the 18 cells before the sprites.

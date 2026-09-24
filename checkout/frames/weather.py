@@ -16,8 +16,8 @@ would change):
 - ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
   big burst, small burst, thin, dot.
 
-- ``pacman``  — ``9/23/26 WED8:33`` (compact: no leading zeros, no space before
-  the time) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
+- ``pacman``  — ``9/23/26 WED  8:33`` (no leading zeros; the time is a fixed
+  5-cell field) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
   swapping between two frames. The time colon is the steady font
   ``:`` (the sprites need the colon's glyph slots). Solo (``weather_pacman`` =
   ghost | pacman) shows just one; each keeps its own cell.
