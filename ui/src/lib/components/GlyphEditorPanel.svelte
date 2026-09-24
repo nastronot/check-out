@@ -166,11 +166,7 @@
     </div>
   </div>
 
-  <p class="field__hint">
-    Click or drag to draw g{selected}. Edits auto-push to the daemon (~400 ms),
-    which defines the glyph on the display; reference it in a message as
-    <code>{SLOTS[selected].token}</code>.
-  </p>
+  <p class="field__hint">Click or drag to draw. Changes reach the display in under a second.</p>
 </section>
 
 <style>
@@ -319,14 +315,6 @@
     color: var(--text-faint);
   }
 
-  code {
-    color: var(--phosphor);
-    background: #04090a;
-    padding: 1px 5px;
-    border-radius: 3px;
-    border: 1px solid var(--rule);
-    font-size: 11px;
-  }
 
   @media (max-width: 560px) {
     .board {

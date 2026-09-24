@@ -51,10 +51,7 @@
   {:else}
     <!-- Brightness -->
     <div class="field">
-      <span class="field__label">
-        Brightness
-        <span class="bright-readout">{BRIGHTNESS_LABELS[clampLevel(state.brightness)]}</span>
-      </span>
+      <span class="field__label">Brightness</span>
       <div class="bright">
         <input
           class="phosphor-slider"
@@ -144,10 +141,6 @@
     gap: 6px;
   }
 
-  .bright-readout {
-    color: var(--phosphor);
-    letter-spacing: 0.1em;
-  }
 
   /* The brightness slider's track + handle styling now lives globally as
      `.phosphor-slider` (app.css), shared with the audio Sensitivity / Smoothing

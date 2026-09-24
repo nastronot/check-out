@@ -13,8 +13,8 @@
     SpectrumStyle,
     SpectrumLayout,
     Status,
-    WeatherColon,
-    WeatherPacmanSprite,
+    DynamicColon,
+    DynamicPacmanSprite,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -68,12 +68,6 @@
     { value: 'message', label: 'Message' },
     { value: 'clock', label: 'Clock' },
   ];
-  const setSrcTop = (s: ScrollSource) => patch({ scroll_top_source: s });
-  const setSrcBottom = (s: ScrollSource) => patch({ scroll_bottom_source: s });
-  const setScrollTop = (e: Event) => patch({ scroll_top: checked(e) });
-  const setScrollBottom = (e: Event) => patch({ scroll_bottom: checked(e) });
-  const setDirTop = (d: ScrollDir) => patch({ scroll_dir_top: d });
-  const setDirBottom = (d: ScrollDir) => patch({ scroll_dir_bottom: d });
   // marquee (hardware ticker). Bottom is STATIC TEXT ONLY (a live clock there
   // stops the hardware scroll), so there's no source selector.
   let marqueeDraft = '';
@@ -151,25 +145,57 @@
     if (!locValid || latValue === undefined || lonValue === undefined) return;
     patch({ weather_lat: latValue, weather_lon: lonValue });
   }
-  const COLONS: { value: WeatherColon; label: string }[] = [
+  const COLONS: { value: DynamicColon; label: string }[] = [
     { value: 'on', label: 'ON' },
     { value: 'tick', label: 'TICK' },
     { value: 'wiggle', label: 'WIGGLE' },
     { value: 'twinkle', label: 'TWINKLE' },
     { value: 'pacman', label: 'PACMAN' },
   ];
-  const setColon = (c: WeatherColon) => patch({ dynamic_colon: c });
+  const setColon = (c: DynamicColon) => patch({ dynamic_colon: c });
   const setColonHalf = (e: Event) => patch({ dynamic_colon_half: checked(e) });
   // pacman: Solo shows one sprite; the chosen sprite is remembered while Solo
   // is off, because the widest date/time forces solo with it automatically.
-  const SPRITES: { value: WeatherPacmanSprite; label: string }[] = [
+  const SPRITES: { value: DynamicPacmanSprite; label: string }[] = [
     { value: 'ghost', label: 'GHOST' },
     { value: 'heart', label: 'HEART' },
     { value: 'pacman', label: 'PACMAN' },
   ];
   const setSolo = (e: Event) => patch({ dynamic_pacman_solo: checked(e) });
-  const setSprite = (p: WeatherPacmanSprite) => patch({ dynamic_pacman_sprite: p });
+  const setSprite = (p: DynamicPacmanSprite) => patch({ dynamic_pacman_sprite: p });
   $: weatherLine = weatherSummary(status?.weather);
+
+  // One line per colon choice: only the selected one is explained.
+  const COLON_HINTS: Record<DynamicColon, string> = {
+    on: 'A steady colon.',
+    tick: 'The colon blinks every second.',
+    wiggle: 'The colon twists one way, then the other.',
+    twinkle: 'The colon grows into a burst and back.',
+    pacman: 'Pacman eats the chosen sprite; Solo shows it alone (automatic when the date fills the line).',
+  };
+
+  // Message rows: one template for top and bottom, via these helpers.
+  type Row = 'top' | 'bottom';
+  const ROWS: { row: Row; label: string }[] = [
+    { row: 'top', label: 'Top' },
+    { row: 'bottom', label: 'Bottom' },
+  ];
+  const rowSource = (r: Row): ScrollSource =>
+    (r === 'top' ? state?.scroll_top_source : state?.scroll_bottom_source) ?? 'message';
+  const rowScrolls = (r: Row): boolean =>
+    !!(r === 'top' ? state?.scroll_top : state?.scroll_bottom);
+  const rowDir = (r: Row): ScrollDir =>
+    (r === 'top' ? state?.scroll_dir_top : state?.scroll_dir_bottom) ?? 'left';
+  const setRowSource = (r: Row, v: ScrollSource) =>
+    patch(r === 'top' ? { scroll_top_source: v } : { scroll_bottom_source: v });
+  const setRowScroll = (r: Row, e: Event) =>
+    patch(r === 'top' ? { scroll_top: checked(e) } : { scroll_bottom: checked(e) });
+  const setRowDir = (r: Row, d: ScrollDir) =>
+    patch(r === 'top' ? { scroll_dir_top: d } : { scroll_dir_bottom: d });
+  // Re-evaluate the helpers whenever the state object changes.
+  $: rowsView = state &&
+    ROWS.map((x) => ({ ...x, source: rowSource(x.row), scrolls: rowScrolls(x.row), dir: rowDir(x.row) }));
+  $: anyScroll = !!(state?.scroll_top || state?.scroll_bottom);
 
   const DIRS: ScrollDir[] = ['left', 'right'];
   // Merge one animation_params field, keeping the siblings (full object so the
@@ -189,33 +215,27 @@
   {#if !state}
     <p class="loading">connecting to daemon…</p>
   {:else}
-    <!-- Mode -->
     <div class="field">
       <span class="field__label">Mode</span>
       <div class="seg">
         {#each MODES as m}
-          <button
-            type="button"
-            aria-pressed={state.mode === m}
-            on:click={() => setMode(m)}>{m}</button
-          >
+          <button type="button" aria-pressed={state.mode === m} on:click={() => setMode(m)}>{m}</button>
         {/each}
       </div>
     </div>
 
-    <!-- Message (per-row source, scroll and direction below) -->
+    <!-- MESSAGE: text + per-row source / scroll / direction (was also "scroll") -->
     {#if state.mode === 'message'}
       <div class="field">
         <span class="field__label">
           Message
-          <!-- Budget warning only while nothing scrolls: when a row scrolls,
-               long text is the point, so length is never flagged. -->
-          {#if !state.scroll_top && !state.scroll_bottom}
+          <!-- Length is only flagged while nothing scrolls. -->
+          {#if !anyScroll}
             {#if budget.hasNewline}
               <span class="budget">
-                <span class:over={budget.topOver}>top {budget.top}/20</span>
+                <span class:over={budget.topOver}>{budget.top}/20</span>
                 <span class="sep">·</span>
-                <span class:over={budget.bottomOver}>bottom {budget.bottom}/20</span>
+                <span class:over={budget.bottomOver}>{budget.bottom}/20</span>
               </span>
             {:else}
               <span class:over={budget.topOver}>{budget.top}/20</span>
@@ -226,74 +246,93 @@
           rows="2"
           bind:value={messageDraft}
           on:input={onMessageInput}
-          placeholder="message (Enter = line break)"
+          placeholder="message"
           spellcheck="false"
         ></textarea>
         <span class="field__hint">
-          Press <kbd>Enter</kbd> for a line break (splits top/bottom). Use
-          <code>{'{g0}'}</code>…<code>{'{g8}'}</code> for custom glyphs (light up
-          once defined). Each row can scroll on its own (below); a single line
-          with nothing scrolling word-wraps across both rows.
+          <kbd>Enter</kbd> = new line · <code>{'{g0}'}</code>–<code>{'{g8}'}</code> = custom glyphs
         </span>
+      </div>
+
+      <div class="field">
+        <span class="field__label">Rows</span>
+        {#each rowsView ?? [] as r (r.row)}
+          <div class="ctl-row">
+            <span class="ctl-row__name">{r.label}</span>
+            <div class="seg seg--sm">
+              {#each SCROLL_SOURCES as src}
+                <button
+                  type="button"
+                  aria-pressed={r.source === src.value}
+                  on:click={() => setRowSource(r.row, src.value)}>{src.label}</button
+                >
+              {/each}
+            </div>
+            {#if r.source === 'message'}
+              <label class="switch">
+                <input type="checkbox" checked={r.scrolls} on:change={(e) => setRowScroll(r.row, e)} />
+                <span class="switch__track"></span>
+                <span class="switch__label">Scroll</span>
+              </label>
+              {#if r.scrolls}
+                <div class="seg seg--sm">
+                  {#each DIRS as d}
+                    <button
+                      type="button"
+                      aria-pressed={r.dir === d}
+                      on:click={() => setRowDir(r.row, d)}>{d}</button
+                    >
+                  {/each}
+                </div>
+              {/if}
+            {/if}
+          </div>
+        {/each}
+        {#if anyScroll}
+          <label class="ctl-row">
+            <span class="ctl-row__name">Speed</span>
+            <input type="number" min="60" step="20" value={state.scroll_speed_ms} on:change={setScrollSpeed} />
+            <span class="field__hint">ms per step</span>
+          </label>
+        {/if}
       </div>
     {/if}
 
-    <!-- MARQUEE (hardware ticker: top autonomous, FIXED speed) -->
+    <!-- MARQUEE: hidden from MODES (v1.4.0) but still works if selected. -->
     {#if state.mode === 'marquee'}
       <div class="field">
         <span class="field__label">
           Marquee text
           <span class:over={marqueeDraft.length > 45}>{marqueeDraft.length}/45</span>
         </span>
-        <input
-          type="text"
-          bind:value={marqueeDraft}
-          on:input={onMarqueeInput}
-          placeholder="scrolls on the top row (hardware ticker)"
-          spellcheck="false"
-        />
-        <span class="field__hint">
-          Top row scrolls autonomously at the hardware's FIXED speed (no speed
-          control). 45-char buffer.
-        </span>
+        <input type="text" bind:value={marqueeDraft} on:input={onMarqueeInput} spellcheck="false" />
+        <span class="field__hint">Hardware ticker: top row, fixed speed.</span>
       </div>
       <div class="field">
-        <span class="field__label">Bottom row (static)</span>
+        <span class="field__label">Bottom row</span>
         <input
           type="text"
           value={state.marquee_bottom_text}
           on:change={setMarqueeBottomText}
-          placeholder="static bottom text (≤20)"
           spellcheck="false"
         />
       </div>
-      <p class="tip">
-        Hardware ticker: top row only, fixed speed, 45-char buffer. The bottom row
-        is static — changing it briefly interrupts the top scroll. For a live
-        clock/news ticker, use <strong>MESSAGE</strong>.
-      </p>
     {/if}
 
-    <!-- SPECTRUM (audio analyzer: a separate audioviz process captures + FFTs
-         and streams 20 bar heights to the daemon over a socket). -->
+    <!-- SPECTRUM: settings only; the bars stream from the audioviz process. -->
     {#if state.mode === 'spectrum'}
       <div class="field">
         <span class="field__label">Source</span>
         <div class="seg">
-          {#each SOURCES as s}
+          {#each SOURCES as src}
             <button
               type="button"
-              aria-pressed={state.audio_source === s.value}
-              on:click={() => setAudioSource(s.value)}>{s.label}</button
+              aria-pressed={state.audio_source === src.value}
+              on:click={() => setAudioSource(src.value)}>{src.label}</button
             >
           {/each}
         </div>
-        <span class="field__hint">
-          <strong>System</strong> captures playback via a PipeWire/Pulse monitor;
-          <strong>Mic</strong> captures the default input. Bars are
-          <strong>volume-independent</strong> (auto-gain) and fall to flat on
-          silence.
-        </span>
+        <span class="field__hint">System = what's playing · Mic = the default input</span>
       </div>
 
       <div class="field">
@@ -307,37 +346,27 @@
             >
           {/each}
         </div>
-        <span class="field__hint">
-          <strong>Full</strong> = one mono spectrum. <strong>Stereo-V</strong> =
-          left/right spectrum per row. <strong>Stereo-H</strong> = a horizontal
-          level meter per channel. Auto-gain is shared so you can read the balance.
-        </span>
+        <span class="field__hint">Full = mono · Stereo-V = a spectrum per channel · Stereo-H = level meters</span>
       </div>
 
       <div class="field">
         <span class="field__label">Style</span>
         <div class="seg">
-          {#each STYLES as s}
+          {#each STYLES as st}
             <button
               type="button"
-              aria-pressed={state.spectrum_style === s.value}
-              on:click={() => setSpectrumStyle(s.value)}>{s.label}</button
+              aria-pressed={state.spectrum_style === st.value}
+              on:click={() => setSpectrumStyle(st.value)}>{st.label}</button
             >
           {/each}
         </div>
-        <span class="field__hint">
-          <strong>Bars</strong> = filled; <strong>Line</strong> = a single lit
-          row/column (the peak/edge). Applies across all layouts.
-        </span>
       </div>
 
       <div class="field">
         <span class="field__label">Device</span>
         <select value={state.audio_device ?? ''} on:change={setAudioDevice}>
           <option value="">
-            {state.audio_source === 'system'
-              ? 'Auto (default sink monitor)'
-              : 'Auto (default input)'}
+            {state.audio_source === 'system' ? 'Auto (default output)' : 'Auto (default input)'}
           </option>
           {#each devicesForSource as d}
             <option value={d.id}>{d.label}</option>
@@ -345,20 +374,14 @@
         </select>
         {#if devicesForSource.length === 0}
           <span class="field__hint">
-            {#if state.audio_source === 'system'}
-              No monitor sources found — needs PipeWire/Pulse. Run
-              <code>python -m checkout.audioviz --list</code>.
-            {:else}
-              No input devices listed — run
-              <code>python -m checkout.audioviz --list</code>.
-            {/if}
+            None found — run <code>python -m checkout.audioviz --list</code>
           </span>
         {/if}
       </div>
 
       <div class="field">
         <span class="field__label">
-          Sensitivity <span class="bright-readout">{state.audio_gain.toFixed(1)}×</span>
+          Sensitivity <span class="readout">{state.audio_gain.toFixed(1)}×</span>
         </span>
         <input
           class="phosphor-slider"
@@ -367,46 +390,37 @@
           value={state.audio_gain}
           on:input={setAudioGain}
         />
-        <span class="field__hint">
-          Auto-gain keeps the bars full regardless of system volume; sensitivity
-          biases it (center is fine for most content).
-        </span>
       </div>
 
       <div class="field">
         <span class="field__label">
-          Smoothing <span class="bright-readout">{state.audio_decay.toFixed(2)}</span>
+          Smoothing <span class="readout">{state.audio_decay.toFixed(2)}</span>
         </span>
         <input
           class="phosphor-slider"
           type="range" min="0" max="0.98" step="0.01"
-          aria-label="audio decay"
+          aria-label="smoothing"
           value={state.audio_decay}
           on:input={setAudioDecay}
         />
-        <span class="field__hint">0 = snappy (instant fall); higher = bars fall more slowly (less twitch).</span>
+        <span class="field__hint">Uses all 9 glyph slots; your glyphs come back when you leave.</span>
       </div>
-
-      <p class="tip">
-        Spectrum uses the 9 glyph slots for the bars — your custom glyphs pause
-        during spectrum and restore on exit.
-      </p>
     {/if}
 
-    <!-- WEATHER: date/time on top, today's high/low/current/rain below. -->
+    <!-- DYNAMIC: date/time on top, the next 24 h of weather below. -->
     {#if state.mode === 'dynamic'}
       <div class="field">
         <span class="field__label">Location</span>
         <form class="coords" on:submit|preventDefault={saveLocation}>
           <input
             type="text" inputmode="decimal" spellcheck="false"
-            aria-label="latitude" placeholder="lat 41.8781"
+            aria-label="latitude" placeholder="latitude"
             class:invalid={latValue === undefined}
             bind:value={latDraft}
           />
           <input
             type="text" inputmode="decimal" spellcheck="false"
-            aria-label="longitude" placeholder="lon -87.6298"
+            aria-label="longitude" placeholder="longitude"
             class:invalid={lonValue === undefined}
             bind:value={lonDraft}
           />
@@ -414,10 +428,11 @@
         </form>
         <span class="field__hint">
           {#if !locValid}
-            <span class="over">Latitude is −90…90 and longitude −180…180.</span>
+            <span class="over">Latitude is −90 to 90, longitude −180 to 180.</span>
+          {:else if state.weather_lat == null}
+            Decimal degrees; south and west are negative.
           {:else}
-            Decimal degrees; south and west are negative. Weather from
-            Open-Meteo, fetched once per 15-minute update.
+            {weatherLine}
           {/if}
         </span>
       </div>
@@ -433,24 +448,20 @@
             >
           {/each}
         </div>
-        <label class="switch colon-half" class:disabled={state.dynamic_colon === 'on'}>
-          <input
-            type="checkbox"
-            checked={state.dynamic_colon_half}
-            disabled={state.dynamic_colon === 'on'}
-            on:change={setColonHalf}
-          />
-          <span class="switch__track"></span>
-          <span class="switch__label">Half speed</span>
-        </label>
-        {#if state.dynamic_colon === 'pacman'}
-          <div class="pac-solo">
+        <div class="ctl-row">
+          <label class="switch" class:disabled={state.dynamic_colon === 'on'}>
+            <input
+              type="checkbox"
+              checked={state.dynamic_colon_half}
+              disabled={state.dynamic_colon === 'on'}
+              on:change={setColonHalf}
+            />
+            <span class="switch__track"></span>
+            <span class="switch__label">Half speed</span>
+          </label>
+          {#if state.dynamic_colon === 'pacman'}
             <label class="switch">
-              <input
-                type="checkbox"
-                checked={state.dynamic_pacman_solo}
-                on:change={setSolo}
-              />
+              <input type="checkbox" checked={state.dynamic_pacman_solo} on:change={setSolo} />
               <span class="switch__track"></span>
               <span class="switch__label">Solo</span>
             </label>
@@ -463,217 +474,63 @@
                 >
               {/each}
             </div>
-          </div>
-        {/if}
-        <span class="field__hint">
-          <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
-          on and off every second. <strong>Wiggle</strong> = the colon twists
-          one way, then the other. <strong>Twinkle</strong> = it grows into a
-          burst and back. <strong>Pacman</strong> = date and time at the left,
-          pacman eating the chosen sprite at the right (a pacman meets its mirror
-          image). <strong>Solo</strong> shows the sprite alone — it also goes solo
-          by itself when the date and time fill the line.
-          <strong>Half speed</strong> stretches each loop to 2 s.
-        </span>
+          {/if}
+        </div>
+        <span class="field__hint">{COLON_HINTS[state.dynamic_colon]}</span>
       </div>
-
-      <p class="tip">{weatherLine}</p>
     {/if}
 
-    <!-- Per-line alignment. In MARQUEE the top row is the hardware ticker (it
-         controls its own layout), so Line 1 justify is hidden; Line 2 (the
-         static bottom) still justifies. N/A in SPECTRUM (both rows are bars) and
-         WEATHER (always centered: DynamicFrame.align). -->
+    <!-- Justify: N/A in spectrum (bars) and dynamic (always centred). In the
+         hidden marquee mode only the static bottom line justifies. -->
     {#if state.mode !== 'spectrum' && state.mode !== 'dynamic'}
-    <div class="field">
-      <span class="field__label">Justify</span>
-      <div class="align-rows">
+      <div class="field">
+        <span class="field__label">Justify</span>
         {#if state.mode !== 'marquee'}
-          <div class="align-row">
-            <span class="align-row__label">Line 1</span>
+          <div class="ctl-row">
+            <span class="ctl-row__name">Line 1</span>
             <div class="seg seg--sm">
               {#each ALIGNS as a}
-                <button
-                  type="button"
-                  aria-pressed={state.align_top === a}
-                  on:click={() => setAlignTop(a)}>{a}</button
-                >
+                <button type="button" aria-pressed={state.align_top === a} on:click={() => setAlignTop(a)}>{a}</button>
               {/each}
             </div>
           </div>
-        {:else}
-          <p class="field__hint">
-            Line 1 is the hardware ticker (it sets its own layout). Line 2 justify
-            applies to the static bottom.
-          </p>
         {/if}
-        <div class="align-row">
-          <span class="align-row__label">Line 2</span>
+        <div class="ctl-row">
+          <span class="ctl-row__name">Line 2</span>
           <div class="seg seg--sm">
             {#each ALIGNS as a}
-              <button
-                type="button"
-                aria-pressed={state.align_bottom === a}
-                on:click={() => setAlignBottom(a)}>{a}</button
-              >
+              <button type="button" aria-pressed={state.align_bottom === a} on:click={() => setAlignBottom(a)}>{a}</button>
             {/each}
           </div>
         </div>
       </div>
-    </div>
     {/if}
 
-    <!-- Brightness, Blank, HW scroll, and Code page now live in the Display
-         panel (mode-agnostic device settings). Control is per-mode only. -->
-
-    <!-- Animation (N/A in marquee: the ticker owns the top row; N/A in
-         spectrum: the bars own both rows and the daemon forces "none"; N/A in
-         weather: the Colon setting owns the brightness animation). -->
+    <!-- Animation: N/A where the mode owns the rows (marquee, spectrum) or
+         animates its own colon (dynamic). -->
     {#if state.mode !== 'marquee' && state.mode !== 'spectrum' && state.mode !== 'dynamic'}
-    <div class="field">
-      <span class="field__label">Animation</span>
-      <div class="seg">
-        {#each ANIMATIONS as a}
-          <button
-            type="button"
-            aria-pressed={state.animation === a}
-            on:click={() => setAnimation(a)}>{a}</button
-          >
-        {/each}
-      </div>
-      {#if state.animation === 'flash' || state.animation === 'blink'}
-        <div class="row timing">
-          <label class="field__hint">on
-            <input
-              type="number"
-              min="50"
-              step="50"
-              value={state.animation_params.on_ms}
-              on:change={setOnMs}
-            /> ms</label>
-          <label class="field__hint">off
-            <input
-              type="number"
-              min="50"
-              step="50"
-              value={state.animation_params.off_ms}
-              on:change={setOffMs}
-            /> ms</label>
-        </div>
-      {:else if state.animation === 'pulse'}
-        <div class="row timing">
-          <label class="field__hint">step
-            <input
-              type="number"
-              min="50"
-              step="50"
-              value={state.animation_params.step_ms}
-              on:change={setStepMs}
-            /> ms</label>
-          <span class="field__hint">brightness breathes 0→3→0 (6 steps)</span>
-        </div>
-      {/if}
-    </div>
-    {/if}
-
-    <!-- MESSAGE ROWS: per-row content source + scroll + direction + speed. Each
-         row picks a source (Message|Clock, room for more) and, for a Message
-         row, whether/how it scrolls. (Was the separate SCROLL mode.) -->
-    {#if state.mode === 'message'}
       <div class="field">
-        <span class="field__label">Rows</span>
-        <div class="scroll-rows">
-          <!-- TOP row -->
-          <div class="scroll-row">
-            <span class="scroll-row__name">Top</span>
-            <div class="scroll-row__ctrls">
-              <div class="scroll-ctrl">
-                <span class="scroll-ctrl__label">Source</span>
-                <div class="seg seg--sm">
-                  {#each SCROLL_SOURCES as s}
-                    <button
-                      type="button"
-                      aria-pressed={state.scroll_top_source === s.value}
-                      on:click={() => setSrcTop(s.value)}>{s.label}</button
-                    >
-                  {/each}
-                </div>
-              </div>
-              {#if state.scroll_top_source === 'message'}
-                <div class="scroll-ctrl scroll-ctrl--inline">
-                  <label class="switch">
-                    <input type="checkbox" checked={state.scroll_top} on:change={setScrollTop} />
-                    <span class="switch__track"></span>
-                    <span class="switch__label">Scroll</span>
-                  </label>
-                  <div class="seg seg--sm" class:disabled={!state.scroll_top}>
-                    {#each DIRS as d}
-                      <button
-                        type="button"
-                        disabled={!state.scroll_top}
-                        aria-pressed={state.scroll_dir_top === d}
-                        on:click={() => setDirTop(d)}>{d}</button
-                      >
-                    {/each}
-                  </div>
-                </div>
-              {:else}
-                <span class="field__hint">Live time line (updates each second).</span>
-              {/if}
-            </div>
-          </div>
-          <!-- BOTTOM row -->
-          <div class="scroll-row">
-            <span class="scroll-row__name">Bottom</span>
-            <div class="scroll-row__ctrls">
-              <div class="scroll-ctrl">
-                <span class="scroll-ctrl__label">Source</span>
-                <div class="seg seg--sm">
-                  {#each SCROLL_SOURCES as s}
-                    <button
-                      type="button"
-                      aria-pressed={state.scroll_bottom_source === s.value}
-                      on:click={() => setSrcBottom(s.value)}>{s.label}</button
-                    >
-                  {/each}
-                </div>
-              </div>
-              {#if state.scroll_bottom_source === 'message'}
-                <div class="scroll-ctrl scroll-ctrl--inline">
-                  <label class="switch">
-                    <input type="checkbox" checked={state.scroll_bottom} on:change={setScrollBottom} />
-                    <span class="switch__track"></span>
-                    <span class="switch__label">Scroll</span>
-                  </label>
-                  <div class="seg seg--sm" class:disabled={!state.scroll_bottom}>
-                    {#each DIRS as d}
-                      <button
-                        type="button"
-                        disabled={!state.scroll_bottom}
-                        aria-pressed={state.scroll_dir_bottom === d}
-                        on:click={() => setDirBottom(d)}>{d}</button
-                      >
-                    {/each}
-                  </div>
-                </div>
-              {:else}
-                <span class="field__hint">Live time line (updates each second).</span>
-              {/if}
-            </div>
-          </div>
+        <span class="field__label">Animation</span>
+        <div class="seg">
+          {#each ANIMATIONS as a}
+            <button type="button" aria-pressed={state.animation === a} on:click={() => setAnimation(a)}>{a}</button>
+          {/each}
         </div>
-      </div>
-      <div class="field">
-        <span class="field__label">Scroll speed</span>
-        <label class="field__hint">
-          <input
-            type="number"
-            min="60"
-            step="20"
-            value={state.scroll_speed_ms}
-            on:change={setScrollSpeed}
-          /> ms / step (floor ~60 — 9600 baud can't go faster)
-        </label>
+        {#if state.animation === 'flash' || state.animation === 'blink'}
+          <div class="ctl-row">
+            <span class="ctl-row__name">On</span>
+            <input type="number" min="50" step="50" value={state.animation_params.on_ms} on:change={setOnMs} />
+            <span class="ctl-row__name">Off</span>
+            <input type="number" min="50" step="50" value={state.animation_params.off_ms} on:change={setOffMs} />
+            <span class="field__hint">ms</span>
+          </div>
+        {:else if state.animation === 'pulse'}
+          <div class="ctl-row">
+            <span class="ctl-row__name">Step</span>
+            <input type="number" min="50" step="50" value={state.animation_params.step_ms} on:change={setStepMs} />
+            <span class="field__hint">ms per brightness step</span>
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -685,22 +542,7 @@
     font-size: 13px;
   }
 
-  .timing {
-    margin-top: 10px;
-  }
-
-  /* lat | lon | Save — three equal columns across the field. */
-  .colon-half {
-    margin-top: 10px;
-  }
-
-  .pac-solo {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-top: 10px;
-  }
-
+  /* lat | lon | Save — three equal columns */
   .coords {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -718,20 +560,6 @@
     border-color: var(--red-dead);
   }
 
-  .timing input,
-  .field__hint input {
-    margin: 0 4px;
-  }
-
-  code {
-    color: var(--phosphor);
-    background: #04090a;
-    padding: 1px 4px;
-    border-radius: 3px;
-    border: 1px solid var(--rule);
-    font-size: 11px;
-  }
-
   .over {
     color: var(--amber-warn);
   }
@@ -745,119 +573,7 @@
     gap: 5px;
   }
 
-  /* marquee constraints tip */
-  .tip {
-    margin: -4px 0 14px;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--text-mute);
-    border-left: 2px solid var(--phosphor-dim);
-    padding: 6px 0 6px 10px;
-  }
-
-  .tip strong {
-    color: var(--phosphor);
-  }
-
-  /* SCROLL: per-row source / scroll / direction, grouped + room to grow */
-  .scroll-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .scroll-row {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .scroll-row:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .scroll-row__name {
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--phosphor-dim);
-  }
-
-  .scroll-row__ctrls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 16px;
-  }
-
-  .scroll-ctrl {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .scroll-ctrl--inline {
-    gap: 10px;
-  }
-
-  .scroll-ctrl__label {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--text-mute);
-  }
-
-  .align-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .align-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .align-row__label {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--text-mute);
-    min-width: 44px;
-  }
-
-  .seg--sm button {
-    padding: 6px 12px;
-    font-size: 11px;
-  }
-
-  .seg.disabled {
+  .switch.disabled {
     opacity: 0.4;
-  }
-
-  .seg button:disabled {
-    cursor: not-allowed;
-  }
-
-  .budget .sep {
-    color: var(--text-faint);
-  }
-
-  textarea {
-    /* keep both display lines visible; no horizontal wrap surprises */
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  kbd {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--phosphor);
-    background: #04090a;
-    border: 1px solid var(--rule);
-    border-radius: 3px;
-    padding: 0 4px;
   }
 </style>

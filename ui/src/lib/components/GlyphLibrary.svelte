@@ -91,11 +91,7 @@
   </div>
 
   {#if $library.glyphs.length === 0}
-    <p class="field__hint">
-      No saved glyphs yet. The 9 <strong>slots</strong> are the live hardware
-      registers; this <strong>library</strong> is unlimited saved bitmaps you load
-      into a slot.
-    </p>
+    <p class="field__hint">No saved glyphs yet. Draw one in a slot, then save it here.</p>
   {:else}
     <div class="grid">
       {#each $library.glyphs as g (g.id)}
@@ -129,19 +125,13 @@
       {/each}
     </div>
     <p class="field__hint">
-      <strong>Drag</strong> a glyph onto a slot (g0–g8) to load it there, or drag
-      within the library to reorder. <strong>Click</strong> a glyph to load it into
-      the selected slot (g{$selectedGlyphSlot}). 9 slots are live hardware registers;
-      the library is unlimited.
+      Click to load into g{$selectedGlyphSlot} · drag onto a slot to load it there · drag
+      within the library to reorder
     </p>
   {/if}
 </section>
 
 <style>
-  .panel__title {
-    justify-content: space-between;
-  }
-
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
@@ -215,8 +205,4 @@
     opacity: 1;
   }
 
-  strong {
-    color: var(--phosphor);
-    font-weight: 600;
-  }
 </style>

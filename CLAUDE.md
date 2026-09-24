@@ -121,6 +121,11 @@ glyph library. Right column: Control, Saved messages, then ONE Display panel
 (brightness, blank, commands, daemon readout; `CommandBar` and `StatusReadout`
 render as its sections). HW scroll and code page are hidden behind
 `DisplayPanel.svelte` `SHOW_HW_SETTINGS = false` — kept, not removed.
+**Shared UI patterns (`app.css`) — use these, don't restyle per panel:** panel
+headers are dot + title left, any `.btn` pushed right; `.seg` rows fill the width
+with equal buttons, `.seg--sm` is the compact inline variant; `.ctl-row` +
+`.ctl-row__name` is "short label, then controls on one line"; `.readout` is a
+value at the right of a field label; hints (`.field__hint`) are one short line.
 
 ### UI caching (v1.4.0)
 `web/app.py` `_UIFiles` serves `index.html` as `Cache-Control: no-cache` and

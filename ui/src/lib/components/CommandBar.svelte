@@ -40,9 +40,6 @@
   {#if lastFired}
     <p class="last">last → <span>{lastFired}</span></p>
   {/if}
-  <p class="field__hint">
-    Fire-once actions. The daemon runs each exactly once (nonce-guarded).
-  </p>
 </div>
 
 <style>

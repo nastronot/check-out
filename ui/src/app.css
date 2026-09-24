@@ -73,10 +73,13 @@ a {
   padding: 14px 16px 16px;
 }
 
+/* Every panel header: dot + title on the left, any action pushed right, and a
+   fixed height so headers with and without a button line up. */
 .panel__title {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 26px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.18em;
@@ -93,6 +96,12 @@ a {
   border-radius: 50%;
   background: var(--phosphor);
   box-shadow: 0 0 6px var(--phosphor);
+}
+
+.panel__title .btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 10px;
 }
 
 .panel--disabled {
@@ -174,8 +183,11 @@ input[type='number'] {
 }
 
 /* --- segmented control -------------------------------------------------- */
+/* Full width, equal buttons. .seg--sm is the compact inline variant for a
+   control that shares a row with others (see .ctl-row). */
 .seg {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   border: 1px solid var(--bezel);
   border-radius: 5px;
   overflow: hidden;
@@ -200,6 +212,56 @@ input[type='number'] {
 
 .seg button:last-child {
   border-right: 0;
+}
+
+.seg:not(.seg--sm) button {
+  flex: 1 1 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.seg--sm {
+  display: inline-flex;
+  width: auto;
+}
+
+.seg--sm button {
+  padding: 6px 11px;
+  font-size: 11px;
+}
+
+/* --- control row: a short label, then controls, on one line --------------- */
+.ctl-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  min-height: 32px;
+}
+
+.ctl-row__name {
+  min-width: 52px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+}
+
+/* a value shown at the right of a field label (slider readouts) */
+.readout {
+  color: var(--phosphor);
+  letter-spacing: 0.1em;
+}
+
+code,
+kbd {
+  color: var(--phosphor);
+  background: #04090a;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
 .seg button:hover {

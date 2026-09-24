@@ -86,10 +86,6 @@
 </section>
 
 <style>
-  .panel__title {
-    justify-content: space-between;
-  }
-
   .list {
     list-style: none;
     margin: 0;

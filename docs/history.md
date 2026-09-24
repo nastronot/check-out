@@ -699,3 +699,15 @@ settings moved with it: `dynamic_colon`, `dynamic_colon_half`,
 `checkout/weather.py` (fetcher, reading, bottom line), `weather_lat` /
 `weather_lon`, and status.json's `weather` field. Old states migrate on load
 (an old key fills its new one only if the new one wasn't written).
+
+**UI pass.** Panel headers were inconsistent (Saved messages and Glyph library
+centred their title with the dot stranded left) — every header is now dot + title
+left, action right, same height. Segmented rows fill the width with equal
+buttons (`.seg`; `.seg--sm` for inline use); one control-row pattern
+(`.ctl-row`) covers message rows, justify, animation timing and the colon
+options; `code`/`kbd`/`.readout` moved to `app.css`. Explainers cut to one line
+each — the colon hint describes only the selected option; the location hint
+shows the format until a location is saved, then the reading's freshness.
+Message rows share one template (helpers over top/bottom); scroll speed only
+shows while a row scrolls. Display: brightness shows its level once, the
+command footnote and raw command id are gone, the daemon readout is one row.

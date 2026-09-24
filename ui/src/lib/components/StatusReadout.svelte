@@ -37,15 +37,11 @@
     <span class="k">updated</span>
     <span class="v">{ago(status?.updated_at)}</span>
   </div>
-  <div class="cell">
-    <span class="k">last cmd</span>
-    <span class="v mono-id">{status?.last_command_id?.slice(0, 8) ?? '—'}</span>
-  </div>
 </div>
 <style>
   .readout__grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
 
@@ -71,7 +67,4 @@
     letter-spacing: 0.06em;
   }
 
-  .mono-id {
-    color: var(--text-mute);
-  }
 </style>
