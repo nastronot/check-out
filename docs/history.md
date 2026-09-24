@@ -722,3 +722,7 @@ bench photos stays in `docs/hardware.md` as reference.
 unblanks it. The thin colon glyph remains only as a frame of wiggle and twinkle.
 The degree glyph also moved one column left (`[2, 5, 2, 0, 0, 0, 0]`) to sit
 against its number.
+
+**Leading zeros stay on on/tick/wiggle/twinkle** (a change removing them was
+reverted): those four use the zero-padded `09/24/26 THU 12:09`; only pacman's
+layout drops leading zeros.
