@@ -56,6 +56,7 @@ _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame, clock_time
 from .frames.message import MessageFrame
+from .frames.weather import WeatherFrame, colon_animation
 from .renderer import WIDTH, fit_line, render_line, render_lines, ticker_window
 from .state import load_state, save_status
 from . import spectrum, weather
@@ -79,7 +80,9 @@ SPECTRUM_STALE_MS = 200
 
 # Static frames, keyed by name. "scroll" + "marquee" are handled specially in
 # the tick (they need per-row offsets / the hardware ticker), not via a Frame.
-FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame())}
+# Weather's fetcher lives on its frame so tests can swap in a threadless one.
+WEATHER_FRAME = WeatherFrame(weather.WeatherFetcher(log=lambda m: log(m)))
+FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), WEATHER_FRAME)}
 DEFAULT_FRAME = "clock"
 
 
@@ -310,17 +313,24 @@ def animation_brightness(
     if animation == "blink" and not _phase_on(now_ms, params):
         return _MIN_BRIGHTNESS
     if animation == "pulse":
-        step_ms = max(1, int(params.get("step_ms", _PULSE_STEP_MS)))
-        idx = (now_ms // step_ms) % len(_PULSE_TRIANGLE)
+        period = int(params.get("period_ms", 0))
+        if period > 0:
+            # A fixed period, phase-locked to the wall clock: weather's
+            # once-a-second sweep starts dim at the top of each second.
+            idx = (now_ms % period) * len(_PULSE_TRIANGLE) // period
+        else:
+            step_ms = max(1, int(params.get("step_ms", _PULSE_STEP_MS)))
+            idx = (now_ms // step_ms) % len(_PULSE_TRIANGLE)
         return _PULSE_TRIANGLE[idx]
     return base
 
 
 def _apply_emit(driver: VFDDriver, emit: tuple) -> None:
+    """("blank",) | ("show", top, bottom) | ("show", top, bottom, cursor)."""
     if emit[0] == "blank":
         driver.blank()
     else:
-        driver.show(emit[1], emit[2])
+        driver.show(emit[1], emit[2], cursor=emit[3] if len(emit) > 3 else None)
 
 
 # --- the tick ----------------------------------------------------------------
@@ -332,6 +342,7 @@ def _write_status(
     now_ms: int,
     bars: list | None = None,
     stereo: dict | None = None,
+    cursor: int | None = None,
 ) -> None:
     """Mirror the current display state to status.json — a throttled HEARTBEAT.
 
@@ -370,6 +381,14 @@ def _write_status(
             "spectrum_right": (stereo or {}).get("right"),
             "spectrum_level_l": (stereo or {}).get("level_l"),
             "spectrum_level_r": (stereo or {}).get("level_r"),
+            # Cell the hardware cursor is parked on (weather's colon tick), else null.
+            "cursor": cursor,
+            # The glyph set a MODE loaded (weather, spectrum), keyed "0".."8", so the
+            # preview draws those cells; null = the user's state.glyphs are loaded.
+            "mode_glyphs": ({str(k): v for k, v in ctx["mode_glyphs"].items()}
+                            if ctx["mode_glyphs"] else None),
+            "weather": (WEATHER_FRAME.fetcher.status()
+                        if _norm_mode(state.get("mode")) == "weather" else None),
             "last_command_id": ctx["last_command_id"],
             "heartbeat": ctx["heartbeat"],
         }
@@ -649,14 +668,24 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
 
     mode = _norm_mode(state.get("mode"))
 
+    # The weather fetcher works only while weather is the active mode.
+    WEATHER_FRAME.fetcher.set_location(
+        weather.location(state) if mode == "weather" else None)
+
     # 3. glyphs: the active mode's own set (spectrum, weather), else the user's.
     _sync_glyphs(driver, state, ctx, mode)
 
     # Animation is N/A in marquee/spectrum: the ticker / the bars own the rows, so
     # flash/blink/pulse don't apply meaningfully. Force "none" so a leftover
     # animation setting carried over from another mode can't affect them.
-    animation = "none" if mode in ("marquee", "spectrum") else state.get("animation", "none")
-    params = state.get("animation_params") or {}
+    if mode in ("marquee", "spectrum"):
+        animation, params = "none", state.get("animation_params") or {}
+    elif mode == "weather":
+        # The colon setting owns the brightness animation in weather mode.
+        animation, params = colon_animation(state)
+    else:
+        animation = state.get("animation", "none")
+        params = state.get("animation_params") or {}
 
     # SPECTRUM: socket-fed double-height bars — its own fast path.
     # (When blank, fall through to the normal blank handling below.)
@@ -677,7 +706,10 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     ctx["last_marquee_bottom"] = None
 
     # 4. frame + animation. Compute the frame first, so the brightness step below
-    # can apply blink's brightness PULSE for this tick.
+    # can apply blink's brightness PULSE for this tick. A frame may also park the
+    # hardware cursor on a cell (weather's colon tick); the cell rides on the emit
+    # tuple so emit-diffing writes when the cursor toggles.
+    cursor = None
     if state.get("blank"):
         top, bottom = _BLANK_LINE, _BLANK_LINE
         emit: tuple = ("blank",)
@@ -691,7 +723,10 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
                 top_align=_align(state.get("align_top")),
                 bottom_align=_align(state.get("align_bottom")),
             )
+            cursor = frame.cursor(now, state, top, bottom)
         emit = resolve_emit(now_ms, animation, params, top, bottom)
+        if cursor is not None and emit[0] == "show":
+            emit = (*emit, cursor)
 
     # 5. display settings (brightness incl. blink/pulse, scroll mode, code page).
     _apply_settings(driver, state, ctx, now_ms, animation, params)
@@ -708,7 +743,8 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         disp_top, disp_bottom = _BLANK_LINE, _BLANK_LINE
     else:
         disp_top, disp_bottom = emit[1], emit[2]
-    _write_status(state, disp_top, disp_bottom, ctx, now_ms)
+    _write_status(state, disp_top, disp_bottom, ctx, now_ms,
+                  cursor=emit[3] if len(emit) > 3 else None)
 
 
 def open_driver(dry_run: bool) -> VFDDriver | None:
@@ -803,6 +839,7 @@ def run(dry_run: bool = False, once: bool = False) -> int:
         except VFDError:
             pass
         driver.close()
+        WEATHER_FRAME.fetcher.stop()
         rx = ctx.get("spectrum_rx")
         if rx is not None:
             rx.close()

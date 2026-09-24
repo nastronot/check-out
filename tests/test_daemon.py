@@ -694,7 +694,7 @@ class _CountingDriver:
     def set_vertical_scroll(self, enabled):
         pass
 
-    def show(self, top, bottom):
+    def show(self, top, bottom, cursor=None):
         self.shows += 1
 
     def blank(self):
@@ -836,3 +836,134 @@ def test_mode_glyphs_are_redefined_after_a_reset(monkeypatch):
     daemon._invalidate_caches(ctx)                     # what a reset/reconnect does
     daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
     assert drv.defines == 2 * first
+
+
+# --- weather mode ------------------------------------------------------------
+def test_mode_glyph_sets_round_trip_spectrum_weather_clock(monkeypatch, capsys):
+    from checkout import weather
+    from checkout.weather import WeatherFetcher
+
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    monkeypatch.setattr(daemon.WEATHER_FRAME, "fetcher", WeatherFetcher(autostart=False))
+    drv = VFDDriver(dry_run=True)
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([])
+    user = {"0": [1, 2, 4, 8, 16, 1, 2]}
+
+    daemon.tick_once(drv, {"mode": "spectrum", "glyphs": user}, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"] == ("spectrum", "full", "bars")
+
+    capsys.readouterr()
+    daemon.tick_once(drv, {"mode": "weather", "glyphs": user}, ctx,
+                     now=datetime(2026, 6, 19, 12, 0, 1))
+    defines = _parse_defines(_all_tx_bytes(capsys.readouterr().out))
+    assert ctx["mode_glyphs_key"] == ("weather",)
+    assert len(defines) == len(weather.WEATHER_GLYPHS)
+
+    capsys.readouterr()
+    daemon.tick_once(drv, {"mode": "clock", "glyphs": user}, ctx,
+                     now=datetime(2026, 6, 19, 12, 0, 2))
+    defines = _parse_defines(_all_tx_bytes(capsys.readouterr().out))
+    assert ctx["mode_glyphs_key"] is None
+    assert list(defines) == [0x15]                    # the user's slot 0 is back
+
+
+def _weather_setup(monkeypatch, colon="tick"):
+    from checkout.weather import WeatherFetcher
+
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    fetcher = WeatherFetcher(autostart=False)
+    monkeypatch.setattr(daemon.WEATHER_FRAME, "fetcher", fetcher)
+    state = {"mode": "weather", "weather_lat": 41.9, "weather_lon": -87.6,
+             "weather_colon": colon}
+    return written, fetcher, state
+
+
+def test_weather_tick_toggles_the_cursor_on_the_colon(monkeypatch, capsys):
+    written, _, state = _weather_setup(monkeypatch)
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    t = datetime(2026, 9, 23, 20, 33, 12, 100_000)
+    daemon.tick_once(drv, state, ctx, now=t)
+    capsys.readouterr()
+    daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=200_000))
+    assert _all_tx_bytes(capsys.readouterr().out) == []      # same frame: no write
+    daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
+    off = _all_tx_bytes(capsys.readouterr().out)
+    assert off[-1] == 0x14                                   # cursor hidden
+    daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
+    on = _all_tx_bytes(capsys.readouterr().out)
+    assert on[-3:] == [0x10, 16, 0x13]                       # centered colon cell
+    assert ctx["last_emit"][3] == 16
+
+
+def test_weather_on_never_writes_a_cursor(monkeypatch, capsys):
+    _, _, state = _weather_setup(monkeypatch, colon="on")
+    drv = VFDDriver(dry_run=True)
+    daemon.tick_once(drv, state, daemon._new_ctx(), now=datetime(2026, 9, 23, 20, 33, 12))
+    assert 0x13 not in _all_tx_bytes(capsys.readouterr().out)
+
+
+def test_weather_blank_has_no_cursor(monkeypatch, capsys):
+    _, _, state = _weather_setup(monkeypatch)
+    drv = VFDDriver(dry_run=True)
+    daemon.tick_once(drv, {**state, "blank": True}, daemon._new_ctx(),
+                     now=datetime(2026, 9, 23, 20, 33, 12))
+    assert 0x13 not in _all_tx_bytes(capsys.readouterr().out)
+
+
+def test_weather_pulse_sweeps_brightness_once_a_second(monkeypatch):
+    _, _, state = _weather_setup(monkeypatch, colon="pulse")
+    levels = []
+
+    class _Drv(_CountingDriver):
+        def set_brightness(self, level):
+            levels.append(level)
+
+    drv = _Drv()
+    ctx = daemon._new_ctx()
+    for ms in range(0, 1000, 50):
+        daemon.tick_once(drv, state, ctx,
+                         now=datetime(2026, 9, 23, 20, 33, 12, ms * 1000))
+    assert levels == [0, 1, 2, 3, 2, 1]
+
+
+def test_weather_ignores_the_global_animation(monkeypatch, capsys):
+    _, _, state = _weather_setup(monkeypatch, colon="on")
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {**state, "animation": "flash", "animation_params": {"on_ms": 500, "off_ms": 500}}
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 600_000))
+    assert ctx["last_emit"][0] == "show"                    # flash's dark phase ignored
+
+
+def test_weather_sets_and_clears_the_fetch_location(monkeypatch):
+    _, fetcher, state = _weather_setup(monkeypatch)
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    assert fetcher.due_in(0) == 0                            # wants a fetch
+    daemon.tick_once(drv, {"mode": "clock"}, ctx, now=NOW)
+    assert fetcher.due_in(0) is None                         # idle outside weather
+
+
+def test_weather_status_reports_cursor_glyphs_and_weather(monkeypatch):
+    written, _, state = _weather_setup(monkeypatch)
+    drv = _CountingDriver()
+    daemon.tick_once(drv, state, daemon._new_ctx(),
+                     now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
+    s = written[-1]
+    assert s["mode"] == "weather"
+    assert s["cursor"] == 16
+    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4"}
+    assert s["weather"]["error"] is None
+
+
+def test_clock_status_has_no_mode_glyphs_or_cursor(monkeypatch):
+    written = []
+    monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
+    daemon.tick_once(_CountingDriver(), {"mode": "clock"}, daemon._new_ctx(), now=NOW)
+    assert written[-1]["mode_glyphs"] is None
+    assert written[-1]["cursor"] is None
+    assert written[-1]["weather"] is None
