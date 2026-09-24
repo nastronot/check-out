@@ -63,10 +63,12 @@ it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it �
 **do not copy bitmaps into the UI** for a new mode.
 
 ### Weather mode (v1.4.0)
-Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R] 82%`
-(four fixed 5-cell fields, ` --` when missing or ≥1 h stale). H / L / R are a **rolling 24 hours from
-now** (max / min / max of `hourly` with `forecast_hours=24`), not the calendar
-day; C is the current reading. Both lines are always centered
+Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R].40"`
+(four fixed 5-cell fields, ` --` when missing or ≥1 h stale). H / L are the max / min and R the rain
+TOTAL in inches over a **rolling 24 hours from now** (`hourly` with
+`forecast_hours=25`, first value dropped: each hourly amount covers the hour
+BEFORE its stamp), not the calendar day; C is the current reading. The rain
+field uses the fewest digits that fit 3 cells: `.04` / `1.2` / ` 42`. Both lines are always centered
 (`WeatherFrame.align`; a frame's `align` overrides the Justify setting), so the UI
 hides Justify in weather. State:
 `weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle` | `pacman`),

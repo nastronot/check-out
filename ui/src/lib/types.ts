@@ -31,12 +31,13 @@ export type WeatherColon = 'on' | 'tick' | 'wiggle' | 'twinkle' | 'pacman';
  *  when the date/time is as wide as it gets). */
 export type WeatherPacmanSprite = 'ghost' | 'pacman';
 
-/** status.weather — the latest reading (°F / %) and fetch health. */
+/** status.weather — the latest reading (°F; rain = next-24-hour total in inches)
+ *  and fetch health. */
 export interface WeatherStatus {
   high: number | null;
   low: number | null;
   current: number | null;
-  rain: number | null;
+  rain: number | null; // inches, next 24 hours
   observed_at: string | null;
   fetched_at: string | null;
   error: string | null;

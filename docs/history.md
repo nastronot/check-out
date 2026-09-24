@@ -665,3 +665,13 @@ min / max of the next 24 hourly values (`hourly=temperature_2m,
 precipitation_probability&forecast_hours=24`, which starts at the current hour;
 ~1.1 KB reply, up from ~600 bytes). Hours with no value, or a non-finite one, are
 skipped. Current is unchanged.
+
+**Rain in inches, exactly the next 24 hours.** R changed from the wettest hour's
+chance of rain (%) to the expected rain TOTAL for the next 24 hours, in inches
+(`precipitation` with `precipitation_unit=inch`, summed). A chance said nothing
+about amount — drizzle and a downpour both scored 82%. Each hourly amount covers
+the hour before its timestamp, so the first value (stamped with the current
+hour) was the hour just past: the request now asks for 25 hours and drops the
+first, for high and low too. The 3-cell value uses the fewest digits that fit:
+`.04` under an inch, `1.2` under ten, whole inches above (`" 42"`, `"100"`), `" --"`
+only past 999 — the US 24-hour record is about 42".

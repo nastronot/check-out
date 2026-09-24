@@ -1,8 +1,8 @@
 """Weather mode data: the Open-Meteo call, its reply, and the bottom line.
 
 One HTTP call returns everything the bottom line needs: the current
-temperature, plus the next 24 hourly temperatures and rain chances, from which
-the high, low and rain figures are taken — a ROLLING 24 hours from now, not the
+temperature, plus hourly temperatures and rain amounts from which the high, the
+low and the rain TOTAL (inches) are taken — a ROLLING 24 hours from now, not the
 calendar day (so late at night it is about tomorrow, not the day that is ending). Open-Meteo refreshes ``current``
 every ``interval`` seconds (900 = 15 min), so the fetcher (below) fetches once
 per refresh instead of polling. Nothing here touches the serial port.
@@ -104,7 +104,8 @@ _DASHES = " --"
 
 @dataclass(frozen=True)
 class Reading:
-    """One reply. Temperatures are °F, rain is %; times are epoch seconds (UTC)."""
+    """One reply. Temperatures are °F; rain is the next-24-hour total in inches;
+    times are epoch seconds (UTC)."""
 
     high: float | None
     low: float | None
@@ -133,8 +134,11 @@ def build_url(lat: float, lon: float) -> str:
         "longitude": f"{lon:.4f}",
         "current": "temperature_2m",
         # 24 hourly steps starting at the current hour (~1.1 KB reply).
-        "hourly": "temperature_2m,precipitation_probability",
-        "forecast_hours": 24,
+        # 25 hourly steps starting at the current hour; parse() drops the first,
+        # whose value covers the hour that already passed (~1.1 KB reply).
+        "hourly": "temperature_2m,precipitation",
+        "forecast_hours": 25,
+        "precipitation_unit": "inch",
         "temperature_unit": "fahrenheit",
         "timezone": "auto",
     }, safe=",")
@@ -159,15 +163,17 @@ def _extreme(values, pick) -> float | None:
 def parse(payload: dict, fetched_at: float) -> Reading:
     """Turn a reply into a Reading; raise ValueError if it is malformed.
 
-    High / low / rain are the max / min / max over the next 24 hourly values
-    (hours with no value are skipped).
+    High / low are the max / min of the next 24 hourly temperatures; rain is the
+    SUM of the next 24 hourly amounts, in inches. Each hourly precipitation value
+    covers the hour BEFORE its timestamp, so the first (stamped with the current
+    hour) is dropped. Hours with no value are skipped.
 
     ``current.time`` is local to the location (``timezone=auto``), so the reply's
     ``utc_offset_seconds`` converts it to an absolute instant.
     """
     try:
         cur, hourly = payload["current"], payload["hourly"]
-        temps, rain = hourly["temperature_2m"], hourly["precipitation_probability"]
+        temps, rain = hourly["temperature_2m"][1:], hourly["precipitation"][1:]
         if not temps or not rain:
             raise ValueError("no hourly values")
         local = datetime.fromisoformat(cur["time"]).replace(tzinfo=timezone.utc)
@@ -175,7 +181,7 @@ def parse(payload: dict, fetched_at: float) -> Reading:
             high=_extreme(temps, max),
             low=_extreme(temps, min),
             current=_num(cur["temperature_2m"]),
-            rain=_extreme(rain, max),
+            rain=_extreme(rain, sum),
             observed_at=local.timestamp() - int(payload.get("utc_offset_seconds", 0)),
             interval_s=int(cur.get("interval", 900)),
             fetched_at=fetched_at,
@@ -193,29 +199,48 @@ def next_fetch_at(reading: Reading) -> float:
     )
 
 
-def _field(slot: int, value: float | None, suffix: str) -> str:
-    """One 5-cell field: label glyph + 3-wide right-aligned number + suffix."""
-    text = _DASHES
-    if value is not None:
-        rounded = str(math.floor(value + 0.5))
-        if len(rounded) <= 3:
-            text = rounded.rjust(3)
+def _whole(value: float | None) -> str:
+    """A number rounded to a whole, in 3 cells, or `` --`` if it doesn't fit."""
+    if value is None:
+        return _DASHES
+    rounded = str(math.floor(value + 0.5))
+    return rounded.rjust(3) if len(rounded) <= 3 else _DASHES
+
+
+def _inches(value: float | None) -> str:
+    """A rain total in 3 cells with the fewest digits that fit: ``.04`` under an
+    inch, ``1.2`` under ten, whole inches (`` 42``, ``100``) above; ``  0`` when
+    dry; `` --`` only past 999 (the US 24-hour record is ~42")."""
+    if value is None:
+        return _DASHES
+    if value < 0.005:
+        return "  0"
+    if value < 0.995:
+        return f"{value:.2f}"[1:]          # ".04" (drop the leading 0)
+    if value < 9.95:
+        return f"{value:.1f}"              # "1.2"
+    return _whole(value)                    # " 42" / "100"; " --" past 999
+
+
+def _field(slot: int, text: str, suffix: str) -> str:
+    """One 5-cell field: label glyph + a 3-cell value + suffix."""
     return chr(GLYPH_CODES[slot]) + text + suffix
 
 
 def bottom_line(reading: Reading | None, now: float) -> str:
-    """``[H] 93°[L] 74°[C] 82°[R] 82%`` — always exactly 20 cells.
+    """``[H] 93°[L] 74°[C] 82°[R] .40"`` — always exactly 20 cells.
 
+    High / low / current are whole °F; rain is the next-24-hour total in inches.
     A missing, unfittable or stale (≥ STALE_S old) value shows `` --``.
     """
     if reading is not None and now - reading.observed_at >= STALE_S:
         reading = None
     get = (lambda name: getattr(reading, name)) if reading else (lambda name: None)
     return (
-        _field(SLOT_HIGH, get("high"), _DEG)
-        + _field(SLOT_LOW, get("low"), _DEG)
-        + _field(SLOT_CURRENT, get("current"), _DEG)
-        + _field(SLOT_RAIN, get("rain"), "%")
+        _field(SLOT_HIGH, _whole(get("high")), _DEG)
+        + _field(SLOT_LOW, _whole(get("low")), _DEG)
+        + _field(SLOT_CURRENT, _whole(get("current")), _DEG)
+        + _field(SLOT_RAIN, _inches(get("rain")), '"')
     )
 
 

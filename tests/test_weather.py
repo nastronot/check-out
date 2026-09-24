@@ -7,17 +7,19 @@ import pytest
 from checkout import weather
 from checkout.driver import GLYPH_CODES
 
-# The reply shape probed live on 2026-09-23 (Chicago): current + the next 24
-# hourly values starting at the current hour. Values trimmed/chosen for the test.
-_TEMPS = [82.0, 85.5, 92.6, 90.1] + [80.0] * 19 + [74.2]
-_RAIN = [0, 10, 82, 40] + [5] * 20
+# The reply shape probed live on 2026-09-23 (Chicago): current + 25 hourly values
+# starting at the current hour. The FIRST is dropped (its value covers the hour
+# that already passed), leaving exactly the next 24. Values chosen for the test.
+_PAST = 999.0   # the dropped first hour: must never show up in a result
+_TEMPS = [_PAST, 82.0, 85.5, 92.6, 90.1] + [80.0] * 19 + [74.2]
+_RAIN = [_PAST, 0.0, 0.1, 0.25, 0.05] + [0.0] * 20      # inches per hour -> 0.40 total
 PAYLOAD = {
     "utc_offset_seconds": -18000,
     "current": {"time": "2026-09-23T20:45", "interval": 900, "temperature_2m": 82.4},
     "hourly": {
-        "time": [f"2026-09-2{3 + (20 + h) // 24}T{(20 + h) % 24:02d}:00" for h in range(24)],
+        "time": [f"2026-09-2{3 + (20 + h) // 24}T{(20 + h) % 24:02d}:00" for h in range(25)],
         "temperature_2m": _TEMPS,
-        "precipitation_probability": _RAIN,
+        "precipitation": _RAIN,
     },
 }
 # 20:45 local at UTC-5 is 01:45 UTC the next day.
@@ -26,9 +28,10 @@ OBSERVED = datetime(2026, 9, 24, 1, 45, tzinfo=timezone.utc).timestamp()
 H, L, C, R, DEG = (chr(GLYPH_CODES[s]) for s in range(5))
 
 
-def test_parse_takes_high_low_rain_over_the_next_24_hours():
+def test_parse_takes_the_next_24_hours_and_drops_the_past_one():
     r = weather.parse(PAYLOAD, fetched_at=OBSERVED + 30)
-    assert (r.high, r.low, r.current, r.rain) == (92.6, 74.2, 82.4, 82.0)
+    assert (r.high, r.low, r.current) == (92.6, 74.2, 82.4)
+    assert r.rain == pytest.approx(0.40)          # total inches, not a max
     assert r.observed_at == OBSERVED
     assert r.interval_s == 900
     assert r.fetched_at == OBSERVED + 30
@@ -42,10 +45,9 @@ def test_parse_rejects_malformed_replies(bad):
 
 def test_parse_skips_null_hours_and_is_none_when_all_are_null():
     some = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"],
-                                  "precipitation_probability": [None, 30] + [None] * 22}}
-    assert weather.parse(some, 0).rain == 30.0
-    none = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"],
-                                  "precipitation_probability": [None] * 24}}
+                                  "precipitation": [None, 0.3] + [None] * 23}}
+    assert weather.parse(some, 0).rain == pytest.approx(0.3)
+    none = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"], "precipitation": [0.5] + [None] * 24}}
     assert weather.parse(none, 0).rain is None
 
 
@@ -53,8 +55,8 @@ def test_build_url_asks_only_for_the_used_fields():
     url = weather.build_url(41.8781, -87.6298)
     assert url.startswith("https://api.open-meteo.com/v1/forecast?")
     for part in ("latitude=41.8781", "longitude=-87.6298", "current=temperature_2m",
-                 "hourly=temperature_2m,precipitation_probability", "forecast_hours=24",
-                 "temperature_unit=fahrenheit", "timezone=auto"):
+                 "hourly=temperature_2m,precipitation", "forecast_hours=25",
+                 "temperature_unit=fahrenheit", "precipitation_unit=inch", "timezone=auto"):
         assert part in url
     assert "daily=" not in url and "forecast_days" not in url
 
@@ -70,25 +72,38 @@ def test_next_fetch_is_never_sooner_than_a_minute_after_fetching():
     assert weather.next_fetch_at(r) == OBSERVED + 5000 + 60
 
 
-def test_bottom_line_matches_the_mockup():
+def test_bottom_line_shows_rain_in_inches():
     r = weather.parse(PAYLOAD, fetched_at=OBSERVED)
     line = weather.bottom_line(r, now=OBSERVED + 60)
-    assert line == f"{H} 93{DEG}{L} 74{DEG}{C} 82{DEG}{R} 82%"
+    assert line == f'{H} 93{DEG}{L} 74{DEG}{C} 82{DEG}{R}.40"'
     assert len(line) == 20
 
 
 @pytest.mark.parametrize("value,text", [(100, "100"), (-10, "-10"), (-4.6, " -5"),
                                         (0.4, "  0"), (1000, " --"), (None, " --")])
-def test_bottom_line_fields_stay_three_wide(value, text):
-    r = weather.Reading(high=value, low=value, current=value, rain=value,
+def test_temperature_fields_stay_three_wide(value, text):
+    r = weather.Reading(high=value, low=value, current=value, rain=0.0,
                         observed_at=OBSERVED, interval_s=900, fetched_at=OBSERVED)
     line = weather.bottom_line(r, now=OBSERVED)
     assert len(line) == 20
     assert line[1:4] == text
 
 
+@pytest.mark.parametrize("inches,text", [
+    (0.0, "  0"), (0.004, "  0"), (0.04, ".04"), (0.75, ".75"), (0.996, "1.0"),
+    (1.24, "1.2"), (9.94, "9.9"), (9.96, " 10"), (42.0, " 42"), (99.6, "100"),
+    (999.6, " --"), (None, " --"),
+])
+def test_rain_field_uses_the_fewest_digits_that_fit(inches, text):
+    r = weather.Reading(high=70, low=60, current=65, rain=inches,
+                        observed_at=OBSERVED, interval_s=900, fetched_at=OBSERVED)
+    line = weather.bottom_line(r, now=OBSERVED)
+    assert len(line) == 20
+    assert line[16:] == text + '"'
+
+
 def test_bottom_line_without_a_reading_shows_dashes():
-    assert weather.bottom_line(None, now=0) == f"{H} --{DEG}{L} --{DEG}{C} --{DEG}{R} --%"
+    assert weather.bottom_line(None, now=0) == f'{H} --{DEG}{L} --{DEG}{C} --{DEG}{R} --"'
 
 
 def test_bottom_line_goes_to_dashes_after_an_hour():
@@ -249,7 +264,8 @@ def test_status_reports_the_reading_and_times():
     f.set_location((1.0, 2.0))
     f.fetch_once()
     s = f.status()
-    assert (s["high"], s["low"], s["current"], s["rain"]) == (92.6, 74.2, 82.4, 82.0)
+    assert (s["high"], s["low"], s["current"]) == (92.6, 74.2, 82.4)
+    assert s["rain"] == pytest.approx(0.40)
     assert s["observed_at"].startswith("2026-09-24T01:45")
     assert s["error"] is None
 
@@ -303,7 +319,7 @@ def test_thread_survives_an_unexpected_error_and_logs_it():
 
 
 def test_non_finite_hours_are_skipped():
-    temps = [float("nan"), 70.0, float("inf"), 60.0] + [65.0] * 20
+    temps = [_PAST, float("nan"), 70.0, float("inf"), 60.0] + [65.0] * 20
     p = {**PAYLOAD, "hourly": {**PAYLOAD["hourly"], "temperature_2m": temps}}
     r = weather.parse(p, OBSERVED)
     assert (r.high, r.low) == (70.0, 60.0)
