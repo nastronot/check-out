@@ -241,3 +241,36 @@ def test_thread_fetches_and_stops():
     f.set_location((1.0, 2.0))
     assert got.wait(2)
     f.stop()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_values_become_none(bad):
+    p = {**PAYLOAD, "current": {**PAYLOAD["current"], "temperature_2m": bad}}
+    r = weather.parse(p, OBSERVED)
+    assert r.current is None
+    assert len(weather.bottom_line(r, OBSERVED)) == 20
+
+
+def test_thread_survives_an_unexpected_error_and_logs_it():
+    import threading
+
+    logged, first, second = [], threading.Event(), threading.Event()
+
+    def get_json(url, timeout):
+        if not first.is_set():
+            first.set()
+            raise RuntimeError("bug")
+        second.set()
+        return PAYLOAD
+
+    f = weather.WeatherFetcher(get_json=get_json, log=logged.append)
+    f.set_location((1.0, 2.0))
+    assert first.wait(2)
+    for _ in range(200):           # wait for the thread to finish handling the error
+        if logged:
+            break
+        threading.Event().wait(0.01)
+    f.set_location((3.0, 4.0))     # new location -> due now -> the thread fetches again
+    assert second.wait(2)
+    f.stop()
+    assert any("bug" in m for m in logged)

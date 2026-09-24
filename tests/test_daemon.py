@@ -967,3 +967,17 @@ def test_clock_status_has_no_mode_glyphs_or_cursor(monkeypatch):
     assert written[-1]["mode_glyphs"] is None
     assert written[-1]["cursor"] is None
     assert written[-1]["weather"] is None
+
+
+def test_blank_stops_brightness_animation_so_nothing_follows_cursor_off(monkeypatch, capsys):
+    # hardware rule 1: any write after 0x14 re-shows the cursor, so a dark screen
+    # must stay silent — no pulse brightness writes while blank.
+    _, _, state = _weather_setup(monkeypatch, colon="pulse")
+    drv = VFDDriver(dry_run=True)
+    ctx = daemon._new_ctx()
+    state = {**state, "blank": True}
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 0))
+    capsys.readouterr()
+    for ms in range(50, 1000, 50):
+        daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, ms * 1000))
+    assert _all_tx_bytes(capsys.readouterr().out) == []

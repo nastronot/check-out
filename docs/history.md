@@ -504,7 +504,9 @@ reads as current. A reply for a location that changed mid-request is dropped.
 
 **The colon (`weather_colon`).** `tick` parks the hardware cursor block on the
 colon for the first half of each second — `VFDDriver.show(..., cursor=pos)` ends
-`0x10 pos 0x13` instead of `0x14` (both confirmed-safe bytes); the cursor cell
+`0x10 pos 0x13` instead of `0x14`. `0x13` (cursor on) is in the Futaba command
+set but was first emitted by this release, so it is bench-confirm pending; the
+cursor cell
 rides on the emit tuple, so emit-diffing writes ~2×/s. `pulse` reuses the
 brightness triangle with a new `period_ms` param (phase-locked to the second);
 brightness is display-wide, so the whole panel breathes. `on` is a plain colon.

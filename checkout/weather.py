@@ -81,7 +81,12 @@ def build_url(lat: float, lon: float) -> str:
 
 
 def _num(value) -> float | None:
-    return None if value is None else float(value)
+    """A finite float, or None (null, NaN and Infinity — json.load accepts the
+    last two — would crash the rounding in _field)."""
+    if value is None:
+        return None
+    v = float(value)
+    return v if math.isfinite(v) else None
 
 
 def parse(payload: dict, fetched_at: float) -> Reading:
@@ -268,4 +273,14 @@ class WeatherFetcher:
             elif wait > 0:
                 self._wake.wait(wait)
             else:
-                self.fetch_once()
+                try:
+                    self.fetch_once()
+                except Exception as exc:  # noqa: BLE001 — keep the thread alive
+                    # fetch_once handles network/reply errors itself; anything
+                    # else is a bug. Log it and back off instead of letting the
+                    # thread die and weather read " --" forever.
+                    self._log(f"weather fetcher error: {exc!r}")
+                    with self._lock:
+                        self._error = repr(exc)
+                        self._backoff = min(RETRY_MAX_S, max(RETRY_START_S, self._backoff * 2))
+                        self._retry_at = self._clock() + self._backoff

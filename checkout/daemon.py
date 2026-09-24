@@ -678,7 +678,11 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
     # Animation is N/A in marquee/spectrum: the ticker / the bars own the rows, so
     # flash/blink/pulse don't apply meaningfully. Force "none" so a leftover
     # animation setting carried over from another mode can't affect them.
-    if mode in ("marquee", "spectrum"):
+    if state.get("blank"):
+        # A dark screen stays silent: blank() ends in cursor-off (0x14) and ANY
+        # later write re-shows the cursor, so no brightness animation runs.
+        animation, params = "none", {}
+    elif mode in ("marquee", "spectrum"):
         animation, params = "none", state.get("animation_params") or {}
     elif mode == "weather":
         # The colon setting owns the brightness animation in weather mode.
