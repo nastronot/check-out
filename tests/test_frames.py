@@ -359,7 +359,7 @@ def _pac(us, second=12, half=False, sprite="both"):
 
 def test_pacman_is_compact_text_left_sprites_far_right():
     top = _pac(100_000)
-    assert top == "9/23/26 WED  8:33".ljust(18) + _GA + _PA   # 1-digit hour: 2 spaces
+    assert top == "9/23/26 WED 8:33".ljust(18) + _GA + _PA   # one space, any hour
 
 
 def test_pacman_longest_date_and_time_still_fit():
@@ -396,7 +396,7 @@ def test_pacman_solo_puts_the_chosen_sprite_in_the_far_right_cell():
 
 
 def test_pacman_colon_is_steady():
-    assert {_pac(us)[14] for us in range(0, 1_000_000, 100_000)} == {":"}
+    assert {_pac(us)[13] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_pacman_glyphs_match_the_drawn_frames():

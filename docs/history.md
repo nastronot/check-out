@@ -642,3 +642,7 @@ centred); the solo ghost alternates `GHOST_B`/`GHOST_C` (centred, left). Rather
 than a third ghost slot (the slots are full in duo), each `weather_pacman`
 choice loads its own frames into the same slots — `glyph_set(colon, pacman)`
 with a per-choice family key — so the frame code never changes.
+
+**Pacman spacing, final.** The time sits exactly one cell after the day whether
+it is 4 or 5 cells wide (`9/23/26 WED 8:33`, `9/23/26 WED 10:33`); the padding
+goes between the time and the sprites instead.
