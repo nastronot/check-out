@@ -611,3 +611,8 @@ and thin colon glyphs and its time colon is the font's 2-wide `:`. The
 alternative (keep the thin colon, drop the degree glyph in pacman mode) was
 offered to the user. `clock.py` gained `short_date` and `hh_mm`, which
 `short_date_time` now composes.
+
+**Pacman layout revised.** The sprites moved between the date and the day —
+`09/23/26` + ghost, gap, pacman + `WED 08:33` — and the ghost was redrawn one
+row shorter (rows 2-6) to match pacman's height. `clock.py`'s `short_date` split
+into `numeric_date` and `weekday` so both layouts compose from the same parts.

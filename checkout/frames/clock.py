@@ -26,10 +26,14 @@ def _hour12(now: datetime) -> int:
     return now.hour % 12 or 12
 
 
-def short_date(now: datetime) -> str:
-    """``MM/DD/YY DAY``, e.g. ``09/23/26 WED`` (12 chars)."""
-    return (f"{now.month:02d}/{now.day:02d}/{now.year % 100:02d} "
-            f"{_DAYS[now.weekday()]}")
+def numeric_date(now: datetime) -> str:
+    """``MM/DD/YY``, e.g. ``09/23/26`` (8 chars)."""
+    return f"{now.month:02d}/{now.day:02d}/{now.year % 100:02d}"
+
+
+def weekday(now: datetime) -> str:
+    """3-letter weekday, e.g. ``WED``."""
+    return _DAYS[now.weekday()]
 
 
 def hh_mm(now: datetime, colon: str = ":") -> str:
@@ -43,7 +47,7 @@ def hh_mm(now: datetime, colon: str = ":") -> str:
 
 def short_date_time(now: datetime, colon: str = ":") -> str:
     """``MM/DD/YY DAY HH:MM`` (12-hour, no AM/PM), e.g. ``09/23/26 WED 08:33``."""
-    return f"{short_date(now)} {hh_mm(now, colon)}"
+    return f"{numeric_date(now)} {weekday(now)} {hh_mm(now, colon)}"
 
 
 def clock_date(now: datetime) -> str:
