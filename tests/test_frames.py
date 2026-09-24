@@ -145,9 +145,10 @@ class _FakeFetcher:
 
 _WX = {"weather_lat": 41.9, "weather_lon": -87.6}
 _T = datetime(2026, 9, 23, 20, 33, 12)
-_MID = chr(GLYPH_CODES[_weather.SLOT_COLON_MID])
-_LOW = chr(GLYPH_CODES[_weather.SLOT_COLON_LOW])
+_DOT = chr(GLYPH_CODES[_weather.SLOT_COLON_DOT])
 _THIN = chr(GLYPH_CODES[_weather.SLOT_COLON_THIN])
+_TWR = chr(GLYPH_CODES[_weather.SLOT_COLON_TWIST_R])
+_TWL = chr(GLYPH_CODES[_weather.SLOT_COLON_TWIST_L])
 
 
 def _top(colon, us):
@@ -185,10 +186,11 @@ def test_tick_changes_only_the_colon_cell():
     assert [i for i in range(len(on)) if on[i] != off[i]] == [15]
 
 
-def test_pulse_fades_the_colon_through_four_steps_once_a_second():
-    steps = [_top("pulse", (2 * k + 1) * 1_000_000 // 12)[15] for k in range(6)]  # mid-step
-    assert steps == [" ", _LOW, _MID, ":", _MID, _LOW]
-
+def test_throb_plays_the_thirteen_step_sequence_once_a_second():
+    # g4 g5 g6 g7 g6 g5 g4 g5 g6 g8 g6 g5 g4 (g4 is a blank cell)
+    steps = [_top("throb", (2 * k + 1) * 1_000_000 // 26)[15] for k in range(13)]  # mid-step
+    assert steps == [" ", _DOT, _THIN, _TWR, _THIN, _DOT, " ",
+                     _DOT, _THIN, _TWL, _THIN, _DOT, " "]
 
 def test_colon_defaults_to_tick():
     state = dict(_WX)
@@ -196,14 +198,12 @@ def test_colon_defaults_to_tick():
     assert frame.render(_T.replace(microsecond=600_000), state)[0][15] == " "
 
 
-def test_colon_fade_glyphs_thin_the_real_colon():
-    # The font's ':' is two 2x2 blocks (8 dots); the fade steps light 4, then 2,
-    # always a subset of the real colon so the fade reads as the same colon.
-    real = [0, 6, 6, 0, 6, 6, 0]
-    for rows, dots in ((_glyphs.COLON_MID, 4), (_glyphs.COLON_LOW, 2)):
-        assert sum(bin(r).count("1") for r in rows) == dots
-        assert all(r & ~full == 0 for r, full in zip(rows, real))
-
+def test_throb_glyphs_match_the_drawn_frames():
+    def draw(rows):
+        return ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in rows]
+    assert draw(_glyphs.COLON_DOT) == [".....", ".....", "..#..", ".....", "..#..", ".....", "....."]
+    assert draw(_glyphs.COLON_TWIST_R) == [".....", "..##.", "..#..", ".....", "..#..", ".##..", "....."]
+    assert draw(_glyphs.COLON_TWIST_L) == [".....", ".##..", "..#..", ".....", "..#..", "..##.", "....."]
 
 def test_thin_colon_is_the_centre_column():
     rows = ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in _glyphs.COLON_THIN]

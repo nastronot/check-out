@@ -22,8 +22,8 @@ export type MarqueeBottom = 'static';
  */
 export type ScrollSource = 'message' | 'clock';
 
-/** Weather colon: steady, cursor tick, or a once-a-second brightness pulse. */
-export type WeatherColon = 'on' | 'tick' | 'pulse';
+/** Weather colon: steady, blinking each second, or a once-a-second throb animation. */
+export type WeatherColon = 'on' | 'tick' | 'throb';
 
 /** status.weather — the latest reading (°F / %) and fetch health. */
 export interface WeatherStatus {

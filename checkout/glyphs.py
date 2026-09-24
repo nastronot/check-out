@@ -19,15 +19,12 @@ LABEL_C = [31, 17, 21, 29, 21, 17, 31]
 # A 3x3 ring in the top rows, for temperatures.
 DEGREE = [4, 10, 4, 0, 0, 0, 0]
 
-# Fade steps for a pulsing colon. The font's ':' is two 2x2 blocks of dots,
-# [0, 6, 6, 0, 6, 6, 0] (8 dots). A VFD cell has no per-cell brightness (it is
-# display-wide), so a colon "fades" by lighting fewer of its own dots:
-COLON_MID = [0, 2, 4, 0, 2, 4, 0]   # 4 dots: one diagonal of each block
-COLON_LOW = [0, 0, 2, 0, 2, 0, 0]   # 2 dots: the inner dot of each block
-
-# A one-column colon (the centre column, 4 dots) — the weather clock's colon for
-# "on" and "tick"; slimmer than the font's 2-wide ':'.
-COLON_THIN = [0, 4, 4, 0, 4, 4, 0]
+# Weather clock colons, drawn by hand. A VFD cell has no per-cell brightness
+# (it is display-wide), so the colon animates by changing its dots instead.
+COLON_THIN = [0, 4, 4, 0, 4, 4, 0]      # the on/tick colon: centre column, 4 dots
+COLON_DOT = [0, 0, 4, 0, 4, 0, 0]       # throb: the two inner dots only
+COLON_TWIST_R = [0, 12, 4, 0, 4, 6, 0]  # throb: top hooks right, bottom hooks left
+COLON_TWIST_L = [0, 6, 4, 0, 4, 12, 0]  # throb: the mirror (top left, bottom right)
 
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
 

@@ -309,7 +309,9 @@ def test_weather_coords_coerce(state_path, lat, lon, expected):
 
 def test_weather_colon_validates(state_path):
     import json
-    state_path.write_text(json.dumps({"weather_colon": "pulse"}))
-    assert state.load_state()["weather_colon"] == "pulse"
+    state_path.write_text(json.dumps({"weather_colon": "throb"}))
+    assert state.load_state()["weather_colon"] == "throb"
+    state_path.write_text(json.dumps({"weather_colon": "pulse"}))   # renamed in v1.4.0
+    assert state.load_state()["weather_colon"] == "throb"
     state_path.write_text(json.dumps({"weather_colon": "wiggle"}))
     assert state.load_state()["weather_colon"] == "tick"

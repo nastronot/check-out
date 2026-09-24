@@ -107,8 +107,9 @@ def test_weather_glyph_set_uses_the_shared_bitmaps():
         weather.SLOT_HIGH: glyphs.LABEL_H, weather.SLOT_LOW: glyphs.LABEL_L,
         weather.SLOT_CURRENT: glyphs.LABEL_C, weather.SLOT_RAIN: glyphs.LABEL_R,
         weather.SLOT_DEGREE: glyphs.DEGREE,
-        weather.SLOT_COLON_MID: glyphs.COLON_MID, weather.SLOT_COLON_LOW: glyphs.COLON_LOW,
-        weather.SLOT_COLON_THIN: glyphs.COLON_THIN,
+        weather.SLOT_COLON_DOT: glyphs.COLON_DOT, weather.SLOT_COLON_THIN: glyphs.COLON_THIN,
+        weather.SLOT_COLON_TWIST_R: glyphs.COLON_TWIST_R,
+        weather.SLOT_COLON_TWIST_L: glyphs.COLON_TWIST_L,
     }
 
 

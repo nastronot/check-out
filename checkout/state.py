@@ -84,7 +84,7 @@ def defaults() -> dict:
         # --- weather (mode "weather") ---
         "weather_lat": None,             # decimal degrees, -90..90, or null
         "weather_lon": None,             # decimal degrees, -180..180, or null
-        "weather_colon": "tick",         # "on" (steady) | "tick" (cursor) | "pulse"
+        "weather_colon": "tick",         # "on" (steady) | "tick" (blink) | "throb"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -147,6 +147,8 @@ def _backfill(data: dict) -> dict:
     # Weather location: a number in range, else null (the UI may send strings or "").
     merged["weather_lat"] = _coord(merged.get("weather_lat"), 90.0)
     merged["weather_lon"] = _coord(merged.get("weather_lon"), 180.0)
+    if merged.get("weather_colon") == "pulse":    # renamed to "throb" in v1.4.0
+        merged["weather_colon"] = "throb"
     if merged.get("weather_colon") not in COLON_MODES:
         merged["weather_colon"] = "tick"
     return merged

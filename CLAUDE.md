@@ -65,16 +65,18 @@ it. `status.json` `mode_glyphs` mirrors the loaded set so the preview draws it �
 ### Weather mode (v1.4.0)
 Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R] 82%`
 (four fixed 5-cell fields, ` --` when missing or ≥1 h stale). State:
-`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `pulse`).
+`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `throb`; legacy `pulse` → `throb`).
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
   service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
   in weather mode and fetches once per data refresh (`current.time` +
   `interval` 900 s + 60 s), retrying 60 s → 900 s on failure. The loop never
   waits on the network.
-- **Colon:** the colon cell changes CHARACTER — `on` / `tick` use a one-column
-  thin colon glyph (`COLON_THIN`); `tick` = thin colon then space each half second; `pulse` = a 1 s fade through space / 2 dots / 4 dots / `:` (two
-  glyphs in weather's set); `on` = steady. **Never use the hardware cursor or
-  brightness for it** (see the bench TODO below). Weather ignores `animation`.
+- **Colon:** the colon cell changes CHARACTER — `on` = the thin one-column
+  colon (`COLON_THIN`); `tick` = thin colon then space each half second;
+  `throb` = 13 frames once a second (blank, dot, thin, twist-R, thin, dot, blank,
+  dot, thin, twist-L, thin, dot, blank). The 4 colon glyphs + 5 labels fill all
+  9 slots. **Never use the hardware cursor or brightness for it** (see the bench
+  TODO below). Weather ignores `animation`.
 
 ### Cell-diff writes (v1.4.0)
 When the glass holds a known frame (`last_emit` is a show), the daemon calls

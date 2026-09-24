@@ -7,13 +7,13 @@ the network.
 The colon stands in for the hidden seconds, per ``weather_colon``, by changing
 the colon CHARACTER — never the hardware cursor (an underline on this glass that
 stays on across writes) and never brightness (display-wide, so the whole panel
-would pulse):
+would change):
 
 - ``on``    — a steady thin colon (one centre column of dots, a weather glyph).
 - ``tick``  — the thin colon for the first half of each second, a space for the
   second.
-- ``pulse`` — the colon fades 0→3→0 once a second through four steps: space,
-  2 dots, 4 dots, the full 8-dot ``:`` (the dot glyphs are in weather's set).
+- ``throb`` — a 13-frame animation once a second: blank, dots, thin, twist,
+  thin, dots, blank, dots, thin, mirrored twist, thin, dots, blank.
 
 Only the colon cell changes, so the daemon's cell-diff writes one cell.
 """
@@ -28,17 +28,18 @@ from .base import Frame
 from .clock import short_date_time
 
 NO_LOCATION = "SET LOCATION"
-_THIN_COLON = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _US_PER_S = 1_000_000
 
-# pulse: one triangle per second, each step one of these colon characters.
-_PULSE_STEPS = (
-    " ",
-    chr(GLYPH_CODES[weather.SLOT_COLON_LOW]),
-    chr(GLYPH_CODES[weather.SLOT_COLON_MID]),
-    ":",
-    chr(GLYPH_CODES[weather.SLOT_COLON_MID]),
-    chr(GLYPH_CODES[weather.SLOT_COLON_LOW]),
+_BLANK = " "
+_DOT = chr(GLYPH_CODES[weather.SLOT_COLON_DOT])
+_THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
+_TWIST_R = chr(GLYPH_CODES[weather.SLOT_COLON_TWIST_R])
+_TWIST_L = chr(GLYPH_CODES[weather.SLOT_COLON_TWIST_L])
+
+# throb: these 13 frames, evenly spaced across each second (~77 ms apiece).
+_THROB_STEPS = (
+    _BLANK, _DOT, _THIN, _TWIST_R, _THIN, _DOT,
+    _BLANK, _DOT, _THIN, _TWIST_L, _THIN, _DOT, _BLANK,
 )
 
 
@@ -52,10 +53,10 @@ def colon_char(state: dict, now: datetime) -> str:
     """The character in the colon's cell at ``now``."""
     mode = colon_mode(state)
     if mode == "tick":
-        return _THIN_COLON if now.microsecond < _US_PER_S // 2 else " "
-    if mode == "pulse":
-        return _PULSE_STEPS[now.microsecond * len(_PULSE_STEPS) // _US_PER_S]
-    return _THIN_COLON
+        return _THIN if now.microsecond < _US_PER_S // 2 else _BLANK
+    if mode == "throb":
+        return _THROB_STEPS[now.microsecond * len(_THROB_STEPS) // _US_PER_S]
+    return _THIN
 
 
 class WeatherFrame(Frame):

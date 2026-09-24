@@ -149,7 +149,7 @@
   const COLONS: { value: WeatherColon; label: string }[] = [
     { value: 'on', label: 'ON' },
     { value: 'tick', label: 'TICK' },
-    { value: 'pulse', label: 'PULSE' },
+    { value: 'throb', label: 'THROB' },
   ];
   const setColon = (c: WeatherColon) => patch({ weather_colon: c });
   $: weatherLine = weatherSummary(status?.weather);
@@ -418,8 +418,8 @@
         </div>
         <span class="field__hint">
           <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
-          on and off every second. <strong>Pulse</strong> = the colon fades in and
-          out once a second (it lights fewer dots; brightness is display-wide).
+          on and off every second. <strong>Throb</strong> = a 13-frame colon
+          animation once a second (dots → colon → twist → back, then the mirror).
         </span>
       </div>
 

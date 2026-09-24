@@ -909,7 +909,7 @@ def test_weather_status_reports_glyphs_and_weather(monkeypatch):
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
     assert s["mode"] == "weather"
-    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4", "5", "6", "7"}
+    assert set(s["mode_glyphs"]) == {str(n) for n in range(9)}
     assert s["weather"]["error"] is None
 
 
@@ -959,7 +959,7 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
-    for colon in ("on", "tick", "pulse"):
+    for colon in ("on", "tick", "throb"):
         _, _, state = _weather_setup(monkeypatch, colon=colon)
         drv = VFDDriver(dry_run=True)
         ctx = daemon._new_ctx()
@@ -974,25 +974,27 @@ def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsy
         assert 0x04 not in tx, colon                             # no brightness writes
 
 
-def test_weather_pulse_steps_the_colon_glyphs(monkeypatch, capsys):
+def test_weather_throb_steps_the_colon_glyphs(monkeypatch, capsys):
     from checkout import weather as wx
     from checkout.driver import GLYPH_CODES
 
-    _, _, state = _weather_setup(monkeypatch, colon="pulse")
+    _, _, state = _weather_setup(monkeypatch, colon="throb")
     drv = VFDDriver(dry_run=True)
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 999_000))
     capsys.readouterr()
     cells = []
-    for k in range(6):
+    for k in range(13):
         daemon.tick_once(drv, state, ctx, now=datetime(
-            2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 12))
+            2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 26))
         tx = _tx_after(capsys)
-        assert tx[:2] == [0x10, 16] and tx[-1] == 0x14 and len(tx) == 4
-        cells.append(tx[2])
-    low, mid = GLYPH_CODES[wx.SLOT_COLON_LOW], GLYPH_CODES[wx.SLOT_COLON_MID]
-    assert cells == [ord(" "), low, mid, ord(":"), mid, low]
-
+        if tx:                                   # a repeat of the last cell writes nothing
+            assert tx[:2] == [0x10, 16] and tx[-1] == 0x14 and len(tx) == 4
+            cells.append(tx[2])
+    dot, thin = GLYPH_CODES[wx.SLOT_COLON_DOT], GLYPH_CODES[wx.SLOT_COLON_THIN]
+    twr, twl = GLYPH_CODES[wx.SLOT_COLON_TWIST_R], GLYPH_CODES[wx.SLOT_COLON_TWIST_L]
+    sp = ord(" ")
+    assert cells == [dot, thin, twr, thin, dot, sp, dot, thin, twl, thin, dot, sp]
 
 def test_mode_change_repaints_the_whole_frame(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)

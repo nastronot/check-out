@@ -45,8 +45,8 @@
   `state.json` self-coordination), so the ordering was cosmetic. `test_deploy.py`
   now asserts no unit references another checkout-* unit / `default.target` in an
   ordering key. Re-run `deploy/install.sh` to pick up the fixed units. (done)
-- **v1.4.0:** `weather` mode — date/weekday/HH:MM top line with an on/tick/pulse
-  colon (tick = `:`/space, pulse = a 1 s dot fade — colon only); high/low/current/
+- **v1.4.0:** `weather` mode — date/weekday/HH:MM top line with an on/tick/throb
+  colon (tick = thin colon/space, throb = a 13-frame 1 s colon animation); high/low/current/
   rain for a lat/lon on the bottom with inverted H/L/C/R label glyphs + a degree
   glyph. Open-Meteo fetched on a daemon thread once per 15-min data refresh.
   Spectrum's glyph swap generalised into mode glyph sets (+ re-sent after a

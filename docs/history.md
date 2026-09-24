@@ -548,3 +548,12 @@ clears) and written only on Save, so typing never triggers a fetch.
 2-wide `:` to `COLON_THIN` — the centre column only, 4 dots — in weather's glyph
 set (slot 7; weather now uses 8 of the 9 slots). `pulse` keeps its fade to the
 font's `:`.
+
+**Pulse → throb.** The dot-fade `pulse` became `throb`: a 13-frame colon
+animation once a second — blank, dot, thin, twist-R, thin, dot, blank, dot,
+thin, twist-L, thin, dot, blank (~77 ms a frame, each a 4-byte one-cell write).
+The frames are the user's hand-drawn glyphs: `COLON_DOT`, `COLON_THIN`,
+`COLON_TWIST_R`, `COLON_TWIST_L` (the blank frame is a space). With the 5 labels
+they fill all 9 glyph slots. `COLON_MID`/`COLON_LOW` were dropped. A saved
+`pulse` is migrated to `throb` on load. The four frames were also added to the
+glyph library (`library.json`) under "Colon …" names.
