@@ -56,7 +56,7 @@ _DEFAULT_BRIGHTNESS = 3  # Maximum
 _MIN_BRIGHTNESS = 0      # blink's off-phase pulses down to this
 from .frames.clock import ClockFrame
 from .frames.message import MessageFrame
-from .frames.weather import WeatherFrame, colon_mode, pacman_cast
+from .frames.dynamic import DynamicFrame, colon_mode, pacman_cast
 from .renderer import WIDTH, fit_line, render_lines, ticker_window
 from .state import load_state, save_status
 from . import spectrum, weather
@@ -77,8 +77,8 @@ SPECTRUM_STALE_MS = 200
 # Frames, keyed by name. "marquee" is handled specially in the tick (the
 # hardware ticker), not via a Frame; "message" covers the old "scroll" mode.
 # Weather's fetcher lives on its frame so tests can swap in a threadless one.
-WEATHER_FRAME = WeatherFrame(weather.WeatherFetcher(log=lambda m: log(m)))
-FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), WEATHER_FRAME)}
+DYNAMIC_FRAME = DynamicFrame(weather.WeatherFetcher(log=lambda m: log(m)))
+FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), DYNAMIC_FRAME)}
 DEFAULT_FRAME = "clock"
 
 
@@ -199,9 +199,9 @@ def mode_glyph_set(mode: str, state: dict, now: datetime):
     if mode == "spectrum":
         layout, style = _norm_spectrum_layout(state), _norm_spectrum_style(state)
         return ("spectrum", layout, style), spectrum.layout_glyphs(layout, style)
-    if mode == "weather":
+    if mode == "dynamic":
         family, glyphs = weather.glyph_set(colon_mode(state), pacman_cast(state, now))
-        return ("weather", family), glyphs
+        return ("dynamic", family), glyphs
     return None
 
 
@@ -384,12 +384,12 @@ def _write_status(
             "spectrum_right": (stereo or {}).get("right"),
             "spectrum_level_l": (stereo or {}).get("level_l"),
             "spectrum_level_r": (stereo or {}).get("level_r"),
-            # The glyph set a MODE loaded (weather, spectrum), keyed "0".."8", so the
+            # The glyph set a MODE loaded (dynamic, spectrum), keyed "0".."8", so the
             # preview draws those cells; null = the user's state.glyphs are loaded.
             "mode_glyphs": ({str(k): v for k, v in ctx["mode_glyphs"].items()}
                             if ctx["mode_glyphs"] else None),
-            "weather": (WEATHER_FRAME.fetcher.status()
-                        if _norm_mode(state.get("mode")) == "weather" else None),
+            "weather": (DYNAMIC_FRAME.fetcher.status()
+                        if _norm_mode(state.get("mode")) == "dynamic" else None),
             "last_command_id": ctx["last_command_id"],
             "heartbeat": ctx["heartbeat"],
         }
@@ -621,11 +621,11 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         ctx["last_emit"] = None
         ctx["last_mode"] = mode
 
-    # The weather fetcher works only while weather is the active mode.
-    WEATHER_FRAME.fetcher.set_location(
-        weather.location(state) if mode == "weather" else None)
+    # The weather fetcher works only while dynamic is the active mode.
+    DYNAMIC_FRAME.fetcher.set_location(
+        weather.location(state) if mode == "dynamic" else None)
 
-    # 3. glyphs: the active mode's own set (spectrum, weather), else the user's.
+    # 3. glyphs: the active mode's own set (spectrum, dynamic), else the user's.
     _sync_glyphs(driver, state, ctx, mode, now)
 
     # Animation is N/A in marquee/spectrum: the ticker / the bars own the rows, so
@@ -635,8 +635,8 @@ def tick_once(driver: VFDDriver, state: dict, ctx: dict, now: datetime | None = 
         # A dark screen stays silent: blank() ends in cursor-off (0x14) and ANY
         # later write re-shows the cursor, so no brightness animation runs.
         animation, params = "none", {}
-    elif mode in ("marquee", "spectrum", "weather"):
-        # N/A: the ticker / the bars own the rows; weather's colon animates itself.
+    elif mode in ("marquee", "spectrum", "dynamic"):
+        # N/A: the ticker / the bars own the rows; dynamic's colon animates itself.
         animation, params = "none", state.get("animation_params") or {}
     else:
         animation = state.get("animation", "none")
@@ -784,7 +784,7 @@ def run(dry_run: bool = False, once: bool = False) -> int:
         except VFDError:
             pass
         driver.close()
-        WEATHER_FRAME.fetcher.stop()
+        DYNAMIC_FRAME.fetcher.stop()
         rx = ctx.get("spectrum_rx")
         if rx is not None:
             rx.close()

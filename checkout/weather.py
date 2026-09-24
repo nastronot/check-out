@@ -31,12 +31,12 @@ STALE_S = 3600          # a reading this old shows " --" (never pass old data as
 FETCH_SLACK_S = 60      # fetch this long after the API's next refresh is due
 HTTP_TIMEOUT_S = 10
 
-# weather_colon values: a steady colon, an on/off tick, an animated loop
+# dynamic_colon values: a steady colon, an on/off tick, an animated loop
 # (wiggle, twinkle), or pacman (a steady colon with sprites beside the time).
-# weather_colon_half doubles every loop's length.
+# dynamic_colon_half doubles every loop's length.
 COLON_MODES = ("on", "tick", "wiggle", "twinkle", "pacman")
-# weather_pacman_sprite: which sprite shows alone when solo (remembered while
-# solo is off, since the widest date/time forces solo — frames/weather.py).
+# dynamic_pacman_sprite: which sprite shows alone when solo (remembered while
+# solo is off, since the widest date/time forces solo — frames/dynamic.py).
 PACMAN_SPRITES = ("ghost", "heart", "pacman")
 # Names used while v1.4.0 was built -> (final name, half speed); state.py migrates.
 LEGACY_COLON_MODES = {
@@ -91,7 +91,7 @@ _PEAKS = {
 
 
 def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[int]]]:
-    """``(family, {slot: rows})`` for a weather_colon value — and, for pacman,
+    """``(family, {slot: rows})`` for a dynamic_colon value — and, for pacman,
     the CAST from ``pacman_cast``: "duo-<sprite>" (pacman eating the sprite) or
     "<sprite>" (solo). on/tick/wiggle share the wiggle set (so switching among
     them redefines nothing); twinkle loads the twinkle peaks; each pacman cast

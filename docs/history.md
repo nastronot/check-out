@@ -691,3 +691,11 @@ would also need an alt `.` and space. Even with the H/L/C/R labels removed and
 the top line plain, only 7 digit slots remain — a simulated 200k weather lines
 fit fully 99.7% of the time, but the extra period/space glyphs push it past what
 fits. The glyphs remain in the library ("Alt 0-9", "Alt Degree", "Alt Inches").
+
+**Weather mode renamed "dynamic".** The mode is becoming more than weather, so
+its value is now `dynamic` (`frames/dynamic.py`, `DynamicFrame`) and its clock
+settings moved with it: `dynamic_colon`, `dynamic_colon_half`,
+`dynamic_pacman_solo`, `dynamic_pacman_sprite`. What IS weather kept the name:
+`checkout/weather.py` (fetcher, reading, bottom line), `weather_lat` /
+`weather_lon`, and status.json's `weather` field. Old states migrate on load
+(an old key fills its new one only if the new one wasn't written).

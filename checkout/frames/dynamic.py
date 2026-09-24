@@ -1,10 +1,10 @@
-"""WeatherFrame — ``MM/DD/YY DAY HH:MM`` on top, today's weather on the bottom.
+"""DynamicFrame — ``MM/DD/YY DAY HH:MM`` on top, today's weather on the bottom.
 
 The fetch happens elsewhere (``checkout.weather.WeatherFetcher``, a background
 thread); this frame only reads the latest reading, so rendering never waits on
 the network.
 
-The colon stands in for the hidden seconds, per ``weather_colon``, by changing
+The colon stands in for the hidden seconds, per ``dynamic_colon``, by changing
 the colon CHARACTER — never the hardware cursor (an underline on this glass that
 stays on across writes) and never brightness (display-wide, so the whole panel
 would change):
@@ -18,16 +18,16 @@ would change):
 
 - ``pacman``  — ``9/23/26 WED 8:33`` (no leading zeros, one space between
   fields) left-aligned, and in the last two cells pacman eating the chosen
-  sprite (``weather_pacman_sprite``: ghost | heart | pacman — a pacman faces
+  sprite (``dynamic_pacman_sprite``: ghost | heart | pacman — a pacman faces
   its mirror image, one frame out of step), each swapping between two frames.
   The time colon is the steady font ``:`` (the sprites need the colon's glyph
   slots). Solo
-  (``weather_pacman_solo`` + ``weather_pacman_sprite``) shows just one, in the
+  (``dynamic_pacman_solo`` + ``dynamic_pacman_sprite``) shows just one, in the
   far-right cell — and is FORCED when the date/time fills all 18 cells, since
   duo would then touch the text (``pacman_cast``); the solo ghost glances
   the other way (its own two frames, loaded by ``weather.glyph_set``).
 
-Each loop takes 1 second, or 2 with ``weather_colon_half`` (half speed), and is
+Each loop takes 1 second, or 2 with ``dynamic_colon_half`` (half speed), and is
 locked to the wall clock (a 2 s loop starts on even seconds). Wiggle's twists and
 twinkle's bursts share the two PEAK glyph slots (``weather.glyph_set``).
 
@@ -65,7 +65,7 @@ _LOOPS = {
 
 def colon_mode(state: dict) -> str:
     """The colon behaviour, coerced to one of ``weather.COLON_MODES``."""
-    mode = state.get("weather_colon")
+    mode = state.get("dynamic_colon")
     return mode if mode in weather.COLON_MODES else "tick"
 
 
@@ -85,7 +85,7 @@ _PACMAN = (chr(GLYPH_CODES[weather.SLOT_PAC_A]), chr(GLYPH_CODES[weather.SLOT_PA
 def _loop_index(state: dict, now: datetime, frames: int) -> int:
     """Which of ``frames`` evenly spaced frames is showing at ``now``, for a loop
     of 1 s (2 s at half speed) locked to the wall clock."""
-    seconds = 2 if state.get("weather_colon_half") else 1
+    seconds = 2 if state.get("dynamic_colon_half") else 1
     phase_us = (now.second % seconds) * _US_PER_S + now.microsecond
     return phase_us * frames // (seconds * _US_PER_S)
 
@@ -97,13 +97,13 @@ def pacman_cast(state: dict, now: datetime) -> str:
     Solo when the switch is on, AND automatically when the date/time is as wide
     as it gets (a 2-digit month and day and a 2-digit hour: 18 cells) — duo's
     two cells would then touch the text. Either way the sprite is the remembered
-    ``weather_pacman_sprite``. The daemon loads glyphs from this too, so what is
+    ``dynamic_pacman_sprite``. The daemon loads glyphs from this too, so what is
     drawn and what is defined always agree.
     """
-    sprite = state.get("weather_pacman_sprite")
+    sprite = state.get("dynamic_pacman_sprite")
     if sprite not in weather.PACMAN_SPRITES:
         sprite = "ghost"
-    if state.get("weather_pacman_solo") or len(compact_date_time(now)) > COLS - 3:
+    if state.get("dynamic_pacman_solo") or len(compact_date_time(now)) > COLS - 3:
         return sprite
     return f"duo-{sprite}"
 
@@ -121,8 +121,8 @@ def pacman_top(state: dict, now: datetime) -> str:
     return compact_date_time(now).ljust(COLS - 2) + cells
 
 
-class WeatherFrame(Frame):
-    name = "weather"
+class DynamicFrame(Frame):
+    name = "dynamic"
     align = "center"  # always centered; the bottom line fills all 20 cells anyway
 
     def __init__(self, fetcher) -> None:

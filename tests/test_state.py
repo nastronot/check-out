@@ -295,8 +295,8 @@ def test_missing_keys_filled_from_defaults(state_path):
 def test_weather_defaults(state_path):
     s = state.load_state()
     assert s["weather_lat"] is None and s["weather_lon"] is None
-    assert s["weather_colon"] == "tick"
-    assert s["weather_colon_half"] is False
+    assert s["dynamic_colon"] == "tick"
+    assert s["dynamic_colon_half"] is False
 
 
 @pytest.mark.parametrize("lat,lon,expected", [
@@ -314,37 +314,37 @@ def test_weather_coords_coerce(state_path, lat, lon, expected):
     assert (s["weather_lat"], s["weather_lon"]) == expected
 
 
-def test_weather_colon_validates(state_path):
+def test_dynamic_colon_validates(state_path):
     import json
     for colon in ("on", "tick", "wiggle", "twinkle", "pacman"):
-        state_path.write_text(json.dumps({"weather_colon": colon}))
-        assert state.load_state()["weather_colon"] == colon
+        state_path.write_text(json.dumps({"dynamic_colon": colon}))
+        assert state.load_state()["dynamic_colon"] == colon
     # Names used during v1.4.0 development map to the final ones (+ half speed).
     for old, new, half in (("pulse", "wiggle", False), ("throb", "wiggle", False),
                            ("throb2", "wiggle", True), ("burst", "twinkle", False),
                            ("burst2", "twinkle", True)):
-        state_path.write_text(json.dumps({"weather_colon": old}))
+        state_path.write_text(json.dumps({"dynamic_colon": old}))
         s = state.load_state()
-        assert (s["weather_colon"], s["weather_colon_half"]) == (new, half), old
-    state_path.write_text(json.dumps({"weather_colon": "wobble"}))
-    assert state.load_state()["weather_colon"] == "tick"
+        assert (s["dynamic_colon"], s["dynamic_colon_half"]) == (new, half), old
+    state_path.write_text(json.dumps({"dynamic_colon": "wobble"}))
+    assert state.load_state()["dynamic_colon"] == "tick"
 
 
-def test_weather_pacman_solo_and_sprite(state_path):
+def test_dynamic_pacman_solo_and_sprite(state_path):
     import json
     s = state.load_state()
-    assert s["weather_pacman_solo"] is False and s["weather_pacman_sprite"] == "ghost"
+    assert s["dynamic_pacman_solo"] is False and s["dynamic_pacman_sprite"] == "ghost"
     for sprite in ("ghost", "heart", "pacman"):
-        state_path.write_text(json.dumps({"weather_pacman_sprite": sprite}))
-        assert state.load_state()["weather_pacman_sprite"] == sprite
-    state_path.write_text(json.dumps({"weather_pacman_sprite": "inky"}))
-    assert state.load_state()["weather_pacman_sprite"] == "ghost"
+        state_path.write_text(json.dumps({"dynamic_pacman_sprite": sprite}))
+        assert state.load_state()["dynamic_pacman_sprite"] == sprite
+    state_path.write_text(json.dumps({"dynamic_pacman_sprite": "inky"}))
+    assert state.load_state()["dynamic_pacman_sprite"] == "ghost"
     # The earlier single key migrates: a solo choice -> solo on + that sprite.
     for old, solo, sprite in (("ghost", True, "ghost"), ("pacman", True, "pacman"),
                               ("both", False, "ghost")):
         state_path.write_text(json.dumps({"weather_pacman": old}))
         s = state.load_state()
-        assert (s["weather_pacman_solo"], s["weather_pacman_sprite"]) == (solo, sprite), old
+        assert (s["dynamic_pacman_solo"], s["dynamic_pacman_sprite"]) == (solo, sprite), old
         assert "weather_pacman" not in s
 
 
@@ -352,9 +352,34 @@ def test_legacy_pacman_key_from_an_old_client_wins(state_path):
     # An old UI bundle still sends weather_pacman; when it lands next to the new
     # keys it is the newer write, so "both" must turn solo OFF.
     import json
-    state_path.write_text(json.dumps({"weather_pacman_solo": True,
-                                      "weather_pacman_sprite": "pacman",
+    state_path.write_text(json.dumps({"dynamic_pacman_solo": True,
+                                      "dynamic_pacman_sprite": "pacman",
                                       "weather_pacman": "both"}))
     s = state.load_state()
-    assert s["weather_pacman_solo"] is False
-    assert s["weather_pacman_sprite"] == "pacman"        # remembered sprite kept
+    assert s["dynamic_pacman_solo"] is False
+    assert s["dynamic_pacman_sprite"] == "pacman"        # remembered sprite kept
+
+
+def test_weather_mode_and_keys_migrate_to_dynamic(state_path):
+    # "weather" mode was renamed "dynamic" (the clock settings moved with it);
+    # weather_lat / weather_lon stay — they ARE weather.
+    import json
+    state_path.write_text(json.dumps({
+        "mode": "weather", "weather_lat": 41.9, "weather_lon": -87.6,
+        "weather_colon": "pacman", "weather_colon_half": True,
+        "weather_pacman_solo": True, "weather_pacman_sprite": "heart"}))
+    s = state.load_state()
+    assert s["mode"] == "dynamic"
+    assert (s["dynamic_colon"], s["dynamic_colon_half"]) == ("pacman", True)
+    assert (s["dynamic_pacman_solo"], s["dynamic_pacman_sprite"]) == (True, "heart")
+    assert (s["weather_lat"], s["weather_lon"]) == (41.9, -87.6)
+    for old in ("weather_colon", "weather_colon_half", "weather_pacman_solo",
+                "weather_pacman_sprite"):
+        assert old not in s
+    assert json.loads(state_path.read_text())["mode"] == "dynamic"   # self-heals
+
+
+def test_new_dynamic_keys_win_over_old_ones(state_path):
+    import json
+    state_path.write_text(json.dumps({"dynamic_colon": "tick", "weather_colon": "pacman"}))
+    assert state.load_state()["dynamic_colon"] == "tick"

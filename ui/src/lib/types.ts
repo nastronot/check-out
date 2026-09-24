@@ -2,7 +2,7 @@
 
 /** 'scroll' merged into 'message' (v1.4.0); 'marquee' is still valid but its
  *  button is hidden in the UI. */
-export type Mode = 'clock' | 'message' | 'marquee' | 'spectrum' | 'weather';
+export type Mode = 'clock' | 'message' | 'marquee' | 'spectrum' | 'dynamic';
 /** Spectrum audio source: the mic, or a PipeWire/Pulse monitor of playback. */
 export type AudioSource = 'mic' | 'system';
 /** Spectrum render style: filled bars, or a single-row line per band (the peak). */
@@ -25,7 +25,7 @@ export type MarqueeBottom = 'static';
 export type ScrollSource = 'message' | 'clock';
 
 /** Weather colon: steady, blinking, or an animated loop (wiggle / twinkle).
- *  weather_colon_half runs tick / wiggle / twinkle at half speed (2 s loops). */
+ *  dynamic_colon_half runs tick / wiggle / twinkle at half speed (2 s loops). */
 export type WeatherColon = 'on' | 'tick' | 'wiggle' | 'twinkle' | 'pacman';
 /** Pacman colon: the sprite shown alone when solo (also forced automatically
  *  when the date/time is as wide as it gets). */
@@ -83,13 +83,13 @@ export interface AppState {
   audio_decay: number;
   spectrum_style: SpectrumStyle;
   spectrum_layout: SpectrumLayout;
-  // weather (mode "weather") — location in decimal degrees + the colon behaviour
+  // weather (mode "dynamic") — location in decimal degrees + the colon behaviour
   weather_lat: number | null;
   weather_lon: number | null;
-  weather_colon: WeatherColon;
-  weather_colon_half: boolean;
-  weather_pacman_solo: boolean;
-  weather_pacman_sprite: WeatherPacmanSprite;
+  dynamic_colon: WeatherColon;
+  dynamic_colon_half: boolean;
+  dynamic_pacman_solo: boolean;
+  dynamic_pacman_sprite: WeatherPacmanSprite;
   command: CommandRef;
   updated_at?: string;
 }

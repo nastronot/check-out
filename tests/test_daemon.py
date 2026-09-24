@@ -766,7 +766,7 @@ def test_mode_glyph_sets_round_trip_spectrum_weather_clock(monkeypatch, capsys):
     from checkout.weather import WeatherFetcher
 
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
-    monkeypatch.setattr(daemon.WEATHER_FRAME, "fetcher", WeatherFetcher(autostart=False))
+    monkeypatch.setattr(daemon.DYNAMIC_FRAME, "fetcher", WeatherFetcher(autostart=False))
     drv = VFDDriver(dry_run=True)
     ctx = _spectrum_ctx()
     ctx["spectrum_rx"] = _FakeRx([])
@@ -776,10 +776,10 @@ def test_mode_glyph_sets_round_trip_spectrum_weather_clock(monkeypatch, capsys):
     assert ctx["mode_glyphs_key"] == ("spectrum", "full", "bars")
 
     capsys.readouterr()
-    daemon.tick_once(drv, {"mode": "weather", "glyphs": user}, ctx,
+    daemon.tick_once(drv, {"mode": "dynamic", "glyphs": user}, ctx,
                      now=datetime(2026, 6, 19, 12, 0, 1))
     defines = _parse_defines(_all_tx_bytes(capsys.readouterr().out))
-    assert ctx["mode_glyphs_key"] == ("weather", "wiggle")
+    assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
     assert len(defines) == len(weather.glyph_set("tick")[1])
 
     capsys.readouterr()
@@ -796,9 +796,9 @@ def _weather_setup(monkeypatch, colon="tick"):
     written = []
     monkeypatch.setattr(daemon, "save_status", lambda s: written.append(s))
     fetcher = WeatherFetcher(autostart=False)
-    monkeypatch.setattr(daemon.WEATHER_FRAME, "fetcher", fetcher)
-    state = {"mode": "weather", "weather_lat": 41.9, "weather_lon": -87.6,
-             "weather_colon": colon}
+    monkeypatch.setattr(daemon.DYNAMIC_FRAME, "fetcher", fetcher)
+    state = {"mode": "dynamic", "weather_lat": 41.9, "weather_lon": -87.6,
+             "dynamic_colon": colon}
     return written, fetcher, state
 
 
@@ -827,7 +827,7 @@ def test_weather_status_reports_glyphs_and_weather(monkeypatch):
     daemon.tick_once(drv, state, daemon._new_ctx(),
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
-    assert s["mode"] == "weather"
+    assert s["mode"] == "dynamic"
     assert set(s["mode_glyphs"]) == {str(n) for n in range(9)}
     assert s["weather"]["error"] is None
 
@@ -947,13 +947,13 @@ def test_switching_wiggle_and_twinkle_redefines_only_the_peak_slots(monkeypatch)
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("weather", "wiggle")
+    assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
     for colon in ("on", "wiggle"):                  # same set: nothing redefined
         drv.defined.clear()
-        daemon.tick_once(drv, {**state, "weather_colon": colon}, ctx, now=NOW)
+        daemon.tick_once(drv, {**state, "dynamic_colon": colon}, ctx, now=NOW)
         assert drv.defined == {}, colon
-    daemon.tick_once(drv, {**state, "weather_colon": "twinkle"}, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("weather", "twinkle")
+    daemon.tick_once(drv, {**state, "dynamic_colon": "twinkle"}, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"] == ("dynamic", "twinkle")
     assert drv.defined[7] == glyphs.COLON_TWINKLE_SMALL
     assert drv.defined[8] == glyphs.COLON_TWINKLE_BIG
 
@@ -994,12 +994,12 @@ def test_pacman_solo_choice_loads_its_own_ghost_frames(monkeypatch):
     _, _, state = _weather_setup(monkeypatch, colon="pacman")
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
-    daemon.tick_once(drv, {**state, "weather_pacman_solo": False}, ctx, now=NOW)
+    daemon.tick_once(drv, {**state, "dynamic_pacman_solo": False}, ctx, now=NOW)
     assert drv.defined[wx.SLOT_SPRITE_A] == glyphs.GHOST_A
     drv.defined.clear()
-    daemon.tick_once(drv, {**state, "weather_pacman_solo": True,
-                           "weather_pacman_sprite": "ghost"}, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("weather", "pacman-ghost")
+    daemon.tick_once(drv, {**state, "dynamic_pacman_solo": True,
+                           "dynamic_pacman_sprite": "ghost"}, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"] == ("dynamic", "pacman-ghost")
     assert drv.defined[wx.SLOT_SPRITE_A] == glyphs.GHOST_B
     assert drv.defined[wx.SLOT_SPRITE_B] == glyphs.GHOST_C
 
@@ -1008,12 +1008,12 @@ def test_widest_line_loads_the_solo_glyphs_automatically(monkeypatch):
     from checkout import glyphs, weather as wx
 
     _, _, state = _weather_setup(monkeypatch, colon="pacman")
-    state = {**state, "weather_pacman_solo": False, "weather_pacman_sprite": "ghost"}
+    state = {**state, "dynamic_pacman_solo": False, "dynamic_pacman_sprite": "ghost"}
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 12, 31, 1, 33))    # 17 cells
-    assert ctx["mode_glyphs_key"] == ("weather", "pacman-duo-ghost")
+    assert ctx["mode_glyphs_key"] == ("dynamic", "pacman-duo-ghost")
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 12, 31, 12, 33))   # 18 cells
-    assert ctx["mode_glyphs_key"] == ("weather", "pacman-ghost")
+    assert ctx["mode_glyphs_key"] == ("dynamic", "pacman-ghost")
     assert drv.defined[wx.SLOT_SPRITE_B] == glyphs.GHOST_C
 

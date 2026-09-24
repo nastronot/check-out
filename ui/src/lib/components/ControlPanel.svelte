@@ -25,7 +25,7 @@
   // the top row at one fixed speed, which message mode's software scroll does
   // better. Its daemon path and its panel below still work — add it back here to
   // show the button again. ('scroll' merged into 'message' in v1.4.0.)
-  const MODES: Mode[] = ['clock', 'message', 'spectrum', 'weather'];
+  const MODES: Mode[] = ['clock', 'message', 'spectrum', 'dynamic'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
   const ALIGNS: Align[] = ['left', 'center', 'right'];
 
@@ -158,8 +158,8 @@
     { value: 'twinkle', label: 'TWINKLE' },
     { value: 'pacman', label: 'PACMAN' },
   ];
-  const setColon = (c: WeatherColon) => patch({ weather_colon: c });
-  const setColonHalf = (e: Event) => patch({ weather_colon_half: checked(e) });
+  const setColon = (c: WeatherColon) => patch({ dynamic_colon: c });
+  const setColonHalf = (e: Event) => patch({ dynamic_colon_half: checked(e) });
   // pacman: Solo shows one sprite; the chosen sprite is remembered while Solo
   // is off, because the widest date/time forces solo with it automatically.
   const SPRITES: { value: WeatherPacmanSprite; label: string }[] = [
@@ -167,8 +167,8 @@
     { value: 'heart', label: 'HEART' },
     { value: 'pacman', label: 'PACMAN' },
   ];
-  const setSolo = (e: Event) => patch({ weather_pacman_solo: checked(e) });
-  const setSprite = (p: WeatherPacmanSprite) => patch({ weather_pacman_sprite: p });
+  const setSolo = (e: Event) => patch({ dynamic_pacman_solo: checked(e) });
+  const setSprite = (p: WeatherPacmanSprite) => patch({ dynamic_pacman_sprite: p });
   $: weatherLine = weatherSummary(status?.weather);
 
   const DIRS: ScrollDir[] = ['left', 'right'];
@@ -394,7 +394,7 @@
     {/if}
 
     <!-- WEATHER: date/time on top, today's high/low/current/rain below. -->
-    {#if state.mode === 'weather'}
+    {#if state.mode === 'dynamic'}
       <div class="field">
         <span class="field__label">Location</span>
         <form class="coords" on:submit|preventDefault={saveLocation}>
@@ -428,27 +428,27 @@
           {#each COLONS as c}
             <button
               type="button"
-              aria-pressed={state.weather_colon === c.value}
+              aria-pressed={state.dynamic_colon === c.value}
               on:click={() => setColon(c.value)}>{c.label}</button
             >
           {/each}
         </div>
-        <label class="switch colon-half" class:disabled={state.weather_colon === 'on'}>
+        <label class="switch colon-half" class:disabled={state.dynamic_colon === 'on'}>
           <input
             type="checkbox"
-            checked={state.weather_colon_half}
-            disabled={state.weather_colon === 'on'}
+            checked={state.dynamic_colon_half}
+            disabled={state.dynamic_colon === 'on'}
             on:change={setColonHalf}
           />
           <span class="switch__track"></span>
           <span class="switch__label">Half speed</span>
         </label>
-        {#if state.weather_colon === 'pacman'}
+        {#if state.dynamic_colon === 'pacman'}
           <div class="pac-solo">
             <label class="switch">
               <input
                 type="checkbox"
-                checked={state.weather_pacman_solo}
+                checked={state.dynamic_pacman_solo}
                 on:change={setSolo}
               />
               <span class="switch__track"></span>
@@ -458,7 +458,7 @@
               {#each SPRITES as p}
                 <button
                   type="button"
-                  aria-pressed={state.weather_pacman_sprite === p.value}
+                  aria-pressed={state.dynamic_pacman_sprite === p.value}
                   on:click={() => setSprite(p.value)}>{p.label}</button
                 >
               {/each}
@@ -483,8 +483,8 @@
     <!-- Per-line alignment. In MARQUEE the top row is the hardware ticker (it
          controls its own layout), so Line 1 justify is hidden; Line 2 (the
          static bottom) still justifies. N/A in SPECTRUM (both rows are bars) and
-         WEATHER (always centered: WeatherFrame.align). -->
-    {#if state.mode !== 'spectrum' && state.mode !== 'weather'}
+         WEATHER (always centered: DynamicFrame.align). -->
+    {#if state.mode !== 'spectrum' && state.mode !== 'dynamic'}
     <div class="field">
       <span class="field__label">Justify</span>
       <div class="align-rows">
@@ -529,7 +529,7 @@
     <!-- Animation (N/A in marquee: the ticker owns the top row; N/A in
          spectrum: the bars own both rows and the daemon forces "none"; N/A in
          weather: the Colon setting owns the brightness animation). -->
-    {#if state.mode !== 'marquee' && state.mode !== 'spectrum' && state.mode !== 'weather'}
+    {#if state.mode !== 'marquee' && state.mode !== 'spectrum' && state.mode !== 'dynamic'}
     <div class="field">
       <span class="field__label">Animation</span>
       <div class="seg">

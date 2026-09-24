@@ -69,11 +69,11 @@ TOTAL in inches over a **rolling 24 hours from now** (`hourly` with
 `forecast_hours=25`, first value dropped: each hourly amount covers the hour
 BEFORE its stamp), not the calendar day; C is the current reading. The rain
 field uses the fewest digits that fit 3 cells: `.04` / `1.2` / ` 42`. Both lines are always centered
-(`WeatherFrame.align`; a frame's `align` overrides the Justify setting), so the UI
+(`DynamicFrame.align`; a frame's `align` overrides the Justify setting), so the UI
 hides Justify in weather. State:
-`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle` | `pacman`),
-`weather_colon_half` (bool), `weather_pacman_solo` (bool) +
-`weather_pacman_sprite` (`ghost` | `heart` | `pacman`, remembered while solo
+`weather_lat`, `weather_lon`, `dynamic_colon` (`on` | `tick` | `wiggle` | `twinkle` | `pacman`),
+`dynamic_colon_half` (bool), `dynamic_pacman_solo` (bool) +
+`dynamic_pacman_sprite` (`ghost` | `heart` | `pacman`, remembered while solo
 is off);
 the earlier `weather_pacman` key and development colon names migrate on load.
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
@@ -82,12 +82,12 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   `interval` 900 s + 60 s), retrying 60 s → 900 s on failure. The loop never
   waits on the network.
 - **Colon:** the colon cell changes CHARACTER, one frame list per setting
-  (`frames/weather.py` `_LOOPS`), spread evenly over a 1 s loop (2 s with
-  `weather_colon_half`), locked to the wall clock: `on` = steady thin colon
+  (`frames/dynamic.py` `_LOOPS`), spread evenly over a 1 s loop (2 s with
+  `dynamic_colon_half`), locked to the wall clock: `on` = steady thin colon
   (`COLON_THIN`); `tick` = thin, blank; `wiggle` = 12 frames, twists alternating
   sides; `twinkle` = 8 frames straight up and down through two burst sizes.
   Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
-  `weather.glyph_set(colon)` picks them and the key `("weather", family)`
+  `weather.glyph_set(colon)` picks them and the key `("dynamic", family)`
   redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
   fill all 9 slots. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
@@ -96,10 +96,10 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   beating heart, or a mirrored pacman (`glyphs.mirror`) on the opposite frame.
   **Solo:** the chosen sprite alone in 19 (the solo ghost glances left). Solo
   is also **forced automatically** when the date/time fills all 18 cells.
-  `frames/weather.py pacman_cast(state, now)` returns the cast — `duo-<sprite>`
+  `frames/dynamic.py pacman_cast(state, now)` returns the cast — `duo-<sprite>`
   or `<sprite>` — and both the frame and the daemon's glyph set use it;
   `weather.glyph_set("pacman", cast)` loads the sprite frames into slots 5/6
-  and, in duo, pacman into 7/8 (key `("weather", "pacman-<cast>")`). With the
+  and, in duo, pacman into 7/8 (key `("dynamic", "pacman-<cast>")`). With the
   5 labels that fills all 9 slots, so pacman's time colon is the font's `:`.
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.

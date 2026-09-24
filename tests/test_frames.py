@@ -234,10 +234,10 @@ def test_ticker_advances_one_cell_per_glyph():
     assert len(top) == 20
 
 
-# --- WeatherFrame ------------------------------------------------------------
+# --- DynamicFrame ------------------------------------------------------------
 from checkout import glyphs as _glyphs  # noqa: E402
 from checkout import weather as _weather  # noqa: E402
-from checkout.frames.weather import NO_LOCATION, WeatherFrame  # noqa: E402
+from checkout.frames.dynamic import NO_LOCATION, DynamicFrame  # noqa: E402
 
 
 class _FakeFetcher:
@@ -259,9 +259,9 @@ _TWINKLE = [" ", _DOT, _THIN, _PKA, _PKB, _PKA, _THIN, _DOT]
 
 
 def _top(colon, us, second=12, half=False):
-    state = {**_WX, "weather_colon": colon, "weather_colon_half": half}
+    state = {**_WX, "dynamic_colon": colon, "dynamic_colon_half": half}
     now = _T.replace(second=second, microsecond=us)
-    return WeatherFrame(_FakeFetcher()).render(now, state)[0]
+    return DynamicFrame(_FakeFetcher()).render(now, state)[0]
 
 
 def test_weather_top_is_the_short_clock():
@@ -269,12 +269,12 @@ def test_weather_top_is_the_short_clock():
 
 
 def test_weather_without_location_asks_for_one():
-    _, bottom = WeatherFrame(_FakeFetcher()).render(_T, {})
+    _, bottom = DynamicFrame(_FakeFetcher()).render(_T, {})
     assert bottom == NO_LOCATION
 
 
 def test_weather_bottom_is_twenty_cells_even_with_no_reading():
-    _, bottom = WeatherFrame(_FakeFetcher()).render(_T, _WX)
+    _, bottom = DynamicFrame(_FakeFetcher()).render(_T, _WX)
     assert len(bottom) == 20
 
 
@@ -325,7 +325,7 @@ def test_half_speed_leaves_on_steady():
 
 def test_colon_defaults_to_tick():
     state = dict(_WX)
-    frame = WeatherFrame(_FakeFetcher())
+    frame = DynamicFrame(_FakeFetcher())
     assert frame.render(_T.replace(microsecond=600_000), state)[0][15] == " "
 
 
@@ -354,9 +354,9 @@ _PB = chr(GLYPH_CODES[_weather.SLOT_PAC_B])
 
 
 def _pac(us, second=12, half=False, sprite="ghost", solo=False):
-    state = {**_WX, "weather_colon": "pacman", "weather_colon_half": half,
-             "weather_pacman_solo": solo, "weather_pacman_sprite": sprite}
-    return WeatherFrame(_FakeFetcher()).render(_T.replace(second=second, microsecond=us), state)[0]
+    state = {**_WX, "dynamic_colon": "pacman", "dynamic_colon_half": half,
+             "dynamic_pacman_solo": solo, "dynamic_pacman_sprite": sprite}
+    return DynamicFrame(_FakeFetcher()).render(_T.replace(second=second, microsecond=us), state)[0]
 
 
 def test_pacman_is_compact_text_left_sprites_far_right():
@@ -365,20 +365,20 @@ def test_pacman_is_compact_text_left_sprites_far_right():
 
 
 def test_pacman_longest_date_and_time_still_fit():
-    state = {**_WX, "weather_colon": "pacman"}
-    top = WeatherFrame(_FakeFetcher()).render(datetime(2026, 12, 31, 23, 59), state)[0]
+    state = {**_WX, "dynamic_colon": "pacman"}
+    top = DynamicFrame(_FakeFetcher()).render(datetime(2026, 12, 31, 23, 59), state)[0]
     assert top[:18] == "12/31/26 THU 11:59" and len(top) == 20   # exactly fills 18
 
 
 def test_pacman_two_digit_hour_has_one_space():
-    state = {**_WX, "weather_colon": "pacman"}
-    top = WeatherFrame(_FakeFetcher()).render(datetime(2026, 9, 23, 22, 5), state)[0]
+    state = {**_WX, "dynamic_colon": "pacman"}
+    top = DynamicFrame(_FakeFetcher()).render(datetime(2026, 9, 23, 22, 5), state)[0]
     assert top[:18] == "9/23/26 WED 10:05 "
 
 
 def test_pacman_keeps_the_minute_and_year_zeros():
-    state = {**_WX, "weather_colon": "pacman"}
-    top = WeatherFrame(_FakeFetcher()).render(datetime(2027, 1, 5, 0, 7), state)[0]
+    state = {**_WX, "dynamic_colon": "pacman"}
+    top = DynamicFrame(_FakeFetcher()).render(datetime(2027, 1, 5, 0, 7), state)[0]
     assert top.startswith("1/5/27 TUE 12:07")
 
 
@@ -425,20 +425,20 @@ def test_mirror_flips_the_columns():
 
 
 def test_widest_line_forces_the_last_solo_sprite():
-    from checkout.frames.weather import pacman_cast
+    from checkout.frames.dynamic import pacman_cast
     widest = datetime(2026, 12, 31, 12, 33)          # 12/31/26 THU 12:33 = 18 cells
     narrower = datetime(2026, 12, 31, 1, 33)         # 17 cells: duo still fits
     for sprite in ("ghost", "heart", "pacman"):
-        state = {**_WX, "weather_colon": "pacman", "weather_pacman_solo": False,
-                 "weather_pacman_sprite": sprite}
+        state = {**_WX, "dynamic_colon": "pacman", "dynamic_pacman_solo": False,
+                 "dynamic_pacman_sprite": sprite}
         assert pacman_cast(state, widest) == sprite
         assert pacman_cast(state, narrower) == f"duo-{sprite}"
-        top = WeatherFrame(_FakeFetcher()).render(widest, state)[0]
+        top = DynamicFrame(_FakeFetcher()).render(widest, state)[0]
         assert top[:19] == "12/31/26 THU 12:33 "   # the gap duo had no room for
         assert top[19] in (_SA, _SB)
 
 
 def test_solo_switch_wins_whatever_the_width():
-    from checkout.frames.weather import pacman_cast
-    state = {"weather_pacman_solo": True, "weather_pacman_sprite": "heart"}
+    from checkout.frames.dynamic import pacman_cast
+    state = {"dynamic_pacman_solo": True, "dynamic_pacman_sprite": "heart"}
     assert pacman_cast(state, datetime(2026, 9, 23, 8, 33)) == "heart"

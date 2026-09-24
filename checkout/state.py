@@ -37,7 +37,7 @@ def _now_iso() -> str:
 def defaults() -> dict:
     """A fresh state dict with every key at its default value."""
     return {
-        "mode": "clock",                 # "clock"|"message"|"marquee"|"spectrum"|"weather"
+        "mode": "clock",                 # "clock"|"message"|"marquee"|"spectrum"|"dynamic"
         "message": "",                   # text for message / scroll modes
         "align_top": "center",           # "left" | "center" | "right" — line 1
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
@@ -81,13 +81,13 @@ def defaults() -> dict:
         "audio_decay": 0.85,             # bar release factor (attack-fast/release-slow)
         "spectrum_style": "bars",        # "bars" (filled) | "line" (single-row peak)
         "spectrum_layout": "full",       # "full" | "stereo_v" | "stereo_h"
-        # --- weather (mode "weather") ---
+        # --- dynamic mode: weather location + the clock colon ---
         "weather_lat": None,             # decimal degrees, -90..90, or null
         "weather_lon": None,             # decimal degrees, -180..180, or null
-        "weather_colon": "tick",         # "on" | "tick" | "wiggle" | "twinkle"
-        "weather_colon_half": False,     # half speed: every colon loop takes 2 s
-        "weather_pacman_solo": False,    # pacman colon: one sprite instead of both
-        "weather_pacman_sprite": "ghost",  # the solo sprite: "ghost" | "pacman"
+        "dynamic_colon": "tick",         # "on" | "tick" | "wiggle" | "twinkle"
+        "dynamic_colon_half": False,     # half speed: every colon loop takes 2 s
+        "dynamic_pacman_solo": False,    # pacman colon: one sprite instead of both
+        "dynamic_pacman_sprite": "ghost",  # the solo sprite: "ghost" | "pacman"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -110,6 +110,15 @@ _SPECTRUM_STYLES = ("bars", "line")
 _SPECTRUM_LAYOUTS = ("full", "stereo_v", "stereo_h")
 
 
+# Keys renamed when mode "weather" became "dynamic" (v1.4.0): old -> new.
+_RENAMED_KEYS = {
+    "weather_colon": "dynamic_colon",
+    "weather_colon_half": "dynamic_colon_half",
+    "weather_pacman_solo": "dynamic_pacman_solo",
+    "weather_pacman_sprite": "dynamic_pacman_sprite",
+}
+
+
 def _backfill(data: dict) -> dict:
     """Return ``data`` with every default key present (recursively for nested)."""
     base = defaults()
@@ -128,6 +137,16 @@ def _backfill(data: dict) -> dict:
     # Legacy modes "ticker" and "scroll" are now the merged "message" mode.
     if merged.get("mode") in ("ticker", "scroll"):
         merged["mode"] = "message"
+    # Mode "weather" was renamed "dynamic", and its clock settings with it (the
+    # location keys stay weather_*). An old key fills its new one only when the
+    # new one wasn't written; either way the old key is dropped.
+    if merged.get("mode") == "weather":
+        merged["mode"] = "dynamic"
+    for old, new in _RENAMED_KEYS.items():
+        if old in merged:
+            value = merged.pop(old)
+            if new not in data:
+                merged[new] = value
     # Marquee bottom is static-only now (live clock-bottom stops the hardware
     # scroll). Normalize any value (incl. legacy "clock") to "static".
     if merged.get("marquee_bottom") != "static":
@@ -150,23 +169,23 @@ def _backfill(data: dict) -> dict:
     # Weather location: a number in range, else null (the UI may send strings or "").
     merged["weather_lat"] = _coord(merged.get("weather_lat"), 90.0)
     merged["weather_lon"] = _coord(merged.get("weather_lon"), 180.0)
-    legacy = LEGACY_COLON_MODES.get(merged.get("weather_colon"))
+    legacy = LEGACY_COLON_MODES.get(merged.get("dynamic_colon"))
     if legacy:  # a name used while v1.4.0 was built (e.g. throb2 -> wiggle + half)
-        merged["weather_colon"], merged["weather_colon_half"] = legacy
-    merged["weather_colon_half"] = bool(merged.get("weather_colon_half"))
+        merged["dynamic_colon"], merged["dynamic_colon_half"] = legacy
+    merged["dynamic_colon_half"] = bool(merged.get("dynamic_colon_half"))
     # The earlier single key "weather_pacman" (both | ghost | pacman) splits into
     # a solo switch + a remembered sprite. If it is present it came from an old
     # client (e.g. a stale UI bundle) and is the newer write, so it wins.
     legacy_pacman = merged.pop("weather_pacman", None)
     if legacy_pacman in PACMAN_SPRITES:
-        merged["weather_pacman_solo"], merged["weather_pacman_sprite"] = True, legacy_pacman
+        merged["dynamic_pacman_solo"], merged["dynamic_pacman_sprite"] = True, legacy_pacman
     elif legacy_pacman == "both":
-        merged["weather_pacman_solo"] = False
-    merged["weather_pacman_solo"] = bool(merged.get("weather_pacman_solo"))
-    if merged.get("weather_pacman_sprite") not in PACMAN_SPRITES:
-        merged["weather_pacman_sprite"] = "ghost"
-    if merged.get("weather_colon") not in COLON_MODES:
-        merged["weather_colon"] = "tick"
+        merged["dynamic_pacman_solo"] = False
+    merged["dynamic_pacman_solo"] = bool(merged.get("dynamic_pacman_solo"))
+    if merged.get("dynamic_pacman_sprite") not in PACMAN_SPRITES:
+        merged["dynamic_pacman_sprite"] = "ghost"
+    if merged.get("dynamic_colon") not in COLON_MODES:
+        merged["dynamic_colon"] = "tick"
     return merged
 
 
