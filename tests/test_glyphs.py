@@ -29,7 +29,7 @@ def test_c_is_an_inverted_c():
 
 def test_degree_is_a_small_ring_at_the_top():
     assert _draw(glyphs.DEGREE) == [
-        "..#..", ".#.#.", "..#..", ".....", ".....", ".....", ".....",
+        ".#...", "#.#..", ".#...", ".....", ".....", ".....", ".....",   # hugs the number
     ]
 
 
