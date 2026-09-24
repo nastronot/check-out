@@ -20,17 +20,20 @@ from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
 from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
-                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, LABEL_C, LABEL_H,
-                     LABEL_L, LABEL_R)
+                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B,
+                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 STALE_S = 3600          # a reading this old shows " --" (never pass old data as current)
 FETCH_SLACK_S = 60      # fetch this long after the API's next refresh is due
 HTTP_TIMEOUT_S = 10
 
-# weather_colon values: a steady colon, an on/off tick, or an animated loop
-# (wiggle, twinkle). weather_colon_half doubles every loop's length.
-COLON_MODES = ("on", "tick", "wiggle", "twinkle")
+# weather_colon values: a steady colon, an on/off tick, an animated loop
+# (wiggle, twinkle), or pacman (a steady colon with sprites beside the time).
+# weather_colon_half doubles every loop's length.
+COLON_MODES = ("on", "tick", "wiggle", "twinkle", "pacman")
+# weather_pacman: both sprites, or one alone ("solo").
+PACMAN_SPRITES = ("both", "ghost", "pacman")
 # Names used while v1.4.0 was built -> (final name, half speed); state.py migrates.
 LEGACY_COLON_MODES = {
     "pulse": ("wiggle", False),
@@ -46,14 +49,27 @@ LEGACY_COLON_MODES = {
 # redefines just slots 7 and 8.
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
  SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
-_BASE_GLYPHS = {
+# Pacman needs 4 sprite frames, so its set uses slots 5-8 for them instead of
+# the colon glyphs (and its time colon is the font's ':').
+SLOT_GHOST_A, SLOT_GHOST_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
+_LABEL_GLYPHS = {
     SLOT_HIGH: LABEL_H,
     SLOT_LOW: LABEL_L,
     SLOT_CURRENT: LABEL_C,
     SLOT_RAIN: LABEL_R,
     SLOT_DEGREE: DEGREE,
+}
+_BASE_GLYPHS = {
+    **_LABEL_GLYPHS,
     SLOT_COLON_DOT: COLON_DOT,
     SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
+}
+_PACMAN_GLYPHS = {
+    **_LABEL_GLYPHS,
+    SLOT_GHOST_A: GHOST_A,
+    SLOT_GHOST_B: GHOST_B,
+    SLOT_PAC_A: PACMAN_CLOSED,
+    SLOT_PAC_B: PACMAN_OPEN,
 }
 _PEAKS = {
     "wiggle": (COLON_TWIST_R, COLON_TWIST_L),
@@ -64,7 +80,9 @@ _PEAKS = {
 def glyph_set(colon: str) -> tuple[str, dict[int, list[int]]]:
     """``(family, {slot: rows})`` for a weather_colon value. on/tick/wiggle
     share the wiggle set (so switching among them redefines nothing); twinkle
-    loads the twinkle peaks."""
+    loads the twinkle peaks; pacman loads the sprites in place of the colons."""
+    if colon == "pacman":
+        return "pacman", dict(_PACMAN_GLYPHS)
     family = "twinkle" if colon == "twinkle" else "wiggle"
     peak_a, peak_b = _PEAKS[family]
     return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}

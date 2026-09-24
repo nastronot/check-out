@@ -600,3 +600,14 @@ surprise.
 one fixed speed, and writing the bottom row interrupts it; message mode's
 software scroll does both rows at any speed. The button is dropped from the UI's
 `MODES` list with a comment; the daemon path, state keys and panel still work.
+
+**Pacman colon mode.** A different top-line layout: `09/23/26 WED` hard left
+(cells 0-11), `08:33` hard right (15-19) with a steady colon, and a ghost, a gap
+and pacman in the three cells between — each sprite swaps between two frames per
+loop (1 s, or 2 s at half speed). Solo (`weather_pacman` = ghost | pacman) shows
+one sprite in the middle cell. Slot budget: the 5 labels plus 4 sprite frames
+fill all 9, so pacman's glyph set (`weather.glyph_set("pacman")`) drops the dot
+and thin colon glyphs and its time colon is the font's 2-wide `:`. The
+alternative (keep the thin colon, drop the degree glyph in pacman mode) was
+offered to the user. `clock.py` gained `short_date` and `hh_mm`, which
+`short_date_time` now composes.

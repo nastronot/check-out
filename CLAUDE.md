@@ -67,8 +67,9 @@ Top `MM/DD/YY DAY HH:MM` (12-hour, no AM/PM); bottom `[H] 93°[L] 74°[C] 82°[R
 (four fixed 5-cell fields, ` --` when missing or ≥1 h stale). Both lines are always centered
 (`WeatherFrame.align`; a frame's `align` overrides the Justify setting), so the UI
 hides Justify in weather. State:
-`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle`), `weather_colon_half`
-(bool; development names `pulse`/`throb*`/`burst*` migrate on load).
+`weather_lat`, `weather_lon`, `weather_colon` (`on` | `tick` | `wiggle` | `twinkle` | `pacman`),
+`weather_colon_half` (bool), `weather_pacman` (`both` | `ghost` | `pacman`;
+development colon names `pulse`/`throb*`/`burst*` migrate on load).
 - **Fetch:** `WeatherFetcher` is a background THREAD in the daemon (not a
   service) — one ~600-byte Open-Meteo call, no key, stdlib `urllib`. It runs only
   in weather mode and fetches once per data refresh (`current.time` +
@@ -82,7 +83,10 @@ hides Justify in weather. State:
   Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
   `weather.glyph_set(colon)` picks them and the key `("weather", family)`
   redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
-  fill all 9 slots.
+  fill all 9 slots. `pacman` is a different LAYOUT: `09/23/26 WED` in cells
+  0-11, sprites in 12-14 (ghost, gap, pacman; solo = one sprite in 13), `08:33`
+  in 15-19. Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
+  (no slot left for `COLON_THIN`).
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
 

@@ -116,6 +116,11 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
     for colon in ("on", "tick", "wiggle"):
         assert weather.glyph_set(colon) == ("wiggle", wiggle), colon
     assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
+    labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
+    pacman = {**labels, weather.SLOT_GHOST_A: glyphs.GHOST_A,
+              weather.SLOT_GHOST_B: glyphs.GHOST_B,
+              weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
+    assert weather.glyph_set("pacman") == ("pacman", pacman)
 
 
 # --- WeatherFetcher ------------------------------------------------------------

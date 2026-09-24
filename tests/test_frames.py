@@ -342,3 +342,50 @@ def test_wiggle_glyphs_match_the_drawn_frames():
 def test_twinkle_glyphs_match_the_drawn_frames():
     assert _draw(_glyphs.COLON_TWINKLE_SMALL) == [".....", ".###.", "..#..", ".....", "..#..", ".###.", "....."]
     assert _draw(_glyphs.COLON_TWINKLE_BIG) == ["..#..", ".###.", "..#..", ".....", "..#..", ".###.", "..#.."]
+
+
+# --- pacman colon mode ----------------------------------------------------------
+_GA = chr(GLYPH_CODES[_weather.SLOT_GHOST_A])
+_GB = chr(GLYPH_CODES[_weather.SLOT_GHOST_B])
+_PA = chr(GLYPH_CODES[_weather.SLOT_PAC_A])
+_PB = chr(GLYPH_CODES[_weather.SLOT_PAC_B])
+
+
+def _pac(us, second=12, half=False, sprite="both"):
+    state = {**_WX, "weather_colon": "pacman", "weather_colon_half": half,
+             "weather_pacman": sprite}
+    return WeatherFrame(_FakeFetcher()).render(_T.replace(second=second, microsecond=us), state)[0]
+
+
+def test_pacman_puts_date_left_time_right_and_sprites_between():
+    top = _pac(100_000)
+    assert len(top) == 20
+    assert top[:12] == "09/23/26 WED" and top[15:] == "08:33"   # font colon, steady
+    assert top[12:15] == _GA + " " + _PA
+
+
+def test_pacman_sprites_swap_frames_each_half_second():
+    assert _pac(100_000)[12:15] == _GA + " " + _PA
+    assert _pac(600_000)[12:15] == _GB + " " + _PB
+
+
+def test_pacman_half_speed_swaps_each_second():
+    assert _pac(600_000, second=12, half=True)[12:15] == _GA + " " + _PA
+    assert _pac(100_000, second=13, half=True)[12:15] == _GB + " " + _PB
+
+
+def test_pacman_solo_shows_one_sprite_in_the_middle_cell():
+    assert _pac(100_000, sprite="ghost")[12:15] == " " + _GA + " "
+    assert _pac(600_000, sprite="pacman")[12:15] == " " + _PB + " "
+
+
+def test_pacman_colon_is_steady():
+    assert {_pac(us)[17] for us in range(0, 1_000_000, 100_000)} == {":"}
+
+
+def test_pacman_glyphs_match_the_drawn_frames():
+    assert _draw(_glyphs.GHOST_A) == [".....", ".###.", "#####", "##.#.", "#####", "#####", "#.#.#"]
+    assert _draw(_glyphs.GHOST_B) == [".....", ".###.", "#####", "#.#.#", "#####", "#####", "#.#.#"]
+    assert _draw(_glyphs.PACMAN_CLOSED) == [".....", ".###.", "#####", "...##", "#####", ".###.", "....."]
+    assert _draw(_glyphs.PACMAN_OPEN) == [".....", ".###.", "..###", "...##", "..###", ".###.", "....."]
+

@@ -878,7 +878,7 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
-    for colon in ("on", "tick", "wiggle", "twinkle"):
+    for colon in ("on", "tick", "wiggle", "twinkle", "pacman"):
         _, _, state = _weather_setup(monkeypatch, colon=colon)
         drv = VFDDriver(dry_run=True)
         ctx = daemon._new_ctx()

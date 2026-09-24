@@ -28,6 +28,12 @@ COLON_TWIST_L = [0, 6, 4, 0, 4, 12, 0]  # wiggle: the mirror (top left, bottom r
 COLON_TWINKLE_SMALL = [0, 14, 4, 0, 4, 14, 0]  # twinkle: a bar caps each dot
 COLON_TWINKLE_BIG = [4, 14, 4, 0, 4, 14, 4]    # twinkle: each dot a small plus
 
+# Pacman sprites (the weather clock's pacman colon mode), two frames each.
+GHOST_A = [0, 14, 31, 11, 31, 31, 21]       # eyes one way
+GHOST_B = [0, 14, 31, 21, 31, 31, 21]       # eyes the other
+PACMAN_CLOSED = [0, 14, 31, 24, 31, 14, 0]  # faces left, mouth a slit
+PACMAN_OPEN = [0, 14, 28, 24, 28, 14, 0]    # faces left, mouth open
+
 _LABELS = {"L": LABEL_L, "R": LABEL_R, "H": LABEL_H, "C": LABEL_C}
 
 

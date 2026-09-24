@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 
 from . import config
 from .driver import normalize_brightness
-from .weather import COLON_MODES, LEGACY_COLON_MODES
+from .weather import COLON_MODES, LEGACY_COLON_MODES, PACMAN_SPRITES
 
 # Default brightness index (3 = Maximum) — bright out of the box.
 _DEFAULT_BRIGHTNESS = 3
@@ -85,7 +85,8 @@ def defaults() -> dict:
         "weather_lat": None,             # decimal degrees, -90..90, or null
         "weather_lon": None,             # decimal degrees, -180..180, or null
         "weather_colon": "tick",         # "on" | "tick" | "wiggle" | "twinkle"
-        "weather_colon_half": False,     # half speed: tick/wiggle/twinkle loop in 2 s
+        "weather_colon_half": False,     # half speed: every colon loop takes 2 s
+        "weather_pacman": "both",        # pacman colon: "both" | solo "ghost" / "pacman"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -152,6 +153,8 @@ def _backfill(data: dict) -> dict:
     if legacy:  # a name used while v1.4.0 was built (e.g. throb2 -> wiggle + half)
         merged["weather_colon"], merged["weather_colon_half"] = legacy
     merged["weather_colon_half"] = bool(merged.get("weather_colon_half"))
+    if merged.get("weather_pacman") not in PACMAN_SPRITES:
+        merged["weather_pacman"] = "both"
     if merged.get("weather_colon") not in COLON_MODES:
         merged["weather_colon"] = "tick"
     return merged

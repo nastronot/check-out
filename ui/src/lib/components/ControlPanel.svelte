@@ -14,6 +14,7 @@
     SpectrumLayout,
     Status,
     WeatherColon,
+    WeatherPacman,
   } from '../types';
 
   export let state: AppState | null = null;
@@ -155,9 +156,17 @@
     { value: 'tick', label: 'TICK' },
     { value: 'wiggle', label: 'WIGGLE' },
     { value: 'twinkle', label: 'TWINKLE' },
+    { value: 'pacman', label: 'PACMAN' },
   ];
   const setColon = (c: WeatherColon) => patch({ weather_colon: c });
   const setColonHalf = (e: Event) => patch({ weather_colon_half: checked(e) });
+  // pacman: Solo on -> one sprite (ghost first); off -> both.
+  const SPRITES: { value: WeatherPacman; label: string }[] = [
+    { value: 'ghost', label: 'GHOST' },
+    { value: 'pacman', label: 'PACMAN' },
+  ];
+  const setSolo = (e: Event) => patch({ weather_pacman: checked(e) ? 'ghost' : 'both' });
+  const setSprite = (p: WeatherPacman) => patch({ weather_pacman: p });
   $: weatherLine = weatherSummary(status?.weather);
 
   const DIRS: ScrollDir[] = ['left', 'right'];
@@ -432,11 +441,37 @@
           <span class="switch__track"></span>
           <span class="switch__label">Half speed</span>
         </label>
+        {#if state.weather_colon === 'pacman'}
+          <div class="pac-solo">
+            <label class="switch">
+              <input
+                type="checkbox"
+                checked={state.weather_pacman !== 'both'}
+                on:change={setSolo}
+              />
+              <span class="switch__track"></span>
+              <span class="switch__label">Solo</span>
+            </label>
+            {#if state.weather_pacman !== 'both'}
+              <div class="seg seg--sm">
+                {#each SPRITES as p}
+                  <button
+                    type="button"
+                    aria-pressed={state.weather_pacman === p.value}
+                    on:click={() => setSprite(p.value)}>{p.label}</button
+                  >
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
         <span class="field__hint">
           <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
           on and off every second. <strong>Wiggle</strong> = the colon twists
           one way, then the other. <strong>Twinkle</strong> = it grows into a
-          burst and back. <strong>Half speed</strong> stretches each loop to 2 s.
+          burst and back. <strong>Pacman</strong> = date left, time right, a
+          ghost and pacman between (or one, with <strong>Solo</strong>).
+          <strong>Half speed</strong> stretches each loop to 2 s.
         </span>
       </div>
 
@@ -654,6 +689,13 @@
 
   /* lat | lon | Save — three equal columns across the field. */
   .colon-half {
+    margin-top: 10px;
+  }
+
+  .pac-solo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     margin-top: 10px;
   }
 

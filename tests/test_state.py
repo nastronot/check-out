@@ -316,7 +316,7 @@ def test_weather_coords_coerce(state_path, lat, lon, expected):
 
 def test_weather_colon_validates(state_path):
     import json
-    for colon in ("on", "tick", "wiggle", "twinkle"):
+    for colon in ("on", "tick", "wiggle", "twinkle", "pacman"):
         state_path.write_text(json.dumps({"weather_colon": colon}))
         assert state.load_state()["weather_colon"] == colon
     # Names used during v1.4.0 development map to the final ones (+ half speed).
@@ -328,3 +328,14 @@ def test_weather_colon_validates(state_path):
         assert (s["weather_colon"], s["weather_colon_half"]) == (new, half), old
     state_path.write_text(json.dumps({"weather_colon": "wobble"}))
     assert state.load_state()["weather_colon"] == "tick"
+
+
+def test_weather_pacman_sprite_validates(state_path):
+    import json
+    assert state.load_state()["weather_pacman"] == "both"
+    for v in ("both", "ghost", "pacman"):
+        state_path.write_text(json.dumps({"weather_pacman": v}))
+        assert state.load_state()["weather_pacman"] == v
+    state_path.write_text(json.dumps({"weather_pacman": "inky"}))
+    assert state.load_state()["weather_pacman"] == "both"
+

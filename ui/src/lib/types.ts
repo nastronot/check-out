@@ -26,7 +26,9 @@ export type ScrollSource = 'message' | 'clock';
 
 /** Weather colon: steady, blinking, or an animated loop (wiggle / twinkle).
  *  weather_colon_half runs tick / wiggle / twinkle at half speed (2 s loops). */
-export type WeatherColon = 'on' | 'tick' | 'wiggle' | 'twinkle';
+export type WeatherColon = 'on' | 'tick' | 'wiggle' | 'twinkle' | 'pacman';
+/** Pacman colon: both sprites, or one alone (solo). */
+export type WeatherPacman = 'both' | 'ghost' | 'pacman';
 
 /** status.weather — the latest reading (°F / %) and fetch health. */
 export interface WeatherStatus {
@@ -84,6 +86,7 @@ export interface AppState {
   weather_lon: number | null;
   weather_colon: WeatherColon;
   weather_colon_half: boolean;
+  weather_pacman: WeatherPacman;
   command: CommandRef;
   updated_at?: string;
 }
