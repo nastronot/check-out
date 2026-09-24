@@ -16,11 +16,10 @@ would change):
 - ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
   big burst, small burst, thin, dot.
 
-- ``pacman``  — ``09/23/26`` + three sprite cells + ``WED 08:33``: a ghost, a
-  gap and pacman sit between the date and the day, each swapping between two
-  frames. The time colon is the steady font ``:`` (the sprites need the colon's
-  glyph slots). Solo (``weather_pacman`` = ghost | pacman) shows just one, in
-  the middle cell.
+- ``pacman``  — ``[ghost][pacman]09/23/26 WED 08:33``: two sprite cells lead the
+  line, each swapping between two frames. The time colon is the steady font
+  ``:`` (the sprites need the colon's glyph slots). Solo (``weather_pacman`` =
+  ghost | pacman) shows just one; each keeps its own cell.
 
 Each loop takes 1 second, or 2 with ``weather_colon_half`` (half speed), and is
 locked to the wall clock (a 2 s loop starts on even seconds). Wiggle's twists and
@@ -36,7 +35,7 @@ from datetime import datetime
 from .. import weather
 from ..driver import GLYPH_CODES
 from .base import Frame
-from .clock import hh_mm, numeric_date, short_date_time, weekday
+from .clock import short_date_time
 
 NO_LOCATION = "SET LOCATION"
 _US_PER_S = 1_000_000
@@ -85,16 +84,12 @@ def _loop_index(state: dict, now: datetime, frames: int) -> int:
 
 
 def pacman_top(state: dict, now: datetime) -> str:
-    """``09/23/26`` + three sprite cells + ``WED 08:33`` — exactly 20 cells."""
+    """Two sprite cells + ``09/23/26 WED 08:33`` — exactly 20 cells."""
     i = _loop_index(state, now, 2)
     sprite = state.get("weather_pacman")
-    if sprite == "ghost":
-        cells = f" {_GHOST[i]} "
-    elif sprite == "pacman":
-        cells = f" {_PACMAN[i]} "
-    else:
-        cells = f"{_GHOST[i]} {_PACMAN[i]}"
-    return f"{numeric_date(now)}{cells}{weekday(now)} {hh_mm(now)}"
+    ghost = _GHOST[i] if sprite in ("both", "ghost", None) else " "
+    pacman = _PACMAN[i] if sprite in ("both", "pacman", None) else " "
+    return ghost + pacman + short_date_time(now)
 
 
 class WeatherFrame(Frame):

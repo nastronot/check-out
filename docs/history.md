@@ -616,3 +616,8 @@ offered to the user. `clock.py` gained `short_date` and `hh_mm`, which
 `09/23/26` + ghost, gap, pacman + `WED 08:33` — and the ghost was redrawn one
 row shorter (rows 2-6) to match pacman's height. `clock.py`'s `short_date` split
 into `numeric_date` and `weekday` so both layouts compose from the same parts.
+
+**Pacman layout, final.** `[ghost][pacman]09/23/26 WED 08:33` — the two sprites
+lead the line. The requested `[ghost][pac][ ]` + `09/23/26 WED 08:33` is 21
+cells, so the blank cell after pacman was dropped (cells are physically spaced
+on the glass). Solo keeps each sprite in its own cell.

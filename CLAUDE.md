@@ -83,9 +83,8 @@ development colon names `pulse`/`throb*`/`burst*` migrate on load).
   Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
   `weather.glyph_set(colon)` picks them and the key `("weather", family)`
   redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
-  fill all 9 slots. `pacman` is a different LAYOUT: `09/23/26` in cells 0-7,
-  sprites in 8-10 (ghost, gap, pacman; solo = one sprite in 9), `WED 08:33` in
-  11-19. Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
+  fill all 9 slots. `pacman` is a different LAYOUT: `[ghost][pacman]` in cells
+  0-1 then `09/23/26 WED 08:33` (2-19); solo blanks the other sprite's cell. Its 4 sprite frames take slots 5-8, so its colon is the font's `:`
   (no slot left for `COLON_THIN`).
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
