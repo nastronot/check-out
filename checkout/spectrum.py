@@ -30,6 +30,7 @@ import socket
 
 from . import config
 from .driver import GLYPH_CODES, GLYPH_ROWS
+from .glyphs import LABEL_L, LABEL_R, label_glyph  # noqa: F401  (re-exported)
 
 # --- locked geometry ---------------------------------------------------------
 NUM_BARS = 20            # one band per display column
@@ -255,18 +256,9 @@ def decay_heights(heights, step: int = 1) -> list[int]:
 # --- stereo glyphs (labels + horizontal columns) + renderers (v1.2.0) --------
 # The L/R channel-label glyphs are the user's hand-designed INVERTED bitmaps (a
 # lit frame with the letter cut out dark), so cell 0 reads as a label, not a bar
-# (v1.2.1). 5x7, editor-natural rows (low 5 bits = columns 1..5, bit0 = col 1) —
-# the same row format as every other glyph. Kept here as the single source so the
-# daemon glyph and the preview (spectrumbars.ts) render the same L/R.
-LABEL_L = [31, 29, 29, 29, 29, 17, 31]
-LABEL_R = [31, 17, 21, 25, 21, 21, 31]
-_LABEL_BITMAPS = {"L": LABEL_L, "R": LABEL_R}
-
-
-def label_glyph(letter: str) -> list[int]:
-    """The 5x7 channel-label glyph for ``"L"``/``"R"`` (the custom inverted design)."""
-    return list(_LABEL_BITMAPS[letter])
-
+# (v1.2.1). They live in checkout/glyphs.py (LABEL_L, LABEL_R, label_glyph —
+# imported at the top of this module) alongside the other shared labels; the
+# preview (spectrumbars.ts) keeps a matching copy.
 
 def col_glyph(n: int) -> list[int]:
     """A horizontal-fill cell: the LEFTMOST ``n`` columns (1..5) lit, all 7 rows.
