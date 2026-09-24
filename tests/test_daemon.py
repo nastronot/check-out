@@ -871,10 +871,7 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
     daemon.tick_once(drv, state, ctx, now=t.replace(microsecond=600_000))
     assert _tx_after(capsys) == [0x10, 16, ord(" "), 0x14]       # colon off
     daemon.tick_once(drv, state, ctx, now=t.replace(second=13, microsecond=0))
-    from checkout import weather as wx
-    from checkout.driver import GLYPH_CODES
-    thin = GLYPH_CODES[wx.SLOT_COLON_THIN]
-    assert _tx_after(capsys) == [0x10, 16, thin, 0x14]           # colon on
+    assert _tx_after(capsys) == [0x10, 16, ord(":"), 0x14]       # colon on
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):

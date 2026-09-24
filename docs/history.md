@@ -717,3 +717,8 @@ sign (CP850 `0xF8`) freed a glyph slot for pacman's thin colon, but on glass the
 custom degree glyph and pacman's standard font colon were preferred, so the
 change was reverted (commit 1168bf0). The extended-character map from the
 bench photos stays in `docs/hardware.md` as reference.
+
+**On and tick use the standard colon.** `on` is the font's `:`; `tick` blanks and
+unblanks it. The thin colon glyph remains only as a frame of wiggle and twinkle.
+The degree glyph also moved one column left (`[2, 5, 2, 0, 0, 0, 0]`) to sit
+against its number.

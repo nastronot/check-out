@@ -9,8 +9,8 @@ the colon CHARACTER — never the hardware cursor (an underline on this glass th
 stays on across writes) and never brightness (display-wide, so the whole panel
 would change):
 
-- ``on``      — a steady thin colon (one centre column of dots, a weather glyph).
-- ``tick``    — the thin colon, then a space: on for half the loop, off for half.
+- ``on``      — the font's standard ``:``, steady.
+- ``tick``    — the standard ``:``, then a blank: on for half the loop, off for half.
 - ``wiggle``  — 12 frames: blank, dot, thin, twist-R, thin, dot, blank, dot, thin,
   twist-L, thin, dot (then blank again) — the twists alternate sides.
 - ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
@@ -56,7 +56,7 @@ _PEAK_B = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_B])
 # The frames of each animated colon, spread evenly across the loop. Each loop
 # wraps back to its first frame, so every frame is the same length.
 _LOOPS = {
-    "tick": (_THIN, _BLANK),
+    "tick": (":", _BLANK),
     "wiggle": (_BLANK, _DOT, _THIN, _PEAK_A, _THIN, _DOT,
                _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT),
     "twinkle": (_BLANK, _DOT, _THIN, _PEAK_A, _PEAK_B, _PEAK_A, _THIN, _DOT),
@@ -73,7 +73,7 @@ def colon_char(state: dict, now: datetime) -> str:
     """The character in the colon's cell at ``now``."""
     frames = _LOOPS.get(colon_mode(state))
     if frames is None:
-        return _THIN  # on
+        return ":"  # on
     return frames[_loop_index(state, now, len(frames))]
 
 

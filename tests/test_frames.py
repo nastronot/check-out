@@ -265,7 +265,7 @@ def _top(colon, us, second=12, half=False):
 
 
 def test_weather_top_is_the_short_clock():
-    assert _top("on", 0) == f"09/23/26 WED 08{_THIN}33"
+    assert _top("on", 0) == "09/23/26 WED 08:33"   # the font's standard colon
 
 
 def test_weather_without_location_asks_for_one():
@@ -279,12 +279,12 @@ def test_weather_bottom_is_twenty_cells_even_with_no_reading():
 
 
 def test_on_is_a_steady_colon():
-    assert {_top("on", us)[15] for us in range(0, 1_000_000, 100_000)} == {_THIN}
+    assert {_top("on", us)[15] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_tick_shows_the_colon_for_the_first_half_second_only():
-    assert _top("tick", 0)[15] == _THIN
-    assert _top("tick", 499_999)[15] == _THIN
+    assert _top("tick", 0)[15] == ":"
+    assert _top("tick", 499_999)[15] == ":"
     assert _top("tick", 500_000)[15] == " "
     assert _top("tick", 999_999)[15] == " "
 
@@ -314,13 +314,13 @@ def test_twinkle_goes_straight_up_and_down_once_a_second():
 
 
 def test_half_speed_doubles_every_loop():
-    assert _loop("tick", 2, half=True) == [_THIN, " "]       # 1 s on, 1 s off
+    assert _loop("tick", 2, half=True) == [":", " "]         # 1 s on, 1 s off
     assert _loop("wiggle", 12, half=True) == _WIGGLE
     assert _loop("twinkle", 8, half=True) == _TWINKLE
 
 
 def test_half_speed_leaves_on_steady():
-    assert {_top("on", us, half=True)[15] for us in range(0, 1_000_000, 100_000)} == {_THIN}
+    assert {_top("on", us, half=True)[15] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_colon_defaults_to_tick():

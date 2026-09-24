@@ -68,7 +68,7 @@ _LABEL_GLYPHS = {
 _BASE_GLYPHS = {
     **_LABEL_GLYPHS,
     SLOT_COLON_DOT: COLON_DOT,
-    SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
+    SLOT_COLON_THIN: COLON_THIN,   # wiggle/twinkle's middle frame
 }
 _PAC_FRAMES = {SLOT_PAC_A: PACMAN_CLOSED, SLOT_PAC_B: PACMAN_OPEN}
 # The chosen sprite's two frames. Duo (being eaten): the ghost glances right, the

@@ -83,8 +83,8 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   waits on the network.
 - **Colon:** the colon cell changes CHARACTER, one frame list per setting
   (`frames/dynamic.py` `_LOOPS`), spread evenly over a 1 s loop (2 s with
-  `dynamic_colon_half`), locked to the wall clock: `on` = steady thin colon
-  (`COLON_THIN`); `tick` = thin, blank; `wiggle` = 12 frames, twists alternating
+  `dynamic_colon_half`), locked to the wall clock: `on` = the font's standard `:`,
+  steady; `tick` = `:` then blank; `wiggle` = 12 frames, twists alternating
   sides; `twinkle` = 8 frames straight up and down through two burst sizes.
   Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
   `weather.glyph_set(colon)` picks them and the key `("dynamic", family)`
