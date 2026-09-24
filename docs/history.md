@@ -621,3 +621,9 @@ into `numeric_date` and `weekday` so both layouts compose from the same parts.
 lead the line. The requested `[ghost][pac][ ]` + `09/23/26 WED 08:33` is 21
 cells, so the blank cell after pacman was dropped (cells are physically spaced
 on the glass). Solo keeps each sprite in its own cell.
+
+**Pacman layout, compact.** Sprites moved to the far right (cells 18-19); the
+date/time became compact — `9/23/26 WED8:33`, no leading zeros on month, day or
+hour and no space before the time — left-aligned in the first 18 cells. The
+longest case, `12/31/26 THU11:59`, is 17 cells, so it always fits. The other
+colon modes keep the zero-padded, centred `09/23/26 WED 08:33`.

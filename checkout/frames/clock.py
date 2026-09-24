@@ -50,6 +50,14 @@ def short_date_time(now: datetime, colon: str = ":") -> str:
     return f"{numeric_date(now)} {weekday(now)} {hh_mm(now, colon)}"
 
 
+def compact_date_time(now: datetime) -> str:
+    """``M/D/YY DAYH:MM`` — no leading zeros on month, day or hour, and no space
+    before the time, e.g. ``9/23/26 WED8:33`` (14-17 chars; the year and the
+    minutes keep their zero)."""
+    return (f"{now.month}/{now.day}/{now.year % 100:02d} "
+            f"{weekday(now)}{_hour12(now)}:{now.minute:02d}")
+
+
 def clock_date(now: datetime) -> str:
     """``DD MON YYYY`` (locale-independent), e.g. ``05 JUN 2026``."""
     return f"{now.day:02d} {_MONTHS[now.month - 1]} {now.year}"

@@ -16,8 +16,9 @@ would change):
 - ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
   big burst, small burst, thin, dot.
 
-- ``pacman``  — ``[ghost][pacman]09/23/26 WED 08:33``: two sprite cells lead the
-  line, each swapping between two frames. The time colon is the steady font
+- ``pacman``  — ``9/23/26 WED8:33`` (compact: no leading zeros, no space before
+  the time) left-aligned, and ``[ghost][pacman]`` in the last two cells, each
+  swapping between two frames. The time colon is the steady font
   ``:`` (the sprites need the colon's glyph slots). Solo (``weather_pacman`` =
   ghost | pacman) shows just one; each keeps its own cell.
 
@@ -33,9 +34,10 @@ from __future__ import annotations
 from datetime import datetime
 
 from .. import weather
+from ..config import COLS
 from ..driver import GLYPH_CODES
 from .base import Frame
-from .clock import short_date_time
+from .clock import compact_date_time, short_date_time
 
 NO_LOCATION = "SET LOCATION"
 _US_PER_S = 1_000_000
@@ -84,12 +86,12 @@ def _loop_index(state: dict, now: datetime, frames: int) -> int:
 
 
 def pacman_top(state: dict, now: datetime) -> str:
-    """Two sprite cells + ``09/23/26 WED 08:33`` — exactly 20 cells."""
+    """Compact date/time on the left + two sprite cells on the right (20 cells)."""
     i = _loop_index(state, now, 2)
     sprite = state.get("weather_pacman")
     ghost = _GHOST[i] if sprite in ("both", "ghost", None) else " "
     pacman = _PACMAN[i] if sprite in ("both", "pacman", None) else " "
-    return ghost + pacman + short_date_time(now)
+    return compact_date_time(now).ljust(COLS - 2) + ghost + pacman
 
 
 class WeatherFrame(Frame):

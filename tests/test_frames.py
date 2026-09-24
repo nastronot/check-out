@@ -357,29 +357,40 @@ def _pac(us, second=12, half=False, sprite="both"):
     return WeatherFrame(_FakeFetcher()).render(_T.replace(second=second, microsecond=us), state)[0]
 
 
-def test_pacman_puts_the_sprites_before_the_date():
+def test_pacman_is_compact_text_left_sprites_far_right():
     top = _pac(100_000)
-    assert len(top) == 20
-    assert top == _GA + _PA + "09/23/26 WED 08:33"   # font colon, steady
+    assert top == "9/23/26 WED8:33".ljust(18) + _GA + _PA   # no leading zeros
+
+
+def test_pacman_longest_date_and_time_still_fit():
+    state = {**_WX, "weather_colon": "pacman", "weather_pacman": "both"}
+    top = WeatherFrame(_FakeFetcher()).render(datetime(2026, 12, 31, 23, 59), state)[0]
+    assert top[:18] == "12/31/26 THU11:59 " and len(top) == 20
+
+
+def test_pacman_keeps_the_minute_and_year_zeros():
+    state = {**_WX, "weather_colon": "pacman", "weather_pacman": "both"}
+    top = WeatherFrame(_FakeFetcher()).render(datetime(2027, 1, 5, 0, 7), state)[0]
+    assert top.startswith("1/5/27 TUE12:07")
 
 
 def test_pacman_sprites_swap_frames_each_half_second():
-    assert _pac(100_000)[:2] == _GA + _PA
-    assert _pac(600_000)[:2] == _GB + _PB
+    assert _pac(100_000)[18:] == _GA + _PA
+    assert _pac(600_000)[18:] == _GB + _PB
 
 
 def test_pacman_half_speed_swaps_each_second():
-    assert _pac(600_000, second=12, half=True)[:2] == _GA + _PA
-    assert _pac(100_000, second=13, half=True)[:2] == _GB + _PB
+    assert _pac(600_000, second=12, half=True)[18:] == _GA + _PA
+    assert _pac(100_000, second=13, half=True)[18:] == _GB + _PB
 
 
 def test_pacman_solo_keeps_each_sprite_in_its_own_cell():
-    assert _pac(100_000, sprite="ghost")[:2] == _GA + " "
-    assert _pac(600_000, sprite="pacman")[:2] == " " + _PB
+    assert _pac(100_000, sprite="ghost")[18:] == _GA + " "
+    assert _pac(600_000, sprite="pacman")[18:] == " " + _PB
 
 
 def test_pacman_colon_is_steady():
-    assert {_pac(us)[17] for us in range(0, 1_000_000, 100_000)} == {":"}
+    assert {_pac(us)[12] for us in range(0, 1_000_000, 100_000)} == {":"}
 
 
 def test_pacman_glyphs_match_the_drawn_frames():
