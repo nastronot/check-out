@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 
 from . import config
 from .driver import normalize_brightness
+from .news import DEFAULT_SOURCES as NEWS_DEFAULT_SOURCES
 from .news import SOURCES as _NEWS_SOURCE_MAP
 from .weather import COLON_MODES, LEGACY_COLON_MODES, PACMAN_SPRITES
 
@@ -92,7 +93,7 @@ def defaults() -> dict:
         "dynamic_pacman_sprite": "ghost",
         # --- dynamic mode: news alerts (checkout/news.py) ---
         "news_enabled": False,           # poll the feeds while dynamic is on screen
-        "news_sources": list(NEWS_SOURCES),  # any of "ap" | "bbc" | "nyt"
+        "news_sources": list(NEWS_DEFAULT_SOURCES),  # keys of news.SOURCES
         "news_interval_min": 5,          # minutes between checks (1..60)
         "news_repeat": 1,                # extra scroll passes of the headline (0..5)
         "news_speed_ms": 250,            # headline scroll step (60..1000 ms)
@@ -199,7 +200,7 @@ def _backfill(data: dict) -> dict:
         merged["news_sources"] = [s for i, s in enumerate(sources)
                                   if s in NEWS_SOURCES and s not in sources[:i]]
     else:
-        merged["news_sources"] = list(NEWS_SOURCES)
+        merged["news_sources"] = list(NEWS_DEFAULT_SOURCES)
     merged["news_interval_min"] = _clamp_int(merged.get("news_interval_min"), 5, 1, 60)
     merged["news_repeat"] = _clamp_int(merged.get("news_repeat"), 1, 0, 5)
     merged["news_speed_ms"] = _clamp_int(merged.get("news_speed_ms"), 250, 60, 1000)

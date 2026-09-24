@@ -23,7 +23,7 @@ def _ts(*args):
 
 
 # --- parsing ---------------------------------------------------------------------
-@pytest.mark.parametrize("key", ["ap", "bbc", "nyt"])
+@pytest.mark.parametrize("key", ["ap", "bbc", "nyt", "mt", "hill", "ai", "linux"])
 def test_parse_reads_every_item(key):
     items = news.parse_rss(_feed(key), news.SOURCES[key])
     assert len(items) == 4
@@ -266,4 +266,22 @@ def test_clean_title_is_printable_ascii_only(raw, clean):
 def test_ap_search_only_matches_article_pages_not_topic_hubs():
     # AP topic pages (apnews.com/hub/donald-trump) showed up as "Donald Trump".
     assert "site:apnews.com/article" in news.SOURCES["ap"].url
+
+
+# --- more sources (time-ordered feeds: their lead is their newest post) ----------
+def test_every_source_has_a_short_label_and_a_known_pick():
+    assert {k: s.name for k, s in news.SOURCES.items()} == {
+        "ap": "AP", "bbc": "BBC", "nyt": "NYT", "mt": "MT", "wired": "WIRED",
+        "hill": "HILL", "ai": "AI", "linux": "LINUX"}
+    assert all(s.pick in ("first", "newest") for s in news.SOURCES.values())
+
+
+def test_wired_coupon_posts_are_dropped():
+    items = news.parse_rss(_feed("wired"), news.SOURCES["wired"])
+    assert len(items) == 3 and not any("Coupon" in h.title for h in items)
+    assert news.lead(items, news.SOURCES["wired"].pick).title.startswith("Meta Pinky Promises")
+
+
+def test_the_default_selection_is_the_original_three():
+    assert news.DEFAULT_SOURCES == ("ap", "bbc", "nyt")
 

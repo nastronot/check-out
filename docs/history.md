@@ -781,3 +781,10 @@ screen, the passes 6 spaces apart, and another blank screen), and it is prefixed
 with its source (`AP: …`). The AP search became `site:apnews.com/article`: the
 bare site search also returned AP topic hub pages, one of which showed as the
 headline "Donald Trump".
+
+**More sources.** Mississippi Today (MT), Wired, The Hill (its homenews feed —
+the main feed posts ~80 a day), AI (Ars Technica's AI section, chosen over The
+Decoder, TechCrunch AI and MIT Tech Review for signal-to-noise) and LINUX
+(Phoronix, the most-read Linux news site). All five order by time, so every new
+post alerts; volumes measured 2026-09-24 are noted beside each source. Sources
+gained an `exclude` title filter, used to drop Wired's coupon and deal posts.

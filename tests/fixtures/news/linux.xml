@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+	<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+	 <channel>
+		<title>Phoronix</title>
+		<link>https://www.phoronix.com/</link>
+		<description>Linux Hardware Reviews, Performance Benchmarks &amp; Open-Source / Free Software News</description>
+		<language>en-us</language>
+	  <item>
+   <title>Debian Inference Portal Launches To Provide Free AI/LLM Inferencing To Debian Developers</title>
+   <link>https://www.phoronix.com/news/Debian-Inference-Portal</link>
+   <guid>https://www.phoronix.com/news/Debian-Inference-Portal</guid>
+   <description>With Debian voting to allow the responsible use of generative AI, there is now a new initiative funded by Scaleway to make it easier for Debian contributors to leverage AI: the Debian Inference Portal...</description>
+   <pubDate>Wed, 23 Sep 2026 17:08:01 -0400</pubDate>
+   <dc:creator>Michael Larabel</dc:creator>
+  </item>
+<item>
+   <title>Qualcomm Talks Up Linux On Snapdragon X2 Laptops</title>
+   <link>https://www.phoronix.com/news/Qualcomm-Talks-Up-X2-Linux</link>
+   <guid>https://www.phoronix.com/news/Qualcomm-Talks-Up-X2-Linux</guid>
+   <description>Qualcomm at their Snapdragon Summit taking place in Hawaii are talking up the forthcoming Linux support for Snapdragon X2 series laptops...</description>
+   <pubDate>Wed, 23 Sep 2026 16:49:30 -0400</pubDate>
+   <dc:creator>Michael Larabel</dc:creator>
+  </item>
+<item>
+   <title>Lemonade Fixes AMD APU Model Streaming, Drops OpenMOSS ROCm As ~40x Slower Than Vulkan</title>
+   <link>https://www.phoronix.com/news/Lemonade-2026.40-RC</link>
+   <guid>https://www.phoronix.com/news/Lemonade-2026.40-RC</guid>
+   <description>The AMD-aligned Lemonade open-source project for serving as a local AI server released 2026.39.1 today as well as issuing a release candidate of 2026.40 as their next release. Besides adapting to a new versioning scheme, the Lemonade SDK updates today bring a few notable changes...</description>
+   <pubDate>Wed, 23 Sep 2026 15:41:24 -0400</pubDate>
+   <dc:creator>Michael Larabel</dc:creator>
+  </item>
+<item>
+   <title>Intel Developing Their DXVK-IGDEXT For Improved Linux Gaming On Arc Graphics</title>
+   <link>https://www.phoronix.com/news/DXVK-IGDEXT</link>
+   <guid>https://www.phoronix.com/news/DXVK-IGDEXT</guid>
+   <description>Intel engineers have been quietly developing dxvk-igdext as their own component for DXVK Direct3D 8 / 9 / 10 / 11 atop the Vulkan API for leveraging Intel Direct3D 11 Graphics Extensions...</description>
+   <pubDate>Wed, 23 Sep 2026 10:54:44 -0400</pubDate>
+   <dc:creator>Michael Larabel</dc:creator>
+  </item>
+</channel>
+	</rss>

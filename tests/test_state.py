@@ -399,6 +399,7 @@ def test_news_defaults(state_path):
 @pytest.mark.parametrize("field,given,expected", [
     ("news_enabled", 1, True),
     ("news_sources", ["nyt", "cnn", "ap", "nyt"], ["nyt", "ap"]),   # known, order kept, no dupes
+    ("news_sources", ["mt", "linux"], ["mt", "linux"]),
     ("news_sources", [], []),
     ("news_sources", "ap", ["ap", "bbc", "nyt"]),                    # junk -> default
     ("news_interval_min", 0, 1), ("news_interval_min", 999, 60), ("news_interval_min", "7", 7),

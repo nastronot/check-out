@@ -41,7 +41,7 @@ export interface WeatherStatus {
 }
 
 /** News alert source keys (checkout/news.py SOURCES) and brightness effect. */
-export type NewsSource = 'ap' | 'bbc' | 'nyt';
+export type NewsSource = 'ap' | 'bbc' | 'nyt' | 'mt' | 'wired' | 'hill' | 'ai' | 'linux';
 export type NewsEffect = 'none' | 'flash' | 'throb';
 
 /** status.news — each source's lead story + error, the newest lead, alert flag. */

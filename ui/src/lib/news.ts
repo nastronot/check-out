@@ -1,6 +1,9 @@
 import type { NewsStatus } from './types';
 
-const LABEL: Record<string, string> = { ap: 'AP', bbc: 'BBC', nyt: 'NYT' };
+// Same labels as checkout/news.py SOURCES (they also prefix the ticker).
+const LABEL: Record<string, string> = {
+  ap: 'AP', bbc: 'BBC', nyt: 'NYT', mt: 'MT', wired: 'WIRED', hill: 'HILL', ai: 'AI', linux: 'LINUX',
+};
 const label = (key: string) => LABEL[key] ?? key.toUpperCase();
 
 const time = (iso: string) =>

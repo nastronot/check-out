@@ -138,7 +138,10 @@ value at the right of a field label; hints (`.field__hint`) are one short line.
 ### News alerts (v1.5.0)
 Dynamic mode, `news_enabled`: `NewsFetcher` polls the selected sources every
 `news_interval_min` for each source's **lead story** (BBC/NYT: first item;
-AP via Google News RSS — AP blocks its own feeds — newest by `pubDate`). The
+AP via Google News RSS — AP blocks its own feeds — newest by `pubDate`). MT,
+WIRED, HILL, AI (Ars Technica AI) and LINUX (Phoronix) are time-ordered feeds, so
+their "lead" is their newest post; a per-source `exclude` regex drops Wired's
+coupon/deal posts. Default selection: AP, BBC, NYT. The
 first lead per source is recorded silently; a later new lead (by link, never a
 repeat) becomes the pending alert, newest wins, no backlog. `DynamicFrame.tick`
 starts it: top = `{g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}` (7 bar glyphs,

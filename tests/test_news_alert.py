@@ -149,3 +149,10 @@ def test_brightness_hook_follows_the_effect_only_during_an_alert():
     assert f.brightness(_at(75), {**STATE, "news_effect": "throb"}, 3) == 0
     assert f.brightness(_at(75), {**STATE, "news_effect": "none"}, 3) is None
     assert f.brightness(_at(60), {**STATE, "news_effect": "flash"}, 3) == 0
+
+
+def test_the_ticker_cites_each_source_by_its_label():
+    f = _frame(alert=Headline("linux", "Kernel 7.0 lands", "l1", 1.0))
+    f.tick(T0, STATE)
+    assert f.render(_at(250 * 20), STATE)[1] == "LINUX: Kernel 7.0 la"
+

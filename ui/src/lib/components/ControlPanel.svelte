@@ -171,6 +171,11 @@
     { value: 'ap', label: 'AP' },
     { value: 'bbc', label: 'BBC' },
     { value: 'nyt', label: 'NYT' },
+    { value: 'mt', label: 'MT' },
+    { value: 'wired', label: 'WIRED' },
+    { value: 'hill', label: 'HILL' },
+    { value: 'ai', label: 'AI' },
+    { value: 'linux', label: 'LINUX' },
   ];
   const NEWS_EFFECTS: { value: NewsEffect; label: string }[] = [
     { value: 'none', label: 'NONE' },
@@ -519,15 +524,6 @@
             <span class="switch__track"></span>
             <span class="switch__label">Alerts</span>
           </label>
-          <div class="seg seg--sm" aria-label="news sources">
-            {#each NEWS_SOURCES as src}
-              <button
-                type="button"
-                aria-pressed={state.news_sources.includes(src.value)}
-                on:click={() => toggleNewsSource(src.value)}>{src.label}</button
-              >
-            {/each}
-          </div>
           <button
             type="button"
             class="btn"
@@ -536,6 +532,15 @@
           >
         </div>
         {#if state.news_enabled}
+          <div class="seg sources" aria-label="news sources">
+            {#each NEWS_SOURCES as src}
+              <button
+                type="button"
+                aria-pressed={state.news_sources.includes(src.value)}
+                on:click={() => toggleNewsSource(src.value)}>{src.label}</button
+              >
+            {/each}
+          </div>
           <div class="ctl-row">
             <span class="ctl-row__name">Every</span>
             <input type="number" min="1" max="60" value={state.news_interval_min} on:change={setNewsInterval} />
@@ -660,5 +665,10 @@
 
   .switch.disabled {
     opacity: 0.4;
+  }
+
+  /* eight source toggles: a full-width row that wraps to two lines if narrow */
+  .seg.sources {
+    flex-wrap: wrap;
   }
 </style>

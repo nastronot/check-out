@@ -33,8 +33,9 @@ class Source:
     key: str
     name: str            # short label for the UI
     url: str
-    pick: str            # "first" (editorial order) | "newest" (by publish time)
+    pick: str            # "first" (the feed's own order) | "newest" (by publish time)
     strip_suffix: str = ""
+    exclude: str = ""    # regex: items whose title matches are dropped (ads, deals)
 
 
 SOURCES: dict[str, Source] = {
@@ -48,7 +49,22 @@ SOURCES: dict[str, Source] = {
     "bbc": Source("bbc", "BBC", "https://feeds.bbci.co.uk/news/rss.xml", pick="first"),
     "nyt": Source("nyt", "NYT", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
                   pick="first"),
+    # The feeds below order by TIME, so their "lead" is simply their newest post —
+    # each new post alerts. Volumes measured 2026-09-24 (posts / 24 h) in comments.
+    "mt": Source("mt", "MT", "https://mississippitoday.org/feed/", pick="first"),        # ~6
+    "wired": Source("wired", "WIRED", "https://www.wired.com/feed/rss", pick="first",     # ~28
+                    exclude=r"\b(coupons?|promo codes?|deals?)\b"),
+    "hill": Source("hill", "HILL", "https://thehill.com/homenews/feed/", pick="first"),   # ~15 (main feed: ~80)
+    # "AI" = Ars Technica's AI section: the best signal-to-noise of those compared
+    # (The Decoder ~9/day, TechCrunch AI ~14/day, MIT Tech Review ~1/day).
+    "ai": Source("ai", "AI", "https://arstechnica.com/ai/feed/", pick="first"),          # ~4
+    # "LINUX" = Phoronix, the most-read Linux news site (9to5Linux ~5/day is
+    # release-only; LWN's items are paywalled).
+    "linux": Source("linux", "LINUX", "https://www.phoronix.com/rss.php", pick="first"), # ~9
 }
+
+# A fresh setup watches only the outlets with true lead stories (+ AP).
+DEFAULT_SOURCES = ("ap", "bbc", "nyt")
 
 
 @dataclass(frozen=True)
@@ -106,6 +122,8 @@ def parse_rss(data: bytes, source: Source) -> list[Headline]:
     for item in root.iter("item"):
         title = clean_title(item.findtext("title") or "", source.strip_suffix)
         link = (item.findtext("link") or item.findtext("guid") or title).strip()
+        if source.exclude and re.search(source.exclude, title, re.IGNORECASE):
+            continue
         if title:
             out.append(Headline(source.key, title, link, _published(item.findtext("pubDate"))))
     return out

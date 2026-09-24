@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:media="http://search.yahoo.com/mrss/" >
+    <channel>
+        <title>AI - Ars Technica</title>
+        <atom:link href="https://arstechnica.com/ai/feed/" rel="self" type="application/rss+xml" />
+        <link>https://arstechnica.com</link>
+        <description>Serving the Technologist since 1998. News, reviews, and analysis.</description>
+        <lastBuildDate>Wed, 23 Sep 2026 21:34:28 +0000</lastBuildDate>
+        <language>en-US</language>
+        <sy:updatePeriod>
+            hourly        </sy:updatePeriod>
+        <sy:updateFrequency>
+            1        </sy:updateFrequency>
+        
+<image>
+	<url>https://cdn.arstechnica.net/wp-content/uploads/2016/10/cropped-ars-logo-512_480-60x60.png</url>
+	<title>AI - Ars Technica</title>
+	<link>https://arstechnica.com</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+            <item>
+                <title>Trump’s China rivalry and “AI race” delusion may endanger US, experts say</title>
+                <link>https://arstechnica.com/tech-policy/2026/09/china-silent-as-us-touts-plan-for-ai-safety-alerts-that-omits-tech-experts/</link>
+                                    <comments>https://arstechnica.com/tech-policy/2026/09/china-silent-as-us-touts-plan-for-ai-safety-alerts-that-omits-tech-experts/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Ashley Belanger]]>
+                </dc:creator>
+                <pubDate>Wed, 23 Sep 2026 20:52:28 +0000</pubDate>
+                		<category><![CDATA[AI]]></category>
+		<category><![CDATA[Policy]]></category>
+		<category><![CDATA[agi]]></category>
+		<category><![CDATA[AI safety]]></category>
+		<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[cybersecurity]]></category>
+		<category><![CDATA[Donald Trump]]></category>
+		<category><![CDATA[US-China relations]]></category>
+		<category><![CDATA[Xi Jinping]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/tech-policy/2026/09/china-silent-as-us-touts-plan-for-ai-safety-alerts-that-omits-tech-experts/</guid>
+
+                                    <description>
+                        <![CDATA[Trump focus on winning “AI race” may deter China from sharing safety intel.]]>
+                    </description>
+                                                                <content:encoded>
+                            <![CDATA[<p>This week, the US and China, the two world leaders on AI, finally started talks meant to keep the whole world safe from emerging safety risks. But whether meetings between Donald Trump and Xi Jinping can lead to a reliable global governance framework for AI depends on how much the fierce rivals are actually willing to cooperate.</p>
+<p>It's clear Trump wants it to seem like discussions are going well. Before Trump and Xi meet on Thursday and Friday, Treasury Secretary Scott Bessent announced that both sides had already discussed setting up a new AI safety notification mechanism. If China agrees to participate, that would create an open line for either side to send alerts when their country’s AI systems pose threats or behave unpredictably. The same channel, Bessent said, could allow the countries to share their “vision of common goals.”</p>
+<p>However, the proposal comes at a time when China may not be ready to trust the US to have AI safety conversations that aren’t about limiting China’s capabilities. Not only has Trump steadily increased export controls that explicitly seek to block China from accessing technology to advance AI, but Congress is mulling bills that would cut the country off from more chips and hardware. Adding to tensions, just two weeks ago, Trump’s Justice Department <a href="https://arstechnica.com/tech-policy/2026/09/six-chinese-ai-firms-accused-of-aggressively-copying-us-frontier-models/">accused six of China's leading AI makers</a> of stealing from US frontier labs, which China has strongly disputed.</p><p><a href="https://arstechnica.com/tech-policy/2026/09/china-silent-as-us-touts-plan-for-ai-safety-alerts-that-omits-tech-experts/">Read full article</a></p>
+<p><a href="https://arstechnica.com/tech-policy/2026/09/china-silent-as-us-touts-plan-for-ai-safety-alerts-that-omits-tech-experts/#comments">Comments</a></p>
+]]>
+                        </content:encoded>
+                                    
+                                    <slash:comments>26</slash:comments>
+                
+                
+                <media:content url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/china-vs-us-ai-race-1152x648.jpg" type="image/jpeg" medium="image" width="1152" height="648">
+<media:thumbnail url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/china-vs-us-ai-race-500x500.jpg" width="500" height="500" />
+<media:credit>Aurich Lawson | Getty Images</media:credit></media:content>
+            </item>
+<item>
+                <title>XPRIZE Wildfire winners spotted fires within 10 min—but couldn’t stop them</title>
+                <link>https://arstechnica.com/gadgets/2026/09/xprize-wildfire-winners-spotted-fires-within-10-min-but-couldnt-stop-them/</link>
+                                    <comments>https://arstechnica.com/gadgets/2026/09/xprize-wildfire-winners-spotted-fires-within-10-min-but-couldnt-stop-them/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Jeremy Hsu]]>
+                </dc:creator>
+                <pubDate>Wed, 23 Sep 2026 20:28:42 +0000</pubDate>
+                		<category><![CDATA[AI]]></category>
+		<category><![CDATA[Tech]]></category>
+		<category><![CDATA[AI drones]]></category>
+		<category><![CDATA[autonomous drones]]></category>
+		<category><![CDATA[drones]]></category>
+		<category><![CDATA[firefighting]]></category>
+		<category><![CDATA[satellites]]></category>
+		<category><![CDATA[wildfire]]></category>
+		<category><![CDATA[wildfires]]></category>
+		<category><![CDATA[XPRIZE]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/gadgets/2026/09/xprize-wildfire-winners-spotted-fires-within-10-min-but-couldnt-stop-them/</guid>
+
+                                    <description>
+                        <![CDATA[$11M competition showed wildfire detection is still easier than stopping fires.]]>
+                    </description>
+                                                                <content:encoded>
+                            <![CDATA[<p>Wildfire detection from space and firefighting drones featured among the finalists honored in the $11 million XPRIZE Wildfire competition. Although no team walked away with either of the two grand prizes, such technologies could prove helpful as the world grapples with the growing costs of worsening wildfire disasters.</p>
+<p>The competition’s First Prize track for space-based wildfire detection challenged teams to accurately detect all fires across a large swath of Australia within 10 minutes. A second Autonomous Response Prize track challenged teams to autonomously detect and put out a high-risk fire located somewhere within rural Alaska while ignoring decoy fires—all within 10 minutes of the fire igniting.</p>
+<p>“We want to be able to prepare and provide tools for firefighters to really allow them to do the best job,” <a href="https://www.xprize.org/about/people/andrea-santy">Andrea Santy</a>, program director of <a href="https://www.xprize.org/competitions/wildfire">XPRIZE Wildfire</a>, told Ars. “They're great at what they do, but it's unfair to continue to put them in harm's way when there's technology coming online that can help keep them safe, keep communities safe, and protect ecosystems.”</p><p><a href="https://arstechnica.com/gadgets/2026/09/xprize-wildfire-winners-spotted-fires-within-10-min-but-couldnt-stop-them/">Read full article</a></p>
+<p><a href="https://arstechnica.com/gadgets/2026/09/xprize-wildfire-winners-spotted-fires-within-10-min-but-couldnt-stop-them/#comments">Comments</a></p>
+]]>
+                        </content:encoded>
+                                    
+                                    <slash:comments>12</slash:comments>
+                
+                
+                <media:content url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/Andurils-fire-retardant-balls-explode-on-fire-target-1152x648.jpg" type="image/jpeg" medium="image" width="1152" height="648">
+<media:thumbnail url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/Andurils-fire-retardant-balls-explode-on-fire-target-500x500.jpg" width="500" height="500" />
+<media:credit>Anduril Industries</media:credit><media:text>Fire retardant balls dropped by Anduril's Ghost-X drone explode on a fire in a test.</media:text></media:content>
+            </item>
+<item>
+                <title>YouTube promises custom feeds and a lot more AI later this year</title>
+                <link>https://arstechnica.com/gadgets/2026/09/youtube-promises-custom-feeds-and-a-lot-more-ai-later-this-year/</link>
+                                    <comments>https://arstechnica.com/gadgets/2026/09/youtube-promises-custom-feeds-and-a-lot-more-ai-later-this-year/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Ryan Whitwam]]>
+                </dc:creator>
+                <pubDate>Wed, 23 Sep 2026 19:35:53 +0000</pubDate>
+                		<category><![CDATA[AI]]></category>
+		<category><![CDATA[Google]]></category>
+		<category><![CDATA[Tech]]></category>
+		<category><![CDATA[Artificial Intelligence]]></category>
+		<category><![CDATA[google]]></category>
+		<category><![CDATA[video streaming]]></category>
+		<category><![CDATA[YouTube]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/gadgets/2026/09/youtube-promises-custom-feeds-and-a-lot-more-ai-later-this-year/</guid>
+
+                                    <description>
+                        <![CDATA[YouTube's next year could change the content you see with a big focus on AI and livestreams.]]>
+                    </description>
+                                                                <content:encoded>
+                            <![CDATA[<p>The annual <a href="https://blog.youtube/news-and-events/innovation-youtube-era-made-on-viewers-creators/">Made on YouTube event</a> has just wrapped up, offering an early look at the features you can expect to come to Google's dominant online streaming platform in the coming months. Yes, there's plenty of AI for both viewers and creators, but there's also a handful of non-AI updates mixed in there, too.</p>
+<p>The design of YouTube's homepage feed comes under fire often, but the platform is preparing to give you more options. With Custom Feeds, you'll be able to add new tabs to the YouTube interface with content of your choice. To create a feed, just type a description and let YouTube populate the page. You can refine your description and rate video suggestions to tune the Custom Feed. Google says you'll be able to save "multiple" feeds without specifying the exact number. This feature will roll out soon in the US for web, mobile, and TV users.</p>
+<p>Interacting on YouTube will also change later this year. The platform will finally add the option to post GIFs in comments, which has apparently been a common request for some time. The comment box will let you search for popular animated thumbnails and post them on both regular videos and YouTube Shorts. The YouTube direct messaging feature is also adding support for group chat, but it's only going to be available in the US, UK, Singapore, Brazil, and some European countries to start.</p><p><a href="https://arstechnica.com/gadgets/2026/09/youtube-promises-custom-feeds-and-a-lot-more-ai-later-this-year/">Read full article</a></p>
+<p><a href="https://arstechnica.com/gadgets/2026/09/youtube-promises-custom-feeds-and-a-lot-more-ai-later-this-year/#comments">Comments</a></p>
+]]>
+                        </content:encoded>
+                                    
+                                    <slash:comments>81</slash:comments>
+                
+                
+                <media:content url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/made-on-youtube-2026.png" type="image/png" medium="image">
+<media:thumbnail url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/made-on-youtube-2026-500x500-1790190424.png" width="500" height="500" />
+<media:credit>Google</media:credit></media:content>
+            </item>
+<item>
+                <title>Owners mourn spoiled food after firmware update bricks Samsung smart fridges</title>
+                <link>https://arstechnica.com/gadgets/2026/09/owners-mourn-spoiled-food-after-firmware-update-bricks-samsung-smart-fridges/</link>
+                                    <comments>https://arstechnica.com/gadgets/2026/09/owners-mourn-spoiled-food-after-firmware-update-bricks-samsung-smart-fridges/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Scharon Harding]]>
+                </dc:creator>
+                <pubDate>Wed, 23 Sep 2026 17:39:39 +0000</pubDate>
+                		<category><![CDATA[AI]]></category>
+		<category><![CDATA[Tech]]></category>
+		<category><![CDATA[Samsung]]></category>
+		<category><![CDATA[smart home]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/gadgets/2026/09/owners-mourn-spoiled-food-after-firmware-update-bricks-samsung-smart-fridges/</guid>
+
+                                    <description>
+                        <![CDATA["So absurd and embarrassing ..."]]>
+                    </description>
+                                                                <content:encoded>
+                            <![CDATA[<p>Some Samsung smart fridges stopped working on Tuesday due to a firmware update.</p>
+<p>Korean outlets were the first to report the problems, which affect Samsung’s Bespoke AI line of fridges. <a href="https://www.starnewskorea.com/en/business-life/2026/09/23/2026092310312665794">Star News Korea</a>, per a Google-provided translation, said that most of the affected devices were four-door fridges from 2024 or later.</p>
+<p>Affected fridges “suddenly lost power and stopped functioning immediately after” trying to issue a firmware update through SmartThings, Samsung’s smart home platform, per Star News Korea. The SmartThings app then showed the devices as offline. Some users said that their fridge’s internal display was stuck showing the message "Checking SmartThings app during update.”</p><p><a href="https://arstechnica.com/gadgets/2026/09/owners-mourn-spoiled-food-after-firmware-update-bricks-samsung-smart-fridges/">Read full article</a></p>
+<p><a href="https://arstechnica.com/gadgets/2026/09/owners-mourn-spoiled-food-after-firmware-update-bricks-samsung-smart-fridges/#comments">Comments</a></p>
+]]>
+                        </content:encoded>
+                                    
+                                    <slash:comments>193</slash:comments>
+                
+                
+                <media:content url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/Samsung-Bespoke-AI-3-Door-Refrigerator-AutoView-950x534-1-1152x648-1790182604.jpg" type="image/jpeg" medium="image" width="1152" height="648">
+<media:thumbnail url="https://cdn.arstechnica.net/wp-content/uploads/2026/09/Samsung-Bespoke-AI-3-Door-Refrigerator-AutoView-950x534-1-500x500-1790182590.jpg" width="500" height="500" />
+<media:credit>Samsung</media:credit><media:text>A marketing image for Samsung's Bespoke AI refrigerators.</media:text></media:content>
+            </item>
+</channel>
+</rss>
