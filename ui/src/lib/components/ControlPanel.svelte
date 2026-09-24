@@ -410,7 +410,7 @@
     <!-- DYNAMIC: date/time on top, the next 24 h of weather below. -->
     {#if state.mode === 'dynamic'}
       <div class="field">
-        <span class="field__label">Location</span>
+        <span class="field__label">Weather location</span>
         <form class="coords" on:submit|preventDefault={saveLocation}>
           <input
             type="text" inputmode="decimal" spellcheck="false"
@@ -438,7 +438,7 @@
       </div>
 
       <div class="field">
-        <span class="field__label">Colon</span>
+        <span class="field__label">Time features</span>
         <div class="seg">
           {#each COLONS as c}
             <button
