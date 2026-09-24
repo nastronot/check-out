@@ -1,7 +1,7 @@
 <script lang="ts">
   import { lineBudget } from '../message';
   import { audioDevices, refreshDevices } from '../stores';
-  import { weatherSummary } from '../weather';
+  import { parseCoord, weatherSummary } from '../weather';
   import type {
     Align,
     AppState,
@@ -122,13 +122,30 @@
   ];
   const setSpectrumLayout = (l: SpectrumLayout) => patch({ spectrum_layout: l });
 
-  // weather — location in decimal degrees (south/west negative) + the colon.
-  function coord(e: Event): number | null {
-    const v = (e.target as HTMLInputElement).value.trim();
-    return v === '' ? null : Number(v);
+  // weather — location in decimal degrees (south/west negative), edited as
+  // drafts and written ONLY on Save (so a half-typed value never triggers a
+  // fetch). The drafts re-seed when the saved location changes elsewhere.
+  let latDraft = '';
+  let lonDraft = '';
+  let seenLoc = '';
+  $: if (state) {
+    const loc = `${state.weather_lat ?? ''},${state.weather_lon ?? ''}`;
+    if (loc !== seenLoc) {
+      seenLoc = loc;
+      latDraft = state.weather_lat == null ? '' : String(state.weather_lat);
+      lonDraft = state.weather_lon == null ? '' : String(state.weather_lon);
+    }
   }
-  const setLat = (e: Event) => patch({ weather_lat: coord(e) });
-  const setLon = (e: Event) => patch({ weather_lon: coord(e) });
+  $: latValue = parseCoord(latDraft, 90);
+  $: lonValue = parseCoord(lonDraft, 180);
+  $: locValid = latValue !== undefined && lonValue !== undefined;
+  $: locDirty =
+    locValid &&
+    (latValue !== (state?.weather_lat ?? null) || lonValue !== (state?.weather_lon ?? null));
+  function saveLocation(): void {
+    if (!locValid || latValue === undefined || lonValue === undefined) return;
+    patch({ weather_lat: latValue, weather_lon: lonValue });
+  }
   const COLONS: { value: WeatherColon; label: string }[] = [
     { value: 'on', label: 'ON' },
     { value: 'tick', label: 'TICK' },
@@ -363,25 +380,28 @@
     {#if state.mode === 'weather'}
       <div class="field">
         <span class="field__label">Location</span>
-        <div class="row coords">
-          <label class="field__hint">lat
-            <input
-              type="number" step="0.0001" min="-90" max="90"
-              placeholder="41.8781"
-              value={state.weather_lat ?? ''}
-              on:change={setLat}
-            /></label>
-          <label class="field__hint">lon
-            <input
-              type="number" step="0.0001" min="-180" max="180"
-              placeholder="-87.6298"
-              value={state.weather_lon ?? ''}
-              on:change={setLon}
-            /></label>
-        </div>
+        <form class="coords" on:submit|preventDefault={saveLocation}>
+          <input
+            type="text" inputmode="decimal" spellcheck="false"
+            aria-label="latitude" placeholder="lat 41.8781"
+            class:invalid={latValue === undefined}
+            bind:value={latDraft}
+          />
+          <input
+            type="text" inputmode="decimal" spellcheck="false"
+            aria-label="longitude" placeholder="lon -87.6298"
+            class:invalid={lonValue === undefined}
+            bind:value={lonDraft}
+          />
+          <button type="submit" class="btn" disabled={!locDirty}>Save</button>
+        </form>
         <span class="field__hint">
-          Decimal degrees; south and west are negative. Weather from Open-Meteo,
-          fetched once per 15-minute update.
+          {#if !locValid}
+            <span class="over">Latitude is −90…90 and longitude −180…180.</span>
+          {:else}
+            Decimal degrees; south and west are negative. Weather from
+            Open-Meteo, fetched once per 15-minute update.
+          {/if}
         </span>
       </div>
 
@@ -397,9 +417,9 @@
           {/each}
         </div>
         <span class="field__hint">
-          <strong>On</strong> = steady. <strong>Tick</strong> = the cursor blinks on
-          the colon every second. <strong>Pulse</strong> = the whole display breathes
-          once a second (brightness is display-wide on this panel).
+          <strong>On</strong> = steady. <strong>Tick</strong> = the colon blinks
+          on and off every second. <strong>Pulse</strong> = the colon fades in and
+          out once a second (it lights fewer dots; brightness is display-wide).
         </span>
       </div>
 
@@ -614,12 +634,22 @@
     margin-top: 10px;
   }
 
+  /* lat | lon | Save — three equal columns across the field. */
   .coords {
-    gap: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
-  .coords input {
-    width: 11ch;
+  .coords input,
+  .coords .btn {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .coords input.invalid {
+    border-color: var(--red-dead);
   }
 
   .timing input,

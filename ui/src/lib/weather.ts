@@ -10,3 +10,12 @@ export function weatherSummary(w: WeatherStatus | null | undefined): string {
   if (!w?.observed_at) return 'Waiting for the first reading…';
   return `Reading from ${time(w.observed_at)} · refreshes every 15 min`;
 }
+
+/** A coordinate typed by the user: a number within ±`limit`, `null` when the
+ *  field is empty (location cleared), or `undefined` when it is not valid. */
+export function parseCoord(text: string, limit: number): number | null | undefined {
+  const t = text.trim();
+  if (t === '') return null;
+  const v = Number(t);
+  return Number.isFinite(v) && Math.abs(v) <= limit ? v : undefined;
+}

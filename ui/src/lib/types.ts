@@ -117,8 +117,6 @@ export interface Status {
   /** stereo_h: one overall level per channel (0..95); null outside stereo_h. */
   spectrum_level_l?: number | null;
   spectrum_level_r?: number | null;
-  /** Cell (0..39) the hardware cursor is parked on, else null. */
-  cursor?: number | null;
   /** The glyph set a mode loaded (weather/spectrum); null = state.glyphs. */
   mode_glyphs?: GlyphMap | null;
   /** Weather mode: the latest reading + fetch health; null elsewhere. */

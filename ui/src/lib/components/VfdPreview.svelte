@@ -6,7 +6,6 @@
     LINE_LEN,
     lineToCells,
   } from '../font5x7';
-  import { withCursor } from '../cursor';
   import { GLASS_BG, paintCell } from '../dotrender';
   import { spectrumStatusCells, type Cell } from '../spectrumbars';
   import type { GlyphMap, Status } from '../types';
@@ -53,8 +52,6 @@
   $: bottom = blank ? '' : status?.bottom ?? '';
   // Brightness is a level index 0..3 (default Maximum if unset).
   $: level = typeof status?.brightness === 'number' ? status.brightness : 3;
-  // The hardware cursor cell (weather's colon tick), hidden while blank.
-  $: cursor = blank ? null : status?.cursor ?? null;
   const LEVEL_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
   $: levelLabel = LEVEL_LABELS[Math.max(0, Math.min(3, Math.round(level)))];
 
@@ -87,7 +84,7 @@
 
   // Redraw whenever the mirrored data changes (every poll / glyph edit). Deps are
   // passed explicitly so Svelte tracks them (a bare `redraw()` could be stripped).
-  $: if (ctx) redraw(spectrumPair, top, bottom, level, glyphs, cursor);
+  $: if (ctx) redraw(spectrumPair, top, bottom, level, glyphs);
 
   /** Size the drawing buffer to the rendered width (×dpr), then draw. */
   function sizeAndDraw(): void {
@@ -106,7 +103,7 @@
       const s = (cssW / W) * dpr;
       ctx.setTransform(s, 0, 0, s, 0, 0);
     }
-    redraw(spectrumPair, top, bottom, level, glyphs, cursor);
+    redraw(spectrumPair, top, bottom, level, glyphs);
   }
 
   /** Branch: the analyzer cells (spectrum mode) or the normal text/glyph frame. */
@@ -116,12 +113,11 @@
     bottomLine: string,
     brightnessLevel: number,
     glyphMap: GlyphMap,
-    cursorCell: number | null,
   ): void {
     if (pair) {
       drawCells(pair.top, pair.bottom, brightnessLevel);
     } else {
-      drawFrame(topLine, bottomLine, brightnessLevel, glyphMap, cursorCell);
+      drawFrame(topLine, bottomLine, brightnessLevel, glyphMap);
     }
   }
 
@@ -165,13 +161,10 @@
     bottomLine: string,
     brightnessLevel: number,
     glyphMap: GlyphMap,
-    cursorCell: number | null,
   ): void {
     if (!ctx) return;
-    const [topCells, bottomCells] = withCursor(
-      lineToCells(topLine, glyphMap),
-      lineToCells(bottomLine, glyphMap),
-      cursorCell,
+    const [topCells, bottomCells] = [topLine, bottomLine].map((l) =>
+      lineToCells(l, glyphMap),
     );
     const litDots = drawCells(topCells, bottomCells, brightnessLevel);
 

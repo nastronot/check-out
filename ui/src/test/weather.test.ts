@@ -20,3 +20,21 @@ describe('weatherSummary', () => {
     expect(weatherSummary({ ...base, error: 'OSError: down' })).toMatch(/^Last fetch failed: OSError: down/);
   });
 });
+
+import { parseCoord } from '../lib/weather';
+
+describe('parseCoord', () => {
+  it('reads decimal degrees in range', () => {
+    expect(parseCoord('41.8781', 90)).toBe(41.8781);
+    expect(parseCoord(' -87.6298 ', 180)).toBe(-87.6298);
+  });
+  it('treats empty as a cleared location', () => {
+    expect(parseCoord('', 90)).toBeNull();
+    expect(parseCoord('   ', 90)).toBeNull();
+  });
+  it('rejects junk and out-of-range values', () => {
+    expect(parseCoord('north', 90)).toBeUndefined();
+    expect(parseCoord('95', 90)).toBeUndefined();
+    expect(parseCoord('-181', 180)).toBeUndefined();
+  });
+});
