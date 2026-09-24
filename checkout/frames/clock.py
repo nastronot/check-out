@@ -17,6 +17,23 @@ _MONTHS = (
 )
 
 
+# 3-letter UPPERCASE weekday names, indexed by datetime.weekday() (Mon = 0).
+_DAYS = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+
+
+def _hour12(now: datetime) -> int:
+    """12-hour clock hour: 12 at midnight and noon, else 1..11."""
+    return now.hour % 12 or 12
+
+
+def short_date_time(now: datetime) -> str:
+    """``MM/DD/YY DAY HH:MM`` (12-hour, no AM/PM), e.g. ``09/23/26 WED 08:33``."""
+    return (
+        f"{now.month:02d}/{now.day:02d}/{now.year % 100:02d} "
+        f"{_DAYS[now.weekday()]} {_hour12(now):02d}:{now.minute:02d}"
+    )
+
+
 def clock_date(now: datetime) -> str:
     """``DD MON YYYY`` (locale-independent), e.g. ``05 JUN 2026``."""
     return f"{now.day:02d} {_MONTHS[now.month - 1]} {now.year}"
@@ -24,9 +41,8 @@ def clock_date(now: datetime) -> str:
 
 def clock_time(now: datetime) -> str:
     """12-hour ``HH:MM:SS AM/PM`` (12 at midnight/noon), e.g. ``08:47:03 PM``."""
-    hour12 = now.hour % 12 or 12
     meridiem = "AM" if now.hour < 12 else "PM"
-    return f"{hour12:02d}:{now.minute:02d}:{now.second:02d} {meridiem}"
+    return f"{_hour12(now):02d}:{now.minute:02d}:{now.second:02d} {meridiem}"
 
 
 class ClockFrame(Frame):

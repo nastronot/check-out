@@ -56,3 +56,20 @@ def test_lines_fit_in_20_cells():
     assert len(top) <= 20
     assert len(bottom) <= 20
     assert bottom == "11:59:59 PM"
+
+
+# --- short_date_time (weather mode's top line) --------------------------------
+from checkout.frames.clock import short_date_time  # noqa: E402
+
+
+def test_short_date_time_matches_mockup():
+    assert short_date_time(datetime(2026, 9, 23, 20, 33, 59)) == "09/23/26 WED 08:33"
+
+
+def test_short_date_time_midnight_and_noon_are_12():
+    assert short_date_time(datetime(2026, 9, 27, 0, 5)) == "09/27/26 SUN 12:05"
+    assert short_date_time(datetime(2026, 9, 28, 12, 0)) == "09/28/26 MON 12:00"
+
+
+def test_short_date_time_is_18_chars_and_fits():
+    assert len(short_date_time(datetime(2026, 12, 31, 23, 59))) == 18
