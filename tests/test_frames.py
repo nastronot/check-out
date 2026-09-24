@@ -280,8 +280,8 @@ def test_meridiem_of_the_hour():
 
 
 def test_ampm_glyphs_match_the_drawn_frames():
-    assert _draw(_glyphs.AM) == [".###.", "#...#", "#####", "#...#", "##.##", "#.#.#", "#...#"]
-    assert _draw(_glyphs.PM) == [".###.", "#...#", "####.", "#....", "##.##", "#.#.#", "#...#"]
+    assert _draw(_glyphs.AM) == [".###.", "#...#", "#####", "#...#", ".#.#.", "#.#.#", "#.#.#"]
+    assert _draw(_glyphs.PM) == [".###.", "#...#", "####.", "#....", ".#.#.", "#.#.#", "#.#.#"]
 
 
 def test_weather_without_location_asks_for_one():
