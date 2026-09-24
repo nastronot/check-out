@@ -227,7 +227,7 @@ def _clamp_int(value, default: int, lo: int, hi: int) -> int:
         return default
     try:
         return max(lo, min(hi, int(value)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError: int(inf)
         return default
 
 

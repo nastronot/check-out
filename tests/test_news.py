@@ -232,3 +232,32 @@ def test_unknown_sources_are_ignored():
     f = _fetcher(_Web(bbc=BBC_1), sources=("bbc", "cnn"))
     f.fetch_once()
     assert set(f.status()["sources"]) == {"bbc"}
+
+
+# --- review fixes -------------------------------------------------------------------
+EMPTY = b"<rss><channel></channel></rss>"
+
+
+def test_a_feed_with_no_items_is_an_error_not_a_tight_loop():
+    f = _fetcher(_Web(bbc=EMPTY, nyt=EMPTY))
+    f.fetch_once()
+    assert f.due_in(f._clock()) == news.NewsFetcher.RETRY_START_S      # backed off
+    assert "no items" in f.error
+
+
+def test_an_empty_source_shows_an_error_while_the_others_work():
+    f = _fetcher(_Web(bbc=EMPTY, nyt=NYT_1))
+    f.fetch_once()
+    assert "no items" in f.status()["sources"]["bbc"]["error"]
+    assert f.latest().title == "NYT lead"
+    assert f.due_in(f._clock()) == 300
+
+
+@pytest.mark.parametrize("raw,clean", [
+    ("bad\x7fbyte\x01here", "badbytehere"),     # control characters and DEL never reach the glass
+    ("£5m and €3", "GBP5m and EUR3"),
+    ("Straße", "Strasse"),
+])
+def test_clean_title_is_printable_ascii_only(raw, clean):
+    out = news.clean_title(raw)
+    assert out == clean and all(0x20 <= ord(c) <= 0x7E for c in out)

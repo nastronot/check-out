@@ -35,3 +35,18 @@ describe('newsSummary', () => {
       .toMatch(/^Fetch failed/);
   });
 });
+
+describe('newsSummary review fixes', () => {
+  it('includes the time of the newest headline', () => {
+    const s = newsSummary({
+      sources: { nyt: src('Court blocks ban') },
+      latest: { source: 'nyt', title: 'Court blocks ban', published: '2026-09-24T05:59:15+00:00' },
+      error: null,
+      alerting: false,
+    });
+    expect(s).toMatch(/^NYT · Court blocks ban · \d{1,2}:\d{2}/);
+  });
+  it('says so when no sources are selected', () => {
+    expect(newsSummary({ sources: {}, latest: null, error: null, alerting: false }, 0)).toMatch(/no sources/i);
+  });
+});

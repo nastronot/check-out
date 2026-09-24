@@ -196,7 +196,7 @@
       showingLatest = false;
     }
   }
-  $: newsLine = newsSummary(status?.news);
+  $: newsLine = newsSummary(status?.news, state?.news_sources.length);
 
   // One line per colon choice: only the selected one is explained.
   const COLON_HINTS: Record<DynamicColon, string> = {

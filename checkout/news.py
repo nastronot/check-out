@@ -63,6 +63,7 @@ _ASCII = str.maketrans({
     "“": '"', "”": '"', "„": '"', "″": '"',
     "–": "-", "—": "-", "‒": "-", "−": "-",
     "…": "...", " ": " ",
+    "£": "GBP", "€": "EUR", "ß": "ss",   # meaningful symbols with no accent to drop
 })
 
 
@@ -72,7 +73,9 @@ def clean_title(text: str, strip_suffix: str = "") -> str:
     trailing ``strip_suffix`` (e.g. `` - AP News``) removed."""
     text = html.unescape(text).translate(_ASCII)
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text)
+    # Printable ASCII only: the driver would draw a control char or DEL as "?".
+    text = "".join(c for c in text if " " <= c <= "~").strip()
     if strip_suffix and text.endswith(strip_suffix.strip()):
         text = text[: -len(strip_suffix.strip())].rstrip(" -")
     return text
@@ -199,6 +202,11 @@ class NewsFetcher(Poller):
             source = SOURCES[src]
             try:
                 items = parse_rss(self._get_bytes(source.url, HTTP_TIMEOUT_S), source)
+                if not items:
+                    # An empty channel, an Atom feed, a portal page: not a lead.
+                    # Counting it as a failure keeps the poller backing off
+                    # instead of re-fetching back to back (it has no result).
+                    raise ValueError("feed has no items")
                 leads[src] = lead(items, source.pick)
             except self.FETCH_ERRORS as exc:
                 errors[src] = f"{type(exc).__name__}: {exc}"

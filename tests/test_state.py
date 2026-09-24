@@ -410,3 +410,9 @@ def test_news_settings_coerce(state_path, field, given, expected):
     import json
     state_path.write_text(json.dumps({field: given}))
     assert state.load_state()[field] == expected
+
+
+@pytest.mark.parametrize("field", ["news_interval_min", "news_repeat", "news_speed_ms"])
+def test_an_infinite_number_cannot_break_loading(state_path, field):
+    state_path.write_text('{"%s": Infinity}' % field)
+    assert isinstance(state.load_state()[field], int)
