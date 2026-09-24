@@ -16,9 +16,6 @@ LABEL_R = [31, 17, 21, 25, 21, 21, 31]
 LABEL_H = [31, 21, 21, 17, 21, 21, 31]
 LABEL_C = [31, 17, 21, 29, 21, 17, 31]
 
-# A 3x3 ring in the top rows, for temperatures.
-DEGREE = [4, 10, 4, 0, 0, 0, 0]
-
 # Weather clock colons, drawn by hand. A VFD cell has no per-cell brightness
 # (it is display-wide), so the colon animates by changing its dots instead.
 COLON_THIN = [0, 4, 4, 0, 4, 4, 0]      # the on/tick colon: centre column, 4 dots

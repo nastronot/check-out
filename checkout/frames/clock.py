@@ -50,7 +50,7 @@ def short_date_time(now: datetime, colon: str = ":") -> str:
     return f"{numeric_date(now)} {weekday(now)} {hh_mm(now, colon)}"
 
 
-def compact_date_time(now: datetime) -> str:
+def compact_date_time(now: datetime, colon: str = ":") -> str:
     """``M/D/YY DAY H:MM`` without leading zeros, e.g. ``9/23/26 WED 8:33``.
 
     Month, day and hour drop their leading zero (the year and minutes keep
@@ -58,7 +58,7 @@ def compact_date_time(now: datetime) -> str:
     day or hour shifts what follows right by one. 15-18 chars (longest:
     ``12/31/26 THU 12:59``)."""
     return (f"{now.month}/{now.day}/{now.year % 100:02d} "
-            f"{weekday(now)} {_hour12(now)}:{now.minute:02d}")
+            f"{weekday(now)} {_hour12(now)}{colon}{now.minute:02d}")
 
 
 def clock_date(now: datetime) -> str:

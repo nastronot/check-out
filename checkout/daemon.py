@@ -45,6 +45,7 @@ from datetime import datetime
 
 from . import config
 from .driver import (
+    CODE_PAGES,
     VFDDriver,
     VFDError,
     apply_glyph_placeholders,
@@ -76,6 +77,9 @@ SPECTRUM_STALE_MS = 200
 
 # Frames, keyed by name. "marquee" is handled specially in the tick (the
 # hardware ticker), not via a Frame; "message" covers the old "scroll" mode.
+# The code page dynamic mode needs for driver.BUILTIN_DEGREE (0xF8 = ° there).
+DYNAMIC_CODE_PAGE = CODE_PAGES["cp850"]
+
 # Weather's fetcher lives on its frame so tests can swap in a threadless one.
 DYNAMIC_FRAME = DynamicFrame(weather.WeatherFetcher(log=lambda m: log(m)))
 FRAMES = {f.name: f for f in (ClockFrame(), MessageFrame(), DYNAMIC_FRAME)}
@@ -428,7 +432,12 @@ def _apply_settings(
         driver.set_vertical_scroll(scroll)
         ctx["last_scroll"] = scroll
 
-    code_page = state.get("code_page", 0)
+    # Dynamic mode shows the display's built-in degree sign, which lives on the
+    # CP850 page; every other mode uses the page from settings.
+    if _norm_mode(state.get("mode")) == "dynamic":
+        code_page = DYNAMIC_CODE_PAGE
+    else:
+        code_page = state.get("code_page", 0)
     if code_page != ctx["last_code_page"]:
         try:
             driver.select_code_page(code_page)  # name or int 0..11

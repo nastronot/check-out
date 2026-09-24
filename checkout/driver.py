@@ -126,6 +126,14 @@ _PRINTABLE_MAX = 0x7E
 _REPLACEMENT = "?"
 _GLYPH_CODE_SET = frozenset(GLYPH_CODES)
 
+# The one character above 0x7E we send: a built-in DEGREE SIGN. Bench-confirmed
+# (v1.4.0, photos of 0x80-0xFF on pages 0 and 2) as a 4-dot ring at 0xF8 on the
+# CP850 page (code page 2), matching the standard CP850 table. On page 0 the
+# same byte is a different character, so it is only sent with page 2 selected
+# (dynamic mode). Using it frees the user-glyph slot a custom degree needed.
+BUILTIN_DEGREE = 0xF8
+_EXTENDED_ALLOWED = frozenset({BUILTIN_DEGREE})
+
 # {g0}..{g8} placeholders in message text -> the glyph code char for that slot.
 _GLYPH_PLACEHOLDER_RE = re.compile(r"\{g([0-8])\}")
 
@@ -164,14 +172,15 @@ def apply_glyph_placeholders(text: str) -> str:
 def _sanitize(text: str) -> bytes:
     """Map a string to safe display bytes.
 
-    Printable ASCII and the user-glyph codes pass through; anything else becomes
-    ``?`` so the byte stream can never contain a control code the display would
-    interpret.
+    Printable ASCII, the user-glyph codes and the built-in degree sign pass
+    through; anything else becomes ``?`` so the byte stream can never contain a
+    control code the display would interpret.
     """
     out = bytearray()
     for ch in text:
         o = ord(ch)
-        if _PRINTABLE_MIN <= o <= _PRINTABLE_MAX or o in _GLYPH_CODE_SET:
+        if (_PRINTABLE_MIN <= o <= _PRINTABLE_MAX or o in _GLYPH_CODE_SET
+                or o in _EXTENDED_ALLOWED):
             out.append(o)
         else:
             out.append(ord(_REPLACEMENT))

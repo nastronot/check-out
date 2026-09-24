@@ -68,3 +68,11 @@ describe('VfdPreview font mapping', () => {
     expect(cell[1]).toEqual([false, false, false, false, true]);
   });
 });
+
+describe('built-in extended characters', () => {
+  it('draws 0xF8 as the display\'s built-in degree ring (CP850 page)', () => {
+    const rows = cellDots(0xf8, {});
+    const lit = rows.map((r) => r.map((on) => (on ? '#' : '.')).join(''));
+    expect(lit).toEqual(['..#..', '.#.#.', '..#..', '.....', '.....', '.....', '.....']);
+  });
+});

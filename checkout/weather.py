@@ -20,9 +20,9 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .driver import GLYPH_CODES
+from .driver import BUILTIN_DEGREE, GLYPH_CODES
 from .glyphs import (COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
-                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
+                     COLON_TWIST_L, COLON_TWIST_R, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
                      LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN,
                      mirror)
 
@@ -51,8 +51,11 @@ LEGACY_COLON_MODES = {
 # slots: 5 labels, the dot + thin colons, and two PEAK frames for the animation
 # (wiggle's twists or twinkle's bursts), so switching between the two animations
 # redefines just slots 7 and 8.
-(SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
- SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
+# The degree sign is the display's BUILT-IN one (driver.BUILTIN_DEGREE, CP850
+# page), so it needs no slot. Slots: 4 labels, the thin colon (every time
+# feature, pacman included), then the animation frames.
+(SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_COLON_THIN,
+ SLOT_COLON_DOT, _SLOT_SPARE, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
 # Pacman needs up to 4 sprite frames, so its set uses slots 5-8 for them instead
 # of the colon glyphs (and its time colon is the font's ':'). Slots 5/6 hold the
 # chosen sprite's two frames, 7/8 hold pacman (duo only); WHICH bitmaps sit in
@@ -63,12 +66,11 @@ _LABEL_GLYPHS = {
     SLOT_LOW: LABEL_L,
     SLOT_CURRENT: LABEL_C,
     SLOT_RAIN: LABEL_R,
-    SLOT_DEGREE: DEGREE,
+    SLOT_COLON_THIN: COLON_THIN,   # the on/tick colon, and pacman's
 }
 _BASE_GLYPHS = {
     **_LABEL_GLYPHS,
     SLOT_COLON_DOT: COLON_DOT,
-    SLOT_COLON_THIN: COLON_THIN,   # also the on/tick colon
 }
 _PAC_FRAMES = {SLOT_PAC_A: PACMAN_CLOSED, SLOT_PAC_B: PACMAN_OPEN}
 # The chosen sprite's two frames. Duo (being eaten): the ghost glances right, the
@@ -111,7 +113,7 @@ def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[
     return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}
 
 
-_DEG = chr(GLYPH_CODES[SLOT_DEGREE])
+_DEG = chr(BUILTIN_DEGREE)
 _DASHES = " --"
 
 

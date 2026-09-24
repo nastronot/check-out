@@ -8,7 +8,9 @@ state from a JSON file each tick, renders the active frame to fit the 40-charact
 budget, and writes it to the display. Phase 1 ships a working clock plus the
 architecture seams (state file, frame interface) that a web UI plugs into later.
 The governing constraint: the port is **write-only at 9600 baud** and only the
-command bytes below are confirmed safe — never emit anything else.
+command bytes below are confirmed safe — never emit anything else. (One extended
+character is also confirmed: `0xF8`, a degree sign on the CP850 page — see
+`docs/hardware.md`.)
 
 ## Hardware reference
 
@@ -32,7 +34,7 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
 - `driver.py` — `VFDDriver`, owns **all** raw command bytes; nothing else emits bytes.
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
 - `frames/base.py` — `Frame` interface; `frames/{clock,message,ticker,weather}.py`.
-- `glyphs.py` — shared hand-drawn label/icon bitmaps (inverted L/R/H/C, degree, colon fade).
+- `glyphs.py` — shared hand-drawn label/icon bitmaps (inverted L/R/H/C, colons, sprites).
 - `state.py` — atomic load/save of `state.json` + `status.json`.
 - `daemon.py` — the SINGLE FAST LOOP + entrypoint; diffs frames, reconnects, shuts down clean.
 - `spectrum.py` — spectrum protocol + bar rendering + DSP + `SpectrumReceiver`/`Sender` (shared).
@@ -88,8 +90,11 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   sides; `twinkle` = 8 frames straight up and down through two burst sizes.
   Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
   `weather.glyph_set(colon)` picks them and the key `("dynamic", family)`
-  redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
-  fill all 9 slots. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
+  redefines only on a wiggle ↔ twinkle switch. **Slots:** labels H/L/C/R in
+  0-3, the thin colon in 4 (every time feature), dot 5, peaks 7/8 (6 spare).
+  The ° is the display's BUILT-IN one (`driver.BUILTIN_DEGREE`, 0xF8 on the
+  CP850 page), so dynamic mode selects code page 2 (`daemon.DYNAMIC_CODE_PAGE`)
+  and spends no slot on it. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
   between fields; 15-18 cells) left-aligned, then two sprite cells (18-19).
   **Duo:** pacman (19) eats the chosen sprite (18) — ghost glancing right, a
@@ -99,8 +104,8 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   `frames/dynamic.py pacman_cast(state, now)` returns the cast — `duo-<sprite>`
   or `<sprite>` — and both the frame and the daemon's glyph set use it;
   `weather.glyph_set("pacman", cast)` loads the sprite frames into slots 5/6
-  and, in duo, pacman into 7/8 (key `("dynamic", "pacman-<cast>")`). With the
-  5 labels that fills all 9 slots, so pacman's time colon is the font's `:`.
+  and, in duo, pacman into 7/8 (key `("dynamic", "pacman-<cast>")`) — with the
+  4 labels and the thin colon that is exactly 9.
   **Never use the hardware cursor or brightness for it** (see the bench
   TODO below). Weather ignores `animation`.
 
