@@ -1,6 +1,7 @@
 <script lang="ts">
   import { lineBudget } from '../message';
   import { audioDevices, refreshDevices } from '../stores';
+  import { weatherSummary } from '../weather';
   import type {
     Align,
     AppState,
@@ -11,12 +12,15 @@
     ScrollSource,
     SpectrumStyle,
     SpectrumLayout,
+    Status,
+    WeatherColon,
   } from '../types';
 
   export let state: AppState | null = null;
+  export let status: Status | null = null;
   export let patch: (p: Partial<AppState>) => void;
 
-  const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee', 'spectrum'];
+  const MODES: Mode[] = ['clock', 'message', 'scroll', 'marquee', 'spectrum', 'weather'];
   const ANIMATIONS: Animation[] = ['none', 'flash', 'blink', 'pulse'];
   const ALIGNS: Align[] = ['left', 'center', 'right'];
 
@@ -117,6 +121,21 @@
     { value: 'stereo_h', label: 'STEREO-H' },
   ];
   const setSpectrumLayout = (l: SpectrumLayout) => patch({ spectrum_layout: l });
+
+  // weather — location in decimal degrees (south/west negative) + the colon.
+  function coord(e: Event): number | null {
+    const v = (e.target as HTMLInputElement).value.trim();
+    return v === '' ? null : Number(v);
+  }
+  const setLat = (e: Event) => patch({ weather_lat: coord(e) });
+  const setLon = (e: Event) => patch({ weather_lon: coord(e) });
+  const COLONS: { value: WeatherColon; label: string }[] = [
+    { value: 'on', label: 'ON' },
+    { value: 'tick', label: 'TICK' },
+    { value: 'pulse', label: 'PULSE' },
+  ];
+  const setColon = (c: WeatherColon) => patch({ weather_colon: c });
+  $: weatherLine = weatherSummary(status?.weather);
 
   const DIRS: ScrollDir[] = ['left', 'right'];
   // Merge one animation_params field, keeping the siblings (full object so the
@@ -340,6 +359,53 @@
       </p>
     {/if}
 
+    <!-- WEATHER: date/time on top, today's high/low/current/rain below. -->
+    {#if state.mode === 'weather'}
+      <div class="field">
+        <span class="field__label">Location</span>
+        <div class="row coords">
+          <label class="field__hint">lat
+            <input
+              type="number" step="0.0001" min="-90" max="90"
+              placeholder="41.8781"
+              value={state.weather_lat ?? ''}
+              on:change={setLat}
+            /></label>
+          <label class="field__hint">lon
+            <input
+              type="number" step="0.0001" min="-180" max="180"
+              placeholder="-87.6298"
+              value={state.weather_lon ?? ''}
+              on:change={setLon}
+            /></label>
+        </div>
+        <span class="field__hint">
+          Decimal degrees; south and west are negative. Weather from Open-Meteo,
+          fetched once per 15-minute update.
+        </span>
+      </div>
+
+      <div class="field">
+        <span class="field__label">Colon</span>
+        <div class="seg">
+          {#each COLONS as c}
+            <button
+              type="button"
+              aria-pressed={state.weather_colon === c.value}
+              on:click={() => setColon(c.value)}>{c.label}</button
+            >
+          {/each}
+        </div>
+        <span class="field__hint">
+          <strong>On</strong> = steady. <strong>Tick</strong> = the cursor blinks on
+          the colon every second. <strong>Pulse</strong> = the whole display breathes
+          once a second (brightness is display-wide on this panel).
+        </span>
+      </div>
+
+      <p class="tip">{weatherLine}</p>
+    {/if}
+
     <!-- Per-line alignment. In MARQUEE the top row is the hardware ticker (it
          controls its own layout), so Line 1 justify is hidden; Line 2 (the
          static bottom) still justifies. N/A in SPECTRUM (both rows are bars). -->
@@ -386,8 +452,9 @@
          panel (mode-agnostic device settings). Control is per-mode only. -->
 
     <!-- Animation (N/A in marquee: the ticker owns the top row; N/A in
-         spectrum: the bars own both rows and the daemon forces "none"). -->
-    {#if state.mode !== 'marquee' && state.mode !== 'spectrum'}
+         spectrum: the bars own both rows and the daemon forces "none"; N/A in
+         weather: the Colon setting owns the brightness animation). -->
+    {#if state.mode !== 'marquee' && state.mode !== 'spectrum' && state.mode !== 'weather'}
     <div class="field">
       <span class="field__label">Animation</span>
       <div class="seg">
@@ -545,6 +612,14 @@
 
   .timing {
     margin-top: 10px;
+  }
+
+  .coords {
+    gap: 16px;
+  }
+
+  .coords input {
+    width: 11ch;
   }
 
   .timing input,

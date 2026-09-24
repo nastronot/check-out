@@ -26,8 +26,10 @@
   });
   onDestroy(stopPolling);
 
-  // Preview mirrors /api/status; glyph bitmaps come from the desired state.
-  $: glyphs = $appState?.glyphs ?? {};
+  // Preview mirrors /api/status. Glyph bitmaps: a mode's own set when one is
+  // loaded (weather), else the user's glyphs from the desired state (immediate
+  // while editing).
+  $: glyphs = $status?.mode_glyphs ?? $appState?.glyphs ?? {};
 
   // App version (Vite-injected from package.json, so it never goes stale).
   const version = __APP_VERSION__;
@@ -57,7 +59,7 @@
     </div>
 
     <div class="layout__controls">
-      <ControlPanel state={$appState} patch={patchState} />
+      <ControlPanel state={$appState} status={$status} patch={patchState} />
       <DisplayPanel state={$appState} patch={patchState} />
       <SavedMessages />
       <CommandBar />

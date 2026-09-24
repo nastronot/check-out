@@ -1,6 +1,6 @@
 // Mirrors checkout/state.py — keep in sync with the daemon's schema.
 
-export type Mode = 'clock' | 'message' | 'scroll' | 'marquee' | 'spectrum';
+export type Mode = 'clock' | 'message' | 'scroll' | 'marquee' | 'spectrum' | 'weather';
 /** Spectrum audio source: the mic, or a PipeWire/Pulse monitor of playback. */
 export type AudioSource = 'mic' | 'system';
 /** Spectrum render style: filled bars, or a single-row line per band (the peak). */
@@ -21,6 +21,20 @@ export type MarqueeBottom = 'static';
  * room for a third option.
  */
 export type ScrollSource = 'message' | 'clock';
+
+/** Weather colon: steady, cursor tick, or a once-a-second brightness pulse. */
+export type WeatherColon = 'on' | 'tick' | 'pulse';
+
+/** status.weather — the latest reading (°F / %) and fetch health. */
+export interface WeatherStatus {
+  high: number | null;
+  low: number | null;
+  current: number | null;
+  rain: number | null;
+  observed_at: string | null;
+  fetched_at: string | null;
+  error: string | null;
+}
 
 /** {"0".."8"} -> 7 row ints (low 5 bits = columns 1..5). Shared with state.glyphs. */
 export type GlyphMap = Record<string, number[]>;
@@ -62,6 +76,10 @@ export interface AppState {
   audio_decay: number;
   spectrum_style: SpectrumStyle;
   spectrum_layout: SpectrumLayout;
+  // weather (mode "weather") — location in decimal degrees + the colon behaviour
+  weather_lat: number | null;
+  weather_lon: number | null;
+  weather_colon: WeatherColon;
   command: CommandRef;
   updated_at?: string;
 }
@@ -99,6 +117,12 @@ export interface Status {
   /** stereo_h: one overall level per channel (0..95); null outside stereo_h. */
   spectrum_level_l?: number | null;
   spectrum_level_r?: number | null;
+  /** Cell (0..39) the hardware cursor is parked on, else null. */
+  cursor?: number | null;
+  /** The glyph set a mode loaded (weather/spectrum); null = state.glyphs. */
+  mode_glyphs?: GlyphMap | null;
+  /** Weather mode: the latest reading + fetch health; null elsewhere. */
+  weather?: WeatherStatus | null;
   last_command_id: string | null;
   updated_at: string | null;
 }
