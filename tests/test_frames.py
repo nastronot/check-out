@@ -127,3 +127,70 @@ def test_ticker_advances_one_cell_per_glyph():
     for code in GLYPH_CODES:
         assert chr(code) in top
     assert len(top) == 20
+
+
+# --- WeatherFrame ------------------------------------------------------------
+from checkout.frames.weather import NO_LOCATION, WeatherFrame, colon_animation  # noqa: E402
+from checkout.renderer import render_lines  # noqa: E402
+
+
+class _FakeFetcher:
+    def __init__(self, reading=None):
+        self.reading = reading
+
+    def latest(self):
+        return self.reading
+
+
+_WX = {"weather_lat": 41.9, "weather_lon": -87.6}
+_T = datetime(2026, 9, 23, 20, 33, 12)
+
+
+def test_weather_top_is_the_short_clock():
+    top, _ = WeatherFrame(_FakeFetcher()).render(_T, _WX)
+    assert top == "09/23/26 WED 08:33"
+
+
+def test_weather_without_location_asks_for_one():
+    _, bottom = WeatherFrame(_FakeFetcher()).render(_T, {})
+    assert bottom == NO_LOCATION
+
+
+def test_weather_bottom_is_twenty_cells_even_with_no_reading():
+    _, bottom = WeatherFrame(_FakeFetcher()).render(_T, _WX)
+    assert len(bottom) == 20
+
+
+def _cursor(state, now, align="center"):
+    frame = WeatherFrame(_FakeFetcher())
+    top, bottom = render_lines(*frame.render(now, state), top_align=align)
+    return frame.cursor(now, state, top, bottom), top
+
+
+def test_tick_parks_cursor_on_the_colon_in_the_first_half_second():
+    state = {**_WX, "weather_colon": "tick"}
+    cur, top = _cursor(state, _T.replace(microsecond=100_000))
+    assert top[cur] == ":"
+    assert _cursor(state, _T.replace(microsecond=600_000))[0] is None
+
+
+def test_colon_cell_follows_alignment():
+    state = {**_WX, "weather_colon": "tick"}
+    left, _ = _cursor(state, _T, "left")
+    right, _ = _cursor(state, _T, "right")
+    assert (left, right) == (15, 17)
+
+
+def test_on_and_pulse_never_park_the_cursor():
+    for colon in ("on", "pulse"):
+        assert _cursor({**_WX, "weather_colon": colon}, _T)[0] is None
+
+
+def test_colon_defaults_to_tick():
+    assert _cursor(_WX, _T)[0] is not None
+
+
+def test_colon_animation():
+    assert colon_animation({"weather_colon": "pulse"}) == ("pulse", {"period_ms": 1000})
+    assert colon_animation({"weather_colon": "tick"}) == ("none", {})
+    assert colon_animation({"weather_colon": "on"}) == ("none", {})
