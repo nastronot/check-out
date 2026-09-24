@@ -1,12 +1,19 @@
 <script lang="ts">
-  import type { AppState, Brightness } from '../types';
+  import CommandBar from './CommandBar.svelte';
+  import StatusReadout from './StatusReadout.svelte';
+  import type { AppState, Brightness, Health, Status } from '../types';
 
-  // Mode-agnostic DEVICE settings (apply regardless of mode): brightness, blank,
-  // hardware vertical-scroll, and code page. Split out of the per-mode Control
-  // panel so the two concerns don't clutter each other. Same state fields, same
-  // optimistic + debounced PUT-on-change as before — this is a relocation.
+  // Everything about the DEVICE rather than a mode, in one panel: brightness and
+  // blank, the fire-once commands (self-test / reset), and the daemon readout.
   export let state: AppState | null = null;
+  export let status: Status | null = null;
+  export let health: Health = { ok: false, daemon_alive: false };
   export let patch: (p: Partial<AppState>) => void;
+
+  // Hardware vertical scroll and code page are HIDDEN (v1.4.0), not removed:
+  // neither is used by any mode today (message scrolls in software; the panel's
+  // default code page is the one the preview font matches). Set true to show.
+  const SHOW_HW_SETTINGS = false;
 
   // Brightness has FOUR discrete levels (index 0..3); a stepped slider, NOT a %.
   const BRIGHTNESS_LABELS = ['MIN', 'MED', 'MED+', 'MAX'];
@@ -72,7 +79,7 @@
       </div>
     </div>
 
-    <!-- Blank + hardware scroll -->
+    <!-- Blank (+ hardware scroll, hidden) -->
     <div class="row switches">
       <label class="switch">
         <input type="checkbox" checked={state.blank} on:change={setBlank} />
@@ -80,23 +87,33 @@
         <span class="switch__label">Blank</span>
       </label>
 
-      <label class="switch" title="Hardware vertical scroll — for marquee effects">
-        <input type="checkbox" checked={state.scroll} on:change={setScroll} />
-        <span class="switch__track"></span>
-        <span class="switch__label">HW scroll</span>
-      </label>
+      {#if SHOW_HW_SETTINGS}
+        <label class="switch" title="Hardware vertical scroll — for marquee effects">
+          <input type="checkbox" checked={state.scroll} on:change={setScroll} />
+          <span class="switch__track"></span>
+          <span class="switch__label">HW scroll</span>
+        </label>
+      {/if}
     </div>
 
-    <!-- Code page -->
-    <div class="field">
-      <span class="field__label">Code page</span>
-      <select value={state.code_page} on:change={setCodePage}>
-        {#each CODE_PAGES as cp}
-          <option value={cp.value}>{cp.value} · {cp.label}</option>
-        {/each}
-      </select>
-    </div>
+    {#if SHOW_HW_SETTINGS}
+      <!-- Code page -->
+      <div class="field">
+        <span class="field__label">Code page</span>
+        <select value={state.code_page} on:change={setCodePage}>
+          {#each CODE_PAGES as cp}
+            <option value={cp.value}>{cp.value} · {cp.label}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
   {/if}
+
+  <div class="subhead">Commands</div>
+  <CommandBar />
+
+  <div class="subhead">Daemon</div>
+  <StatusReadout {status} {health} />
 </section>
 
 <style>
@@ -107,6 +124,17 @@
 
   .switches {
     margin-bottom: 14px;
+  }
+
+  /* section headings inside the one Display panel */
+  .subhead {
+    margin: 18px 0 10px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-faint);
   }
 
   /* brightness: a 4-stop stepped slider (NOT a continuous %) */

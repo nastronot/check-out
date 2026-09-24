@@ -18,8 +18,8 @@
   }
 </script>
 
-<section class="panel">
-  <div class="panel__title">Commands</div>
+<!-- A section of the Display panel (not a panel of its own). -->
+<div class="commands">
   <div class="row">
     <button
       class="btn"
@@ -43,7 +43,7 @@
   <p class="field__hint">
     Fire-once actions. The daemon runs each exactly once (nonce-guarded).
   </p>
-</section>
+</div>
 
 <style>
   .last {

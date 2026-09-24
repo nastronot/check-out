@@ -89,37 +89,9 @@
 <section class="panel glyphs">
   <div class="panel__title">Glyph editor</div>
 
-  <!-- slot strip -->
-  <div class="strip" role="tablist" aria-label="glyph slots">
-    {#each SLOTS as s}
-      <button
-        class="slot"
-        class:selected={selected === s.i}
-        class:dropping={dropSlot === s.i}
-        role="tab"
-        aria-selected={selected === s.i}
-        title={`slot ${s.i} → code 0x${s.code.toString(16).toUpperCase()} (drop a library glyph here to load)`}
-        on:click={() => selectedGlyphSlot.set(s.i)}
-        on:dragover={(e) => onSlotDragOver(e, s.i)}
-        on:dragleave={() => (dropSlot = dropSlot === s.i ? -1 : dropSlot)}
-        on:drop={(e) => onSlotDrop(e, s.i)}
-      >
-        <span class="slot__thumb"><GlyphCanvas rows={slotRows[s.i]} dotSize={5} pitch={6} /></span>
-        <span class="slot__label">
-          g{s.i}
-          <span
-            class="syncdot"
-            class:syncing={sync[s.i] === 'syncing'}
-            class:synced={sync[s.i] === 'synced'}
-            class:error={sync[s.i] === 'error'}
-          ></span>
-        </span>
-      </button>
-    {/each}
-  </div>
-
-  <!-- editor + tools -->
-  <div class="editor">
+  <!-- board: the draw grid (left) sets the height; the 3x3 slot grid (right)
+       stretches to match it. Tools sit underneath both. -->
+  <div class="board">
     <div class="editor__grid">
       <GlyphCanvas
         rows={selectedRows}
@@ -130,40 +102,68 @@
       />
     </div>
 
-    <div class="editor__tools">
-      <div class="ref">
-        <span>use <code>{SLOTS[selected].token}</code> in a message</span>
-        <button class="btn btn--mini" on:click={copyToken}>
-          {copied ? 'copied ✓' : 'copy'}
+    <div class="slots" role="tablist" aria-label="glyph slots">
+      {#each SLOTS as s}
+        <button
+          class="slot"
+          class:selected={selected === s.i}
+          class:dropping={dropSlot === s.i}
+          role="tab"
+          aria-selected={selected === s.i}
+          title={`slot ${s.i} → code 0x${s.code.toString(16).toUpperCase()} (drop a library glyph here to load)`}
+          on:click={() => selectedGlyphSlot.set(s.i)}
+          on:dragover={(e) => onSlotDragOver(e, s.i)}
+          on:dragleave={() => (dropSlot = dropSlot === s.i ? -1 : dropSlot)}
+          on:drop={(e) => onSlotDrop(e, s.i)}
+        >
+          <span class="slot__thumb"><GlyphCanvas rows={slotRows[s.i]} dotSize={5} pitch={6} fit="height" /></span>
+          <span class="slot__label">
+            g{s.i}
+            <span
+              class="syncdot"
+              class:syncing={sync[s.i] === 'syncing'}
+              class:synced={sync[s.i] === 'synced'}
+              class:error={sync[s.i] === 'error'}
+            ></span>
+          </span>
+        </button>
+      {/each}
+    </div>
+  </div>
+
+  <div class="tools">
+    <div class="ref">
+      <span>use <code>{SLOTS[selected].token}</code> in a message</span>
+      <button class="btn btn--mini" on:click={copyToken}>
+        {copied ? 'copied ✓' : 'copy'}
+      </button>
+    </div>
+
+    <div class="tool">
+      <span class="tool__label">seed from char</span>
+      <div class="row">
+        <input
+          type="text"
+          maxlength="1"
+          bind:value={charInput}
+          placeholder="A"
+          spellcheck="false"
+          on:keydown={(e) => e.key === 'Enter' && loadChar()}
+        />
+        <button class="btn btn--mini" on:click={loadChar} disabled={!charKnown}>
+          load
         </button>
       </div>
+    </div>
 
-      <div class="tool">
-        <span class="tool__label">seed from char</span>
-        <div class="row">
-          <input
-            type="text"
-            maxlength="1"
-            bind:value={charInput}
-            placeholder="A"
-            spellcheck="false"
-            on:keydown={(e) => e.key === 'Enter' && loadChar()}
-          />
-          <button class="btn btn--mini" on:click={loadChar} disabled={!charKnown}>
-            load
-          </button>
-        </div>
-      </div>
-
-      <div class="tool">
-        <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
-        <span class="sync-label">
-          {#if sync[selected] === 'syncing'}syncing…
-          {:else if sync[selected] === 'synced'}synced ✓
-          {:else if sync[selected] === 'error'}sync failed
-          {/if}
-        </span>
-      </div>
+    <div class="tool">
+      <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
+      <span class="sync-label">
+        {#if sync[selected] === 'syncing'}syncing…
+        {:else if sync[selected] === 'synced'}synced ✓
+        {:else if sync[selected] === 'error'}sync failed
+        {/if}
+      </span>
     </div>
   </div>
 
@@ -175,16 +175,26 @@
 </section>
 
 <style>
-  /* slot strip */
-  .strip {
+  /* board: draw grid + 3x3 slot grid side by side, equal height */
+  .board {
     display: grid;
-    grid-template-columns: repeat(9, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: stretch;
+    margin-bottom: 14px;
+  }
+
+  .slots {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
     gap: 8px;
-    margin-bottom: 16px;
+    min-height: 0;
   }
 
   .slot {
     appearance: none;
+    min-height: 0; /* a grid cell: let the row height, not the thumb, decide */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -213,8 +223,13 @@
   }
 
   .slot__thumb {
-    display: block;
+    /* fills the slot's height left over by the label; the thumbnail sizes
+       itself to that height (GlyphCanvas fit="height") */
+    flex: 1 1 0;
+    min-height: 0;
     width: 100%;
+    display: flex;
+    justify-content: center;
   }
 
   .slot__label {
@@ -247,13 +262,6 @@
   }
 
   /* editor */
-  .editor {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) 1fr;
-    gap: 16px;
-    align-items: start;
-  }
-
   .editor__grid {
     background: #03090a;
     border: 1px solid var(--bezel);
@@ -262,10 +270,13 @@
     box-shadow: var(--shadow-inset);
   }
 
-  .editor__tools {
+  /* tools: one row under the board */
+  .tools {
     display: flex;
-    flex-direction: column;
-    gap: 14px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 24px;
+    margin-bottom: 10px;
   }
 
   .ref {
@@ -323,8 +334,11 @@
   }
 
   @media (max-width: 560px) {
-    .editor {
+    .board {
       grid-template-columns: 1fr;
+    }
+    .slots {
+      grid-template-rows: none;
     }
   }
 </style>

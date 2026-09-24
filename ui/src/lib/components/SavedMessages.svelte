@@ -70,7 +70,6 @@
           <div class="item__main">
             <span class="item__name">{m.name}</span>
             <span class="item__preview">{preview(m)}</span>
-            <span class="item__meta">{m.mode}</span>
           </div>
           <div class="item__actions">
             <button class="btn btn--mini" disabled={busy !== ''} on:click={() => recall(m)}>
@@ -131,12 +130,6 @@
     text-overflow: ellipsis;
   }
 
-  .item__meta {
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-faint);
-  }
 
   .item__actions {
     display: flex;

@@ -14,6 +14,10 @@
   export let level = 3;
   /** When true, pointer-drag paints cells and emits `paint` events. */
   export let interactive = false;
+  /** 'width': fill the container's width (height follows the 5x7 shape).
+   *  'height': fill the PARENT's height (width follows) — for a cell whose
+   *  height is set by its layout, e.g. a slot in the editor's 3x3 grid. */
+  export let fit: 'width' | 'height' = 'width';
 
   const dispatch = createEventDispatcher<{
     paint: { row: number; col: number; on: boolean };
@@ -28,13 +32,13 @@
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let ro: ResizeObserver | undefined;
-  let lastCssW = -1;
+  let lastSize = '';
 
   onMount(() => {
     ctx = canvas.getContext('2d');
     sizeAndDraw();
     ro = new ResizeObserver(() => sizeAndDraw());
-    ro.observe(canvas);
+    ro.observe(fit === 'height' && canvas.parentElement ? canvas.parentElement : canvas);
     return () => ro?.disconnect();
   });
 
@@ -43,11 +47,20 @@
 
   function sizeAndDraw(): void {
     if (!canvas || !ctx) return;
-    const cssW = canvas.clientWidth || W;
-    if (cssW !== lastCssW) {
-      lastCssW = cssW;
+    let cssW: number;
+    let cssH: number;
+    if (fit === 'height') {
+      cssH = canvas.parentElement?.clientHeight || H;
+      cssW = (cssH * W) / H;
+      canvas.style.width = `${cssW}px`;
+    } else {
+      cssW = canvas.clientWidth || W;
+      cssH = (cssW * H) / W;
+    }
+    const size = `${cssW}x${cssH}`;
+    if (size !== lastSize) {
+      lastSize = size;
       const dpr = window.devicePixelRatio || 1;
-      const cssH = (cssW * H) / W;
       canvas.style.height = `${cssH}px`;
       canvas.width = Math.max(1, Math.round(cssW * dpr));
       canvas.height = Math.max(1, Math.round(cssH * dpr));
@@ -129,6 +142,7 @@
 <canvas
   bind:this={canvas}
   class:interactive
+  class:fit-height={fit === 'height'}
   style="aspect-ratio: {W} / {H};"
   aria-hidden="true"
   on:pointerdown={onDown}
@@ -142,6 +156,9 @@
     display: block;
     width: 100%;
     border-radius: 3px;
+  }
+  canvas.fit-height {
+    width: auto; /* set in px by sizeAndDraw from the parent's height */
   }
   canvas.interactive {
     cursor: crosshair;

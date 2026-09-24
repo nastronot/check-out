@@ -96,6 +96,14 @@ mode list (`ControlPanel.svelte` `MODES`) because the hardware ticker scrolls
 only the top row at one fixed speed; its daemon path, state keys and panel still
 work — add `'marquee'` back to `MODES` to restore it.
 
+### UI layout (v1.4.0)
+Left column: preview, glyph editor (draw grid + 3x3 slot grid side by side at
+equal height — slot thumbnails use `GlyphCanvas fit="height"` — tools below),
+glyph library. Right column: Control, Saved messages, then ONE Display panel
+(brightness, blank, commands, daemon readout; `CommandBar` and `StatusReadout`
+render as its sections). HW scroll and code page are hidden behind
+`DisplayPanel.svelte` `SHOW_HW_SETTINGS = false` — kept, not removed.
+
 ### Cell-diff writes (v1.4.0)
 When the glass holds a known frame (`last_emit` is a show), the daemon calls
 `driver.show_changes(old, new)`: only changed cells, `0x10 pos <bytes>` per run

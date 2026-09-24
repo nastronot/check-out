@@ -16,35 +16,32 @@
   }
 </script>
 
-<section class="panel readout">
-  <div class="panel__title">Daemon</div>
-  <div class="readout__grid">
-    <div class="cell">
-      <span class="k">link</span>
-      <span class="v">
-        <span
-          class="led"
-          class:led--on={health.daemon_alive}
-          class:led--dead={!health.daemon_alive}
-        ></span>
-        {health.daemon_alive ? 'ALIVE' : 'OFFLINE'}
-      </span>
-    </div>
-    <div class="cell">
-      <span class="k">mode</span>
-      <span class="v">{status?.mode ?? '—'}</span>
-    </div>
-    <div class="cell">
-      <span class="k">updated</span>
-      <span class="v">{ago(status?.updated_at)}</span>
-    </div>
-    <div class="cell">
-      <span class="k">last cmd</span>
-      <span class="v mono-id">{status?.last_command_id?.slice(0, 8) ?? '—'}</span>
-    </div>
+<!-- A section of the Display panel (not a panel of its own). -->
+<div class="readout__grid">
+  <div class="cell">
+    <span class="k">link</span>
+    <span class="v">
+      <span
+        class="led"
+        class:led--on={health.daemon_alive}
+        class:led--dead={!health.daemon_alive}
+      ></span>
+      {health.daemon_alive ? 'ALIVE' : 'OFFLINE'}
+    </span>
   </div>
-</section>
-
+  <div class="cell">
+    <span class="k">mode</span>
+    <span class="v">{status?.mode ?? '—'}</span>
+  </div>
+  <div class="cell">
+    <span class="k">updated</span>
+    <span class="v">{ago(status?.updated_at)}</span>
+  </div>
+  <div class="cell">
+    <span class="k">last cmd</span>
+    <span class="v mono-id">{status?.last_command_id?.slice(0, 8) ?? '—'}</span>
+  </div>
+</div>
 <style>
   .readout__grid {
     display: grid;
