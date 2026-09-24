@@ -343,3 +343,15 @@ def test_weather_pacman_solo_and_sprite(state_path):
         s = state.load_state()
         assert (s["weather_pacman_solo"], s["weather_pacman_sprite"]) == (solo, sprite), old
         assert "weather_pacman" not in s
+
+
+def test_legacy_pacman_key_from_an_old_client_wins(state_path):
+    # An old UI bundle still sends weather_pacman; when it lands next to the new
+    # keys it is the newer write, so "both" must turn solo OFF.
+    import json
+    state_path.write_text(json.dumps({"weather_pacman_solo": True,
+                                      "weather_pacman_sprite": "pacman",
+                                      "weather_pacman": "both"}))
+    s = state.load_state()
+    assert s["weather_pacman_solo"] is False
+    assert s["weather_pacman_sprite"] == "pacman"        # remembered sprite kept

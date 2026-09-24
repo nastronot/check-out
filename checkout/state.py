@@ -155,10 +155,13 @@ def _backfill(data: dict) -> dict:
         merged["weather_colon"], merged["weather_colon_half"] = legacy
     merged["weather_colon_half"] = bool(merged.get("weather_colon_half"))
     # The earlier single key "weather_pacman" (both | ghost | pacman) splits into
-    # a solo switch + a remembered sprite.
+    # a solo switch + a remembered sprite. If it is present it came from an old
+    # client (e.g. a stale UI bundle) and is the newer write, so it wins.
     legacy_pacman = merged.pop("weather_pacman", None)
     if legacy_pacman in PACMAN_SPRITES:
         merged["weather_pacman_solo"], merged["weather_pacman_sprite"] = True, legacy_pacman
+    elif legacy_pacman == "both":
+        merged["weather_pacman_solo"] = False
     merged["weather_pacman_solo"] = bool(merged.get("weather_pacman_solo"))
     if merged.get("weather_pacman_sprite") not in PACMAN_SPRITES:
         merged["weather_pacman_sprite"] = "ghost"
