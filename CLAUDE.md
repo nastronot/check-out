@@ -122,6 +122,11 @@ glyph library. Right column: Control, Saved messages, then ONE Display panel
 render as its sections). HW scroll and code page are hidden behind
 `DisplayPanel.svelte` `SHOW_HW_SETTINGS = false` — kept, not removed.
 
+### UI caching (v1.4.0)
+`web/app.py` `_UIFiles` serves `index.html` as `Cache-Control: no-cache` and
+Vite's content-hashed `assets/*` as `immutable`. Without it a browser kept an old
+page after a rebuild and ran a stale bundle (it sent a retired state key twice).
+
 ### Cell-diff writes (v1.4.0)
 When the glass holds a known frame (`last_emit` is a show), the daemon calls
 `driver.show_changes(old, new)`: only changed cells, `0x10 pos <bytes>` per run

@@ -207,8 +207,27 @@ def remove_glyph(item_id: str) -> dict:
 
 
 # --- static UI (mounted last so /api/* wins) -------------------------------
+class _UIFiles(StaticFiles):
+    """The built UI with explicit caching.
+
+    index.html (and anything else unhashed) is ``no-cache``: the browser must
+    revalidate it every load. Without a header it may heuristically reuse an old
+    page after a rebuild and keep running a stale bundle — that sent an old
+    state key twice during v1.4.0. Vite's ``assets/`` files carry a content hash
+    in their name, so a new build is a new URL and they can be cached for good.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if path.startswith("assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if os.path.isdir(UI_DIST):
-    app.mount("/", StaticFiles(directory=UI_DIST, html=True), name="ui")
+    app.mount("/", _UIFiles(directory=UI_DIST, html=True), name="ui")
 else:
     @app.get("/")
     def _no_ui() -> JSONResponse:

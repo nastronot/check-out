@@ -137,3 +137,24 @@ def test_health_stale_status_is_not_alive(client, paths):
 
 def test_health_missing_status_is_not_alive(client):
     assert client.get("/api/health").json()["daemon_alive"] is False
+
+
+# --- caching: the page revalidates, hashed assets are immutable ----------------
+def test_ui_page_is_never_served_stale(client):
+    # Without this a browser may reuse an old index.html after a rebuild and run
+    # a stale UI bundle (it happened twice during v1.4.0).
+    r = client.get("/")
+    if r.status_code == 503:
+        pytest.skip("UI not built")
+    assert r.headers["cache-control"] == "no-cache"
+
+
+def test_hashed_assets_are_cached_for_good(client):
+    import re
+    page = client.get("/")
+    if page.status_code == 503:
+        pytest.skip("UI not built")
+    asset = re.search(r'/(assets/[^"]+\.js)', page.text).group(1)
+    r = client.get("/" + asset)
+    assert r.status_code == 200
+    assert "immutable" in r.headers["cache-control"]
