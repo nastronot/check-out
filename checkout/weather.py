@@ -10,10 +10,8 @@ per refresh instead of polling. Nothing here touches the serial port.
 
 from __future__ import annotations
 
-import http.client
 import json
 import math
-import threading
 import time
 import urllib.parse
 import urllib.request
@@ -261,8 +259,11 @@ def bottom_line(reading: Reading | None, now: float) -> str:
     )
 
 
-RETRY_START_S = 60      # first retry after a failed fetch
-RETRY_MAX_S = 900       # retries double up to this (the data's own refresh)
+from .poller import Poller
+
+# Retry timing lives on the shared Poller; re-exported for callers and tests.
+RETRY_START_S = Poller.RETRY_START_S
+RETRY_MAX_S = Poller.RETRY_MAX_S
 
 
 def _http_get_json(url: str, timeout: float):
@@ -275,94 +276,47 @@ def _iso(ts: float | None) -> str | None:
     return None if ts is None else datetime.fromtimestamp(ts, timezone.utc).isoformat()
 
 
-class WeatherFetcher:
-    """Fetches weather on a background thread so the display loop never waits.
+class WeatherFetcher(Poller):
+    """Weather on the shared background :class:`~checkout.poller.Poller`.
 
-    The daemon calls :meth:`set_location` every tick (cheap; only a CHANGE wakes
-    the thread) with the location while in weather mode and None otherwise, and
-    reads :meth:`latest`. The thread sleeps on an Event until the next fetch is
-    due — it never polls. A failed fetch keeps the last good reading and retries
-    after 60 s, doubling to 15 min. A reply for a location that changed while the
-    request was out is dropped.
+    The key is the ``(lat, lon)`` location. The daemon sets it every tick (None
+    outside dynamic mode) and reads :meth:`latest`. The next fetch follows
+    Open-Meteo's own refresh (:func:`next_fetch_at`), not a fixed timer.
     """
 
     def __init__(self, get_json=_http_get_json, clock=time.time, log=None,
                  autostart: bool = True) -> None:
+        super().__init__(clock=clock, log=log, autostart=autostart, name="weather fetch")
         self._get_json = get_json
-        self._clock = clock
-        self._log = log or (lambda msg: None)
-        self._autostart = autostart
-        self._lock = threading.Lock()
-        self._wake = threading.Event()
-        self._loc = None            # wanted now (None = idle)
-        self._reading_loc = None    # the location the reading/backoff belong to
         self._reading: Reading | None = None
-        self._error: str | None = None
-        self._retry_at: float | None = None
-        self._backoff = 0.0
-        self._thread: threading.Thread | None = None
-        self._stopping = False
 
     def set_location(self, loc) -> None:
-        with self._lock:
-            if loc == self._loc:
-                return
-            self._loc = loc
-            if loc is not None and loc != self._reading_loc:
-                self._reading_loc = loc
-                self._reading = None
-                self._error = None
-                self._retry_at = None
-                self._backoff = 0.0
-        if loc is not None and self._autostart and self._thread is None:
-            self._thread = threading.Thread(
-                target=self._run, name="weather-fetch", daemon=True)
-            self._thread.start()
-        self._wake.set()
+        self.set_key(loc)
 
     def latest(self) -> Reading | None:
         with self._lock:
             return self._reading
 
-    def due_in(self, now: float) -> float | None:
-        with self._lock:
-            if self._loc is None:
-                return None
-            if self._retry_at is not None:
-                at = self._retry_at
-            elif self._reading is None:
-                return 0.0
-            else:
-                at = next_fetch_at(self._reading)
-        return max(0.0, at - now)
+    # --- Poller hooks ---------------------------------------------------------
+    def _fetch(self, key, now):
+        return parse(self._get_json(build_url(*key), HTTP_TIMEOUT_S), now)
 
-    def fetch_once(self) -> None:
-        with self._lock:
-            loc = self._loc
-        if loc is None:
-            return
-        now = self._clock()
-        try:
-            reading, error = parse(self._get_json(build_url(*loc), HTTP_TIMEOUT_S), now), None
-        except (OSError, ValueError, http.client.HTTPException) as exc:
-            reading, error = None, f"{type(exc).__name__}: {exc}"
-        with self._lock:
-            if loc != self._reading_loc:
-                return  # the location changed while the request was out
-            if reading is not None:
-                self._reading, self._error = reading, None
-                self._retry_at, self._backoff = None, 0.0
-            else:
-                self._error = error
-                self._backoff = min(RETRY_MAX_S, max(RETRY_START_S, self._backoff * 2))
-                self._retry_at = now + self._backoff
-        if error:
-            self._log(f"weather fetch failed ({error}); retrying in {self._backoff:.0f}s")
+    def _next_at(self, key, now) -> float:
+        return next_fetch_at(self._reading)
+
+    def _accept(self, key, result, now) -> None:
+        self._reading = result
+
+    def _has_result(self) -> bool:
+        return self._reading is not None
+
+    def _reset(self) -> None:
+        self._reading = None
 
     def status(self) -> dict | None:
         """What status.json reports: the reading, its times and the last error."""
         with self._lock:
-            if self._reading_loc is None:
+            if self._result_key is None:
                 return None
             r = self._reading
             return {
@@ -372,30 +326,5 @@ class WeatherFetcher:
                 "rain": r.rain if r else None,
                 "observed_at": _iso(r.observed_at if r else None),
                 "fetched_at": _iso(r.fetched_at if r else None),
-                "error": self._error,
+                "error": self.error,
             }
-
-    def stop(self) -> None:
-        self._stopping = True
-        self._wake.set()
-
-    def _run(self) -> None:
-        while not self._stopping:
-            self._wake.clear()  # before reading the schedule, so no wake-up is lost
-            wait = self.due_in(self._clock())
-            if wait is None:
-                self._wake.wait()
-            elif wait > 0:
-                self._wake.wait(wait)
-            else:
-                try:
-                    self.fetch_once()
-                except Exception as exc:  # noqa: BLE001 — keep the thread alive
-                    # fetch_once handles network/reply errors itself; anything
-                    # else is a bug. Log it and back off instead of letting the
-                    # thread die and weather read " --" forever.
-                    self._log(f"weather fetcher error: {exc!r}")
-                    with self._lock:
-                        self._error = repr(exc)
-                        self._backoff = min(RETRY_MAX_S, max(RETRY_START_S, self._backoff * 2))
-                        self._retry_at = self._clock() + self._backoff
