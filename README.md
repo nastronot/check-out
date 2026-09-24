@@ -495,9 +495,8 @@ errors and no a11y warnings before commit.
   services (daemon, audioviz, web) that start on login (`deploy/`). User (not
   lingering/headless) so spectrum's PipeWire monitor capture has an active
   session. See **Running as a service** above.
-- **News feed into SCROLL.** The per-row content-source enum is already news-ready
-  (`message` | `clock`, with a documented `news` extension point in `state.py` and
-  the daemon's `_scroll_row`) — wiring a live news source is a drop-in.
+- **A continuous news ticker** (e.g. a message row) — `checkout/news.py`'s
+  `NewsFetcher` is the reusable headline source; dynamic's alerts already use it.
 - **Additional display frames + rotation** between modes.
 ---
 

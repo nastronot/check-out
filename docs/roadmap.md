@@ -53,6 +53,9 @@
   reset); cell-diff serial writes; `status.json` gains `mode_glyphs`, `weather`;
   location saved via a Save button. Also: `scroll` mode merged into `message`;
   the `marquee` button hidden (code kept). (done)
+- **v1.5.0:** dynamic news alerts — AP (via Google News) / BBC / NYT lead
+  stories polled on the shared poller; NEWS ALERT banner + scrolling headline,
+  repeat, speed, interval, flash/throb, Show latest. (done)
 - **Phase 3:** more frames + rotation.
 - Brightness byte first confirmed in v0.1.1 (then thought to be two levels:
   dim/bright; superseded by the four-level finding in v0.6.2).

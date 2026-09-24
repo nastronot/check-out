@@ -38,6 +38,12 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
 - `spectrum.py` — spectrum protocol + bar rendering + DSP + `SpectrumReceiver`/`Sender` (shared).
 - `audioviz.py` — the audio capture + FFT process (separate; streams bars over a socket).
 - `weather.py` — Open-Meteo request/reply, the weather bottom line, and `WeatherFetcher`.
+- `poller.py` — the shared background `Poller` (thread, scheduled wake-ups, backoff) that
+  `WeatherFetcher` and `NewsFetcher` build on. New "fetch now and then" features reuse it.
+- `news.py` — news sources (AP via Google News, BBC, NYT), RSS parsing, `NewsFetcher`.
+  Reusable: a future news ticker reads the same fetcher.
+- `frames/news_alert.py` — the NEWS ALERT screen's pure pieces (banner, headline window,
+  duration, flash/throb curves).
 
 ### Single fast loop (v0.9.0)
 The daemon runs ONE fast loop (~30Hz, `config.LOOP_HZ`), NOT a 250ms tick. Each
@@ -128,6 +134,20 @@ headers are dot + title left, any `.btn` pushed right; `.seg` rows fill the widt
 with equal buttons, `.seg--sm` is the compact inline variant; `.ctl-row` +
 `.ctl-row__name` is "short label, then controls on one line"; `.readout` is a
 value at the right of a field label; hints (`.field__hint`) are one short line.
+
+### News alerts (v1.5.0)
+Dynamic mode, `news_enabled`: `NewsFetcher` polls the selected sources every
+`news_interval_min` for each source's **lead story** (BBC/NYT: first item;
+AP via Google News RSS — AP blocks its own feeds — newest by `pubDate`). The
+first lead per source is recorded silently; a later new lead (by link, never a
+repeat) becomes the pending alert, newest wins, no backlog. `DynamicFrame.tick`
+starts it: top = `{g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}` (7 bar glyphs,
+glyph key `("dynamic", "news")`), bottom = the headline scrolling with a 6-space
+gap for 1 + `news_repeat` passes at `news_speed_ms`, then back to time/weather.
+`news_effect` flash/throb goes through the generic `Frame.brightness` hook. The
+`show_news` command (UI **Show latest**) plays the newest lead. Headlines are
+cleaned to ASCII. The stdlib XML parser is used deliberately: expat ≥ 2.4.1
+refuses entity bombs and external entities (tests pin it).
 
 ### UI caching (v1.4.0)
 `web/app.py` `_UIFiles` serves `index.html` as `Cache-Control: no-cache` and

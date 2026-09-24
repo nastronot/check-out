@@ -65,9 +65,7 @@
   const setAnimation = (a: Animation) => patch({ animation: a });
   const setScrollSpeed = (e: Event) => patch({ scroll_speed_ms: num(e) });
 
-  // software scroll (mode "scroll") — per-row content source + scroll + dir.
-  // SCROLL_SOURCES is the per-row "Source" selector; EXTENSION POINT: add
-  // { value: 'news', label: 'News' } here when the news source lands.
+  // message rows — per-row content source + scroll + direction.
   const SCROLL_SOURCES: { value: ScrollSource; label: string }[] = [
     { value: 'message', label: 'Message' },
     { value: 'clock', label: 'Clock' },

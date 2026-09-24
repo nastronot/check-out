@@ -53,13 +53,11 @@ def defaults() -> dict:
         # back-compat but always normalized to "static".
         "marquee_bottom": "static",      # "static" only (legacy "clock" -> "static")
         "marquee_bottom_text": "",       # the static bottom text
-        # --- software scroll (mode "scroll"): per-row source + scroll + dir ---
+        # --- message rows: per-row source + scroll + direction ---
         # Each row independently selects a CONTENT SOURCE and (for "message")
-        # whether it scrolls and in which direction. "clock" shows the live time
-        # line. This is the flexible, news-ready mode (a "news" source slots into
-        # _SCROLL_SOURCES later without reshaping the schema).
-        "scroll_top_source": "message",     # "message" | "clock" (future: "news")
-        "scroll_bottom_source": "message",  # "message" | "clock" (future: "news")
+        # whether it scrolls and in which direction. "clock" shows the live time.
+        "scroll_top_source": "message",     # "message" | "clock"
+        "scroll_bottom_source": "message",  # "message" | "clock"
         "scroll_top": False,             # scroll the top row (when source "message")
         "scroll_bottom": False,          # scroll the bottom row (when source "message")
         "scroll_dir_top": "left",        # "left" | "right"
@@ -110,9 +108,8 @@ def defaults() -> dict:
 # user-owned map and a write replaces it entirely.
 _NESTED_DEFAULTS = ("animation_params", "command")
 
-# Per-row content sources for software scroll. EXTENSION POINT: add "news" here
-# (and wire a news renderer in the daemon) to give a row a live news feed — the
-# schema/UI shape already accommodate a third option.
+# Per-row content sources for message rows. (A news row, if wanted later, would
+# read checkout/news.py's NewsFetcher — the reusable headline source.)
 _SCROLL_SOURCES = ("message", "clock")
 _DEFAULT_SCROLL_SOURCE = "message"
 

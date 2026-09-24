@@ -17,11 +17,7 @@ export type Align = 'left' | 'center' | 'right';
 export type ScrollDir = 'left' | 'right';
 /** Marquee bottom is static-only (a live clock there stops the hardware scroll). */
 export type MarqueeBottom = 'static';
-/**
- * Per-row content source for software SCROLL mode. EXTENSION POINT: add 'news'
- * here (and a daemon renderer) for a live news row — the UI selector already has
- * room for a third option.
- */
+/** Per-row content source for message rows. */
 export type ScrollSource = 'message' | 'clock';
 
 /** Dynamic time feature: steady colon, blinking colon, the twinkle animation,

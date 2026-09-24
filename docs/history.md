@@ -747,3 +747,30 @@ twinkle is exactly 9/9.
 **Wiggle removed.** The wiggle time feature and its glyphs (dot, thin colon, two
 twists) are gone; a saved `wiggle` — and the older names that became it — now
 loads as twinkle. Time features are on, tick, twinkle and pacman.
+
+## v1.5.0 — news alerts in dynamic
+
+**What shipped.** With News on, dynamic mode polls AP, BBC and NYT for each
+source's lead story; a new lead interrupts the screen with a NEWS ALERT banner
+(fade-in bar glyphs) over the headline scrolling for 1 + repeat passes, with an
+optional flash or throb, then returns to time and weather. Show latest plays the
+newest lead on demand. Spec: `docs/superpowers/specs/2026-09-24-dynamic-news-design.md`.
+
+**Why lead stories, and why RSS.** Measured at 1 AM, the five candidate feeds
+added 10 items in an hour — "newest item anywhere" would alert nearly every
+check. BBC and NYT order by editorial importance, so the first item is what the
+outlet is leading with; that changes a few times an hour and is alert-worthy.
+AP blocks its own feeds (403) and has no public RSS, so it comes via Google
+News RSS filtered to apnews.com (relevance-ordered, so its lead is the newest by
+publish time). News APIs need keys and cap or delay free use; RSS needs neither.
+
+**Reuse.** The weather fetcher's thread / wake-up / backoff / stale-reply logic
+became `checkout/poller.py`; `WeatherFetcher` and the new `NewsFetcher` both sit
+on it (weather's tests passed unchanged). `news.py` is self-contained so a
+continuous ticker can use it later. The alert's pure pieces live in
+`frames/news_alert.py`, and frames gained a generic `brightness()` hook.
+
+**Superseded plan.** v0.8.0 left "news-ready" extension points for a news
+*row source* on the scroll/message rows (described in the v0.8.0 entries above).
+News arrived as dynamic alerts instead, so those stubs were removed; a news row,
+if wanted, would read `NewsFetcher`.

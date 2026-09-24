@@ -255,7 +255,7 @@ this control surface in the daemon; Phase 2b adds the Svelte/FastAPI UI on top.
   "align_top": "left" | "center" | "right",     // line 1 justify (default center)
   "align_bottom": "left" | "center" | "right",  // line 2 justify (default center)
   "marquee_text": "...", "marquee_bottom": "static", "marquee_bottom_text": "...",  // bottom is static-only
-  "scroll_top_source": "message" | "clock",      // per-row content source (news-ready)
+  "scroll_top_source": "message" | "clock",      // per-row content source
   "scroll_bottom_source": "message" | "clock",
   "scroll_top": true, "scroll_bottom": false,
   "scroll_dir_top": "left" | "right", "scroll_dir_bottom": "left" | "right",
@@ -296,11 +296,10 @@ ignored. All actions are idempotent — safe to re-run once on restart: `self_te
 chars); `scroll` and `marquee` (the two scrolling systems, below).
 
 **Two scrolling systems (v0.7.3, bench-validated; refined v0.8.0).**
-- **`scroll` — software, flexible (the news-ready home).** The `message`'s two lines
+- **`scroll` — software, flexible (merged into `message` in v1.4.0).** The `message`'s two lines
   (newline-split). Each row INDEPENDENTLY picks a **content source**
-  (`scroll_top_source` / `scroll_bottom_source` = `message` | `clock`, default `message`;
-  **news-ready** — a third `news` source slots into the enum + per-row selector without
-  reshaping the schema). A `clock` row shows the live TIME line (`HH:MM:SS AM/PM`, refreshed
+  (`scroll_top_source` / `scroll_bottom_source` = `message` | `clock`, default `message`).
+  News arrived instead as dynamic-mode alerts (v1.5.0, `checkout/news.py`). A `clock` row shows the live TIME line (`HH:MM:SS AM/PM`, refreshed
   each second, statically aligned; date-vs-time is a future sub-choice, defaults to time).
   A `message` row scrolls (`scroll_top`/`scroll_bottom`) in either direction
   (`scroll_dir_top`/`scroll_dir_bottom` = `left`/`right`) via `renderer.ticker_window`,
