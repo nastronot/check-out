@@ -283,3 +283,33 @@ def test_missing_keys_filled_from_defaults(state_path):
     assert loaded["message"] == "partial"
     assert loaded["brightness"] == 3  # filled from defaults (Maximum)
     assert loaded["blank"] is False
+
+
+# --- weather keys ----------------------------------------------------------------
+def test_weather_defaults(state_path):
+    s = state.load_state()
+    assert s["weather_lat"] is None and s["weather_lon"] is None
+    assert s["weather_colon"] == "tick"
+
+
+@pytest.mark.parametrize("lat,lon,expected", [
+    (41.88, -87.63, (41.88, -87.63)),
+    ("41.88", "-87.63", (41.88, -87.63)),   # the UI may send strings
+    ("", "", (None, None)),                  # a cleared input
+    (91, -181, (None, None)),                # out of range
+    ("north", True, (None, None)),           # junk; bool is not a number here
+    (float("nan"), 0, (None, 0.0)),
+])
+def test_weather_coords_coerce(state_path, lat, lon, expected):
+    import json
+    state_path.write_text(json.dumps({"weather_lat": lat, "weather_lon": lon}))
+    s = state.load_state()
+    assert (s["weather_lat"], s["weather_lon"]) == expected
+
+
+def test_weather_colon_validates(state_path):
+    import json
+    state_path.write_text(json.dumps({"weather_colon": "pulse"}))
+    assert state.load_state()["weather_colon"] == "pulse"
+    state_path.write_text(json.dumps({"weather_colon": "wiggle"}))
+    assert state.load_state()["weather_colon"] == "tick"

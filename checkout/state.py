@@ -17,12 +17,14 @@ file that only sets some fields.
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 from datetime import datetime, timezone
 
 from . import config
 from .driver import normalize_brightness
+from .weather import COLON_MODES
 
 # Default brightness index (3 = Maximum) — bright out of the box.
 _DEFAULT_BRIGHTNESS = 3
@@ -35,7 +37,7 @@ def _now_iso() -> str:
 def defaults() -> dict:
     """A fresh state dict with every key at its default value."""
     return {
-        "mode": "clock",                 # "clock"|"message"|"scroll"|"marquee"|"spectrum"
+        "mode": "clock",                 # "clock"|"message"|"scroll"|"marquee"|"spectrum"|"weather"
         "message": "",                   # text for message / scroll modes
         "align_top": "center",           # "left" | "center" | "right" — line 1
         "align_bottom": "center",        # "left" | "center" | "right" — line 2
@@ -79,6 +81,10 @@ def defaults() -> dict:
         "audio_decay": 0.85,             # bar release factor (attack-fast/release-slow)
         "spectrum_style": "bars",        # "bars" (filled) | "line" (single-row peak)
         "spectrum_layout": "full",       # "full" | "stereo_v" | "stereo_h"
+        # --- weather (mode "weather") ---
+        "weather_lat": None,             # decimal degrees, -90..90, or null
+        "weather_lon": None,             # decimal degrees, -180..180, or null
+        "weather_colon": "tick",         # "on" (steady) | "tick" (cursor) | "pulse"
         "command": {"id": None, "action": None, "args": {}},
         "updated_at": _now_iso(),
     }
@@ -138,7 +144,23 @@ def _backfill(data: dict) -> dict:
     # Spectrum layout: full (default) | stereo_v | stereo_h; coerce junk.
     if merged.get("spectrum_layout") not in _SPECTRUM_LAYOUTS:
         merged["spectrum_layout"] = "full"
+    # Weather location: a number in range, else null (the UI may send strings or "").
+    merged["weather_lat"] = _coord(merged.get("weather_lat"), 90.0)
+    merged["weather_lon"] = _coord(merged.get("weather_lon"), 180.0)
+    if merged.get("weather_colon") not in COLON_MODES:
+        merged["weather_colon"] = "tick"
     return merged
+
+
+def _coord(value, limit: float) -> float | None:
+    """A coordinate in ``[-limit, limit]`` as a float, else None."""
+    if value is None or isinstance(value, bool) or value == "":
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) and -limit <= v <= limit else None
 
 
 def _clamp_float(value, default: float, lo: float, hi: float) -> float:
