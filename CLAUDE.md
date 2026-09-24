@@ -87,11 +87,11 @@ the earlier `weather_pacman` key and development colon names migrate on load.
   steady; `tick` = `:` then blank. On/tick end the line with a space and an
   AM/PM marker glyph (`glyphs.AM`/`PM`, slots 5/6 — their own set, key
   `("dynamic", "ampm")`), exactly 20 cells; `wiggle` = 12 frames, twists alternating
-  sides; `twinkle` = 8 frames straight up and down through two burst sizes.
-  Wiggle's twists and twinkle's bursts share the PEAK slots 7/8 —
-  `weather.glyph_set(colon)` picks them and the key `("dynamic", family)`
-  redefines only on a wiggle ↔ twinkle switch. 5 labels + dot + thin + 2 peaks
-  fill all 9 slots. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
+  sides; `twinkle` = 6 frames straight up and down (dot, diamond, four corner
+  dots). Every feature keeps the 5 labels in slots 0-4 and loads its own glyphs
+  above them via `weather.glyph_set(colon)` (key `("dynamic", family)`):
+  on/tick 7/9 (AM, PM), wiggle 9/9 (dot, thin, 2 twists), twinkle 8/9 (3
+  frames), pacman duo 9/9, pacman solo 7/9. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
   between fields; 15-18 cells) left-aligned, then two sprite cells (18-19).
   **Duo:** pacman (19) eats the chosen sprite (18) — ghost glancing right, a

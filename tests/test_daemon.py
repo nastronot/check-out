@@ -937,7 +937,7 @@ def test_clock_second_change_is_a_small_write(monkeypatch, capsys):
     assert len(tx) == 4 and tx[-1] == 0x14                       # one cell
 
 
-def test_switching_wiggle_and_twinkle_redefines_only_the_peak_slots(monkeypatch):
+def test_switching_colon_features_loads_each_ones_glyphs(monkeypatch):
     from checkout import glyphs
 
     _, _, state = _weather_setup(monkeypatch, colon="tick")
@@ -952,8 +952,8 @@ def test_switching_wiggle_and_twinkle_redefines_only_the_peak_slots(monkeypatch)
     assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
     daemon.tick_once(drv, {**state, "dynamic_colon": "twinkle"}, ctx, now=NOW)
     assert ctx["mode_glyphs_key"] == ("dynamic", "twinkle")
-    assert drv.defined[7] == glyphs.COLON_TWINKLE_SMALL
-    assert drv.defined[8] == glyphs.COLON_TWINKLE_BIG
+    assert drv.defined[5] == glyphs.TWINKLE_DOT
+    assert drv.defined[7] == glyphs.TWINKLE_CORNERS
 
 
 class _RecordingDefines(_CountingDriver):

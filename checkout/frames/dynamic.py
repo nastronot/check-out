@@ -14,8 +14,8 @@ would change):
 - ``tick``    — the same, with the ``:`` blanking for half of each loop.
 - ``wiggle``  — 12 frames: blank, dot, thin, twist-R, thin, dot, blank, dot, thin,
   twist-L, thin, dot (then blank again) — the twists alternate sides.
-- ``twinkle`` — 8 frames straight up and down: blank, dot, thin, small burst,
-  big burst, small burst, thin, dot.
+- ``twinkle`` — 6 frames straight up and down: blank, a dot, a diamond, four
+  corner dots, the diamond, the dot.
 
 - ``pacman``  — ``9/23/26 WED 8:33`` (no leading zeros, one space between
   fields) left-aligned, and in the last two cells pacman eating the chosen
@@ -29,8 +29,8 @@ would change):
   the other way (its own two frames, loaded by ``weather.glyph_set``).
 
 Each loop takes 1 second, or 2 with ``dynamic_colon_half`` (half speed), and is
-locked to the wall clock (a 2 s loop starts on even seconds). Wiggle's twists and
-twinkle's bursts share the two PEAK glyph slots (``weather.glyph_set``).
+locked to the wall clock (a 2 s loop starts on even seconds). Each time feature
+loads its own glyphs (``weather.glyph_set``).
 
 Only the colon cell changes, so the daemon's cell-diff writes one cell.
 """
@@ -55,6 +55,9 @@ _DOT = chr(GLYPH_CODES[weather.SLOT_COLON_DOT])
 _THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _PEAK_A = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_A])
 _PEAK_B = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_B])
+_TWINKLE_1 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_1])
+_TWINKLE_2 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_2])
+_TWINKLE_3 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_3])
 
 # The frames of each animated colon, spread evenly across the loop. Each loop
 # wraps back to its first frame, so every frame is the same length.
@@ -62,7 +65,7 @@ _LOOPS = {
     "tick": (":", _BLANK),
     "wiggle": (_BLANK, _DOT, _THIN, _PEAK_A, _THIN, _DOT,
                _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT),
-    "twinkle": (_BLANK, _DOT, _THIN, _PEAK_A, _PEAK_B, _PEAK_A, _THIN, _DOT),
+    "twinkle": (_BLANK, _TWINKLE_1, _TWINKLE_2, _TWINKLE_3, _TWINKLE_2, _TWINKLE_1),
 }
 
 

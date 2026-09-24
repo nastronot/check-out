@@ -26,8 +26,9 @@ COLON_THIN = [0, 4, 4, 0, 4, 4, 0]      # a one-column colon (wiggle/twinkle fra
 COLON_DOT = [0, 0, 4, 0, 4, 0, 0]       # the two inner dots only
 COLON_TWIST_R = [0, 12, 4, 0, 4, 6, 0]  # wiggle: top hooks right, bottom hooks left
 COLON_TWIST_L = [0, 6, 4, 0, 4, 12, 0]  # wiggle: the mirror (top left, bottom right)
-COLON_TWINKLE_SMALL = [0, 14, 4, 0, 4, 14, 0]  # twinkle: a bar caps each dot
-COLON_TWINKLE_BIG = [4, 14, 4, 0, 4, 14, 4]    # twinkle: each dot a small plus
+TWINKLE_DOT = [0, 0, 0, 4, 0, 0, 0]          # twinkle: a single centre dot
+TWINKLE_DIAMOND = [0, 0, 4, 10, 4, 0, 0]     # twinkle: a small diamond around it
+TWINKLE_CORNERS = [0, 0, 10, 0, 10, 0, 0]    # twinkle: four corner dots
 
 # AM / PM markers for the on/tick clock: the letter stacked over an M.
 AM = [14, 17, 31, 17, 27, 21, 17]

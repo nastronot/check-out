@@ -255,7 +255,10 @@ _THIN = chr(GLYPH_CODES[_weather.SLOT_COLON_THIN])
 _PKA = chr(GLYPH_CODES[_weather.SLOT_COLON_PEAK_A])
 _PKB = chr(GLYPH_CODES[_weather.SLOT_COLON_PEAK_B])
 _WIGGLE = [" ", _DOT, _THIN, _PKA, _THIN, _DOT, " ", _DOT, _THIN, _PKB, _THIN, _DOT]
-_TWINKLE = [" ", _DOT, _THIN, _PKA, _PKB, _PKA, _THIN, _DOT]
+_T1 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_1])
+_T2 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_2])
+_T3 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_3])
+_TWINKLE = [" ", _T1, _T2, _T3, _T2, _T1]
 
 
 def _top(colon, us, second=12, half=False):
@@ -333,13 +336,13 @@ def test_wiggle_alternates_twists_once_a_second():
 
 
 def test_twinkle_goes_straight_up_and_down_once_a_second():
-    assert _loop("twinkle", 8) == _TWINKLE
+    assert _loop("twinkle", 6) == _TWINKLE
 
 
 def test_half_speed_doubles_every_loop():
     assert _loop("tick", 2, half=True) == [":", " "]         # 1 s on, 1 s off
     assert _loop("wiggle", 12, half=True) == _WIGGLE
-    assert _loop("twinkle", 8, half=True) == _TWINKLE
+    assert _loop("twinkle", 6, half=True) == _TWINKLE
 
 
 def test_half_speed_leaves_on_steady():
@@ -363,8 +366,9 @@ def test_wiggle_glyphs_match_the_drawn_frames():
 
 
 def test_twinkle_glyphs_match_the_drawn_frames():
-    assert _draw(_glyphs.COLON_TWINKLE_SMALL) == [".....", ".###.", "..#..", ".....", "..#..", ".###.", "....."]
-    assert _draw(_glyphs.COLON_TWINKLE_BIG) == ["..#..", ".###.", "..#..", ".....", "..#..", ".###.", "..#.."]
+    assert _draw(_glyphs.TWINKLE_DOT) == [".....", ".....", ".....", "..#..", ".....", ".....", "....."]
+    assert _draw(_glyphs.TWINKLE_DIAMOND) == [".....", ".....", "..#..", ".#.#.", "..#..", ".....", "....."]
+    assert _draw(_glyphs.TWINKLE_CORNERS) == [".....", ".....", ".#.#.", ".....", ".#.#.", ".....", "....."]
 
 
 # --- pacman colon mode ----------------------------------------------------------

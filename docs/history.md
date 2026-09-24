@@ -731,3 +731,8 @@ layout drops leading zeros.
 hand-drawn glyphs, the letter stacked over an M — making the top line exactly 20
 cells (`09/24/26 THU 12:11 ` + marker). They load their own glyph set (the five
 labels + AM + PM); wiggle, twinkle and pacman are unchanged.
+
+**New twinkle.** Twinkle is now a star: a centre dot, a small diamond, four
+corner dots (`TWINKLE_DOT/DIAMOND/CORNERS`), run straight up and down with a
+blank — 6 frames a loop. It has its own glyph set (8/9: the labels + 3 frames);
+the old burst glyphs were removed, and wiggle keeps the dot/thin/twist set.

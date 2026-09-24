@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
-from .glyphs import (AM, COLON_DOT, COLON_THIN, COLON_TWINKLE_BIG, COLON_TWINKLE_SMALL,
+from .glyphs import (AM, COLON_DOT, COLON_THIN, TWINKLE_CORNERS, TWINKLE_DIAMOND, TWINKLE_DOT,
                      COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
                      LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN, PM,
                      mirror)
@@ -47,10 +47,10 @@ LEGACY_COLON_MODES = {
     "burst2": ("twinkle", True),
 }
 
-# Weather's glyph set (loaded on entry by the daemon's mode-glyph swap). All 9
-# slots: 5 labels, the dot + thin colons, and two PEAK frames for the animation
-# (wiggle's twists or twinkle's bursts), so switching between the two animations
-# redefines just slots 7 and 8.
+# Dynamic's glyph sets (loaded by the daemon's mode-glyph swap): every time
+# feature keeps the 5 labels in slots 0-4 and loads its own glyphs above them —
+# wiggle: dot, thin colon, two twists (5-8); twinkle: three frames (5-7);
+# on/tick: AM/PM (5-6); pacman: sprite frames (5-8).
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
  SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
 # Pacman needs up to 4 sprite frames, so its set uses slots 5-8 for them instead
@@ -61,6 +61,8 @@ SLOT_SPRITE_A, SLOT_SPRITE_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
 # on/tick show the font's colon and an AM/PM marker, so their set is the labels
 # plus these two (switching to an animated colon loads that set instead).
 SLOT_AM, SLOT_PM = 5, 6
+# twinkle is its own set too: the labels plus its three frames.
+SLOT_TWINKLE_1, SLOT_TWINKLE_2, SLOT_TWINKLE_3 = 5, 6, 7
 _LABEL_GLYPHS = {
     SLOT_HIGH: LABEL_H,
     SLOT_LOW: LABEL_L,
@@ -87,10 +89,7 @@ _SOLO_SPRITE_FRAMES = {
     "heart": (HEART_FULL, HEART_EMPTY),
     "pacman": (PACMAN_CLOSED, PACMAN_OPEN),
 }
-_PEAKS = {
-    "wiggle": (COLON_TWIST_R, COLON_TWIST_L),
-    "twinkle": (COLON_TWINKLE_SMALL, COLON_TWINKLE_BIG),
-}
+_WIGGLE_PEAKS = (COLON_TWIST_R, COLON_TWIST_L)
 
 
 def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[int]]]:
@@ -100,6 +99,9 @@ def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[
     loads its own sprite frames, and the family names it."""
     if colon in ("on", "tick"):
         return "ampm", {**_LABEL_GLYPHS, SLOT_AM: AM, SLOT_PM: PM}
+    if colon == "twinkle":
+        return "twinkle", {**_LABEL_GLYPHS, SLOT_TWINKLE_1: TWINKLE_DOT,
+                           SLOT_TWINKLE_2: TWINKLE_DIAMOND, SLOT_TWINKLE_3: TWINKLE_CORNERS}
     if colon == "pacman":
         solo = not cast.startswith("duo-")
         sprite = cast.removeprefix("duo-")
@@ -110,9 +112,8 @@ def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[
         if not solo:
             glyphs.update(_PAC_FRAMES)
         return f"pacman-{sprite if solo else 'duo-' + sprite}", glyphs
-    family = "twinkle" if colon == "twinkle" else "wiggle"
-    peak_a, peak_b = _PEAKS[family]
-    return family, {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}
+    peak_a, peak_b = _WIGGLE_PEAKS
+    return "wiggle", {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}
 
 
 _DEG = chr(GLYPH_CODES[SLOT_DEGREE])
