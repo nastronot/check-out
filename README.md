@@ -33,7 +33,7 @@ process. The constraint — two lines, twenty characters — is the aesthetic.
 - **Weather clock** — `MM/DD/YY DAY HH:MM` over the current temperature and the
   next 24 hours' high, low and rain total (inches) for a latitude + longitude
   (Open-Meteo, no API key, fetched once per 15-minute update). The colon stands
-  in for seconds: steady, blinking, an animated wiggle or twinkle, or a pacman
+  in for seconds: steady, blinking, a twinkling star, or a pacman
   layout with a ghost and pacman beside the time (full or half speed).
 - **Web control surface** — a Svelte single-page app over a FastAPI backend with a
   **live pixel-accurate phosphor preview** of the glass.

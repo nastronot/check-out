@@ -875,7 +875,7 @@ def test_weather_tick_rewrites_only_the_colon_cell(monkeypatch, capsys):
 
 
 def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsys):
-    for colon in ("on", "tick", "wiggle", "twinkle", "pacman"):
+    for colon in ("on", "tick", "twinkle", "pacman"):
         _, _, state = _weather_setup(monkeypatch, colon=colon)
         drv = VFDDriver(dry_run=True)
         ctx = daemon._new_ctx()
@@ -889,28 +889,6 @@ def test_weather_never_uses_the_hardware_cursor_or_brightness(monkeypatch, capsy
         assert 0x13 not in tx, colon                             # no cursor-on
         assert 0x04 not in tx, colon                             # no brightness writes
 
-
-def test_weather_wiggle_steps_the_colon_glyphs(monkeypatch, capsys):
-    from checkout import weather as wx
-    from checkout.driver import GLYPH_CODES
-
-    _, _, state = _weather_setup(monkeypatch, colon="wiggle")
-    drv = VFDDriver(dry_run=True)
-    ctx = daemon._new_ctx()
-    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 23, 20, 33, 12, 999_000))
-    capsys.readouterr()
-    cells = []
-    for k in range(12):
-        daemon.tick_once(drv, state, ctx, now=datetime(
-            2026, 9, 23, 20, 33, 13, (2 * k + 1) * 1_000_000 // 24))
-        tx = _tx_after(capsys)
-        if tx:                                   # a repeat of the last cell writes nothing
-            assert tx[:2] == [0x10, 16] and tx[-1] == 0x14 and len(tx) == 4
-            cells.append(tx[2])
-    dot, thin = GLYPH_CODES[wx.SLOT_COLON_DOT], GLYPH_CODES[wx.SLOT_COLON_THIN]
-    twr, twl = GLYPH_CODES[wx.SLOT_COLON_PEAK_A], GLYPH_CODES[wx.SLOT_COLON_PEAK_B]
-    sp = ord(" ")
-    assert cells == [sp, dot, thin, twr, thin, dot, sp, dot, thin, twl, thin, dot]
 
 def test_mode_change_repaints_the_whole_frame(monkeypatch, capsys):
     monkeypatch.setattr(daemon, "save_status", lambda s: None)
@@ -948,8 +926,8 @@ def test_switching_colon_features_loads_each_ones_glyphs(monkeypatch):
     drv.defined.clear()
     daemon.tick_once(drv, {**state, "dynamic_colon": "on"}, ctx, now=NOW)
     assert drv.defined == {}                         # on/tick share the am/pm set
-    daemon.tick_once(drv, {**state, "dynamic_colon": "wiggle"}, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
+    daemon.tick_once(drv, {**state, "dynamic_colon": "pacman"}, ctx, now=NOW)
+    assert ctx["mode_glyphs_key"][1].startswith("pacman-")
     daemon.tick_once(drv, {**state, "dynamic_colon": "twinkle"}, ctx, now=NOW)
     assert ctx["mode_glyphs_key"][1].startswith("twinkle-")
     assert drv.defined[5] == glyphs.TWINKLE_DOT
@@ -967,14 +945,12 @@ class _RecordingDefines(_CountingDriver):
 
 
 def test_weather_is_always_centered_whatever_the_saved_alignment(monkeypatch):
-    written, _, state = _weather_setup(monkeypatch, colon="wiggle")   # an 18-cell line
-    state = {**state, "align_top": "left", "align_bottom": "right"}
+    # Every top line is a full 20 cells now; the bottom proves the rule.
+    written, _, state = _weather_setup(monkeypatch, colon="on")
+    state = {**state, "weather_lat": None, "align_bottom": "right"}
     daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(),
                      now=datetime(2026, 9, 23, 20, 33, 12))
-    top = written[-1]["top"]
-    assert top.startswith(" ") and top.endswith(" ")      # 18 chars, centered
-    assert top.strip().startswith("09/23/26")
-
+    assert written[-1]["bottom"] == "SET LOCATION".center(20)
 
 def test_message_still_honours_the_saved_alignment(monkeypatch):
     written = []

@@ -21,10 +21,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .driver import GLYPH_CODES
-from .glyphs import (AM, COLON_DOT, COLON_THIN, TWINKLE_CORNERS, TWINKLE_DIAMOND, TWINKLE_DOT,
-                     COLON_TWIST_L, COLON_TWIST_R, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
-                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN, PM,
-                     mirror)
+from .glyphs import (AM, DEGREE, GHOST_A, GHOST_B, GHOST_C, HEART_EMPTY, HEART_FULL,
+                     LABEL_C, LABEL_H, LABEL_L, LABEL_R, PACMAN_CLOSED, PACMAN_OPEN,
+                     PM, TWINKLE_CORNERS, TWINKLE_DIAMOND, TWINKLE_DOT, mirror)
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 STALE_S = 3600          # a reading this old shows " --" (never pass old data as current)
@@ -32,28 +31,28 @@ FETCH_SLACK_S = 60      # fetch this long after the API's next refresh is due
 HTTP_TIMEOUT_S = 10
 
 # dynamic_colon values: a steady colon, an on/off tick, an animated loop
-# (wiggle, twinkle), or pacman (a steady colon with sprites beside the time).
+# (twinkle), or pacman (a steady colon with sprites beside the time).
 # dynamic_colon_half doubles every loop's length.
-COLON_MODES = ("on", "tick", "wiggle", "twinkle", "pacman")
+COLON_MODES = ("on", "tick", "twinkle", "pacman")
 # dynamic_pacman_sprite: which sprite shows alone when solo (remembered while
 # solo is off, since the widest date/time forces solo — frames/dynamic.py).
 PACMAN_SPRITES = ("ghost", "heart", "pacman")
 # Names used while v1.4.0 was built -> (final name, half speed); state.py migrates.
 LEGACY_COLON_MODES = {
-    "pulse": ("wiggle", False),
-    "throb": ("wiggle", False),
-    "throb2": ("wiggle", True),
+    "wiggle": ("twinkle", False),   # wiggle was removed; twinkle is the animation left
+    "pulse": ("twinkle", False),
+    "throb": ("twinkle", False),
+    "throb2": ("twinkle", True),
     "burst": ("twinkle", False),
     "burst2": ("twinkle", True),
 }
 
 # Dynamic's glyph sets (loaded by the daemon's mode-glyph swap): every time
 # feature keeps the 5 labels in slots 0-4 and loads its own glyphs above them —
-# wiggle: dot, thin colon, two twists (5-8); twinkle: three frames (5-7);
+# twinkle: three frames (5-7);
 # twinkle also the AM/PM marker (8); on/tick: the marker only (8); pacman:
 # sprite frames (5-8).
-(SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
- SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
+SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE = range(5)
 # Pacman needs up to 4 sprite frames, so its set uses slots 5-8 for them instead
 # of the colon glyphs (and its time colon is the font's ':'). Slots 5/6 hold the
 # chosen sprite's two frames, 7/8 hold pacman (duo only); WHICH bitmaps sit in
@@ -74,11 +73,6 @@ _LABEL_GLYPHS = {
     SLOT_RAIN: LABEL_R,
     SLOT_DEGREE: DEGREE,
 }
-_BASE_GLYPHS = {
-    **_LABEL_GLYPHS,
-    SLOT_COLON_DOT: COLON_DOT,
-    SLOT_COLON_THIN: COLON_THIN,   # wiggle/twinkle's middle frame
-}
 _PAC_FRAMES = {SLOT_PAC_A: PACMAN_CLOSED, SLOT_PAC_B: PACMAN_OPEN}
 # The chosen sprite's two frames. Duo (being eaten): the ghost glances right, the
 # heart beats, and a pacman faces its mirror (drawn on the opposite frame by the
@@ -93,14 +87,13 @@ _SOLO_SPRITE_FRAMES = {
     "heart": (HEART_FULL, HEART_EMPTY),
     "pacman": (PACMAN_CLOSED, PACMAN_OPEN),
 }
-_WIGGLE_PEAKS = (COLON_TWIST_R, COLON_TWIST_L)
 
 
 def glyph_set(colon: str, cast: str = "duo-ghost",
               meridiem: str = "am") -> tuple[str, dict[int, list[int]]]:
     """``(family, {slot: rows})`` for a dynamic_colon value — and, for pacman,
     the CAST from ``pacman_cast``: "duo-<sprite>" (pacman eating the sprite) or
-    "<sprite>" (solo). on/tick load the AM/PM markers; wiggle loads its twists; twinkle loads the twinkle peaks; each pacman cast
+    "<sprite>" (solo). on/tick load the AM/PM marker; twinkle its frames + the marker; each pacman cast
     loads its own sprite frames, and the family names it."""
     marker = {SLOT_MERIDIEM: _MARKERS.get(meridiem, AM)}
     if colon in ("on", "tick"):
@@ -119,8 +112,7 @@ def glyph_set(colon: str, cast: str = "duo-ghost",
         if not solo:
             glyphs.update(_PAC_FRAMES)
         return f"pacman-{sprite if solo else 'duo-' + sprite}", glyphs
-    peak_a, peak_b = _WIGGLE_PEAKS
-    return "wiggle", {**_BASE_GLYPHS, SLOT_COLON_PEAK_A: peak_a, SLOT_COLON_PEAK_B: peak_b}
+    raise ValueError(f"unknown dynamic colon {colon!r}")
 
 
 _DEG = chr(GLYPH_CODES[SLOT_DEGREE])

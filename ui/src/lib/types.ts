@@ -24,9 +24,10 @@ export type MarqueeBottom = 'static';
  */
 export type ScrollSource = 'message' | 'clock';
 
-/** Weather colon: steady, blinking, or an animated loop (wiggle / twinkle).
- *  dynamic_colon_half runs tick / wiggle / twinkle at half speed (2 s loops). */
-export type DynamicColon = 'on' | 'tick' | 'wiggle' | 'twinkle' | 'pacman';
+/** Dynamic time feature: steady colon, blinking colon, the twinkle animation,
+ *  or the pacman layout. dynamic_colon_half runs tick / twinkle / pacman at half
+ *  speed (2 s loops). */
+export type DynamicColon = 'on' | 'tick' | 'twinkle' | 'pacman';
 /** Pacman colon: the sprite shown alone when solo (also forced automatically
  *  when the date/time is as wide as it gets). */
 export type DynamicPacmanSprite = 'ghost' | 'heart' | 'pacman';

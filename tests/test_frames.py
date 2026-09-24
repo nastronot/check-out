@@ -250,11 +250,6 @@ class _FakeFetcher:
 
 _WX = {"weather_lat": 41.9, "weather_lon": -87.6}
 _T = datetime(2026, 9, 23, 20, 33, 12)
-_DOT = chr(GLYPH_CODES[_weather.SLOT_COLON_DOT])
-_THIN = chr(GLYPH_CODES[_weather.SLOT_COLON_THIN])
-_PKA = chr(GLYPH_CODES[_weather.SLOT_COLON_PEAK_A])
-_PKB = chr(GLYPH_CODES[_weather.SLOT_COLON_PEAK_B])
-_WIGGLE = [" ", _DOT, _THIN, _PKA, _THIN, _DOT, " ", _DOT, _THIN, _PKB, _THIN, _DOT]
 _T1 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_1])
 _T2 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_2])
 _T3 = chr(GLYPH_CODES[_weather.SLOT_TWINKLE_3])
@@ -277,10 +272,6 @@ def test_on_tick_twinkle_end_with_a_space_and_the_marker():
         top = _top(colon, 0)
         assert len(top) == 20 and top[18:] == " " + _MARK, colon
     assert _top("on", 0) == "09/23/26 WED 08:33 " + _MARK
-
-
-def test_wiggle_has_no_marker():
-    assert len(_top("wiggle", 0)) == 18
 
 
 def test_meridiem_of_the_hour():
@@ -330,17 +321,12 @@ def _loop(colon, frames, half=False):
     return out
 
 
-def test_wiggle_alternates_twists_once_a_second():
-    assert _loop("wiggle", 12) == _WIGGLE
-
-
 def test_twinkle_goes_straight_up_and_down_once_a_second():
     assert _loop("twinkle", 6) == _TWINKLE
 
 
 def test_half_speed_doubles_every_loop():
     assert _loop("tick", 2, half=True) == [":", " "]         # 1 s on, 1 s off
-    assert _loop("wiggle", 12, half=True) == _WIGGLE
     assert _loop("twinkle", 6, half=True) == _TWINKLE
 
 
@@ -356,12 +342,6 @@ def test_colon_defaults_to_tick():
 
 def _draw(rows):
     return ["".join("#" if r >> c & 1 else "." for c in range(5)) for r in rows]
-
-
-def test_wiggle_glyphs_match_the_drawn_frames():
-    assert _draw(_glyphs.COLON_DOT) == [".....", ".....", "..#..", ".....", "..#..", ".....", "....."]
-    assert _draw(_glyphs.COLON_TWIST_R) == [".....", "..##.", "..#..", ".....", "..#..", ".##..", "....."]
-    assert _draw(_glyphs.COLON_TWIST_L) == [".....", ".##..", "..#..", ".....", "..#..", "..##.", "....."]
 
 
 def test_twinkle_glyphs_match_the_drawn_frames():

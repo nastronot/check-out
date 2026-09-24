@@ -123,22 +123,17 @@ def test_location_from_state(state, expected):
     assert weather.location(state) == expected
 
 
-def test_weather_glyph_sets_swap_only_the_peak_frames():
+def test_weather_glyph_sets_per_time_feature():
     from checkout import glyphs
     base = {
         weather.SLOT_HIGH: glyphs.LABEL_H, weather.SLOT_LOW: glyphs.LABEL_L,
         weather.SLOT_CURRENT: glyphs.LABEL_C, weather.SLOT_RAIN: glyphs.LABEL_R,
         weather.SLOT_DEGREE: glyphs.DEGREE,
-        weather.SLOT_COLON_DOT: glyphs.COLON_DOT, weather.SLOT_COLON_THIN: glyphs.COLON_THIN,
     }
-    wiggle = {**base, weather.SLOT_COLON_PEAK_A: glyphs.COLON_TWIST_R,
-              weather.SLOT_COLON_PEAK_B: glyphs.COLON_TWIST_L}
-    labels5 = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
+    labels5 = dict(base)
     twinkle = {**labels5, weather.SLOT_TWINKLE_1: glyphs.TWINKLE_DOT,
                weather.SLOT_TWINKLE_2: glyphs.TWINKLE_DIAMOND,
                weather.SLOT_TWINKLE_3: glyphs.TWINKLE_CORNERS}
-    assert weather.glyph_set("wiggle") == ("wiggle", wiggle)
-    labels5 = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
     for colon in ("on", "tick"):
         assert weather.glyph_set(colon, meridiem="am") == (
             "clock-am", {**labels5, weather.SLOT_MERIDIEM: glyphs.AM}), colon
@@ -147,7 +142,7 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
     assert weather.glyph_set("twinkle", meridiem="pm") == (
         "twinkle-pm", {**twinkle, weather.SLOT_MERIDIEM: glyphs.PM})
     assert len(weather.glyph_set("twinkle")[1]) == 9      # exactly full
-    labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
+    labels = dict(base)
     pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
 
     def sprite(a, b):

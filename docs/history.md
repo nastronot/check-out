@@ -743,3 +743,7 @@ holding whichever half of the day it is; the glyph-set key names it
 (`clock-am`, `twinkle-pm`), so the existing key-change swap reloads it at noon
 and midnight (one repaint each). On/tick use the same slot, dropping to 6/9;
 twinkle is exactly 9/9.
+
+**Wiggle removed.** The wiggle time feature and its glyphs (dot, thin colon, two
+twists) are gone; a saved `wiggle` — and the older names that became it — now
+loads as twinkle. Time features are on, tick, twinkle and pacman.

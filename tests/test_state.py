@@ -316,12 +316,14 @@ def test_weather_coords_coerce(state_path, lat, lon, expected):
 
 def test_dynamic_colon_validates(state_path):
     import json
-    for colon in ("on", "tick", "wiggle", "twinkle", "pacman"):
+    for colon in ("on", "tick", "twinkle", "pacman"):
         state_path.write_text(json.dumps({"dynamic_colon": colon}))
         assert state.load_state()["dynamic_colon"] == colon
     # Names used during v1.4.0 development map to the final ones (+ half speed).
-    for old, new, half in (("pulse", "wiggle", False), ("throb", "wiggle", False),
-                           ("throb2", "wiggle", True), ("burst", "twinkle", False),
+    # wiggle was removed; it and the names that became it load as twinkle.
+    for old, new, half in (("wiggle", "twinkle", False), ("pulse", "twinkle", False),
+                           ("throb", "twinkle", False), ("throb2", "twinkle", True),
+                           ("burst", "twinkle", False),
                            ("burst2", "twinkle", True)):
         state_path.write_text(json.dumps({"dynamic_colon": old}))
         s = state.load_state()

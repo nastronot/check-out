@@ -148,7 +148,6 @@
   const COLONS: { value: DynamicColon; label: string }[] = [
     { value: 'on', label: 'ON' },
     { value: 'tick', label: 'TICK' },
-    { value: 'wiggle', label: 'WIGGLE' },
     { value: 'twinkle', label: 'TWINKLE' },
     { value: 'pacman', label: 'PACMAN' },
   ];
@@ -169,8 +168,7 @@
   const COLON_HINTS: Record<DynamicColon, string> = {
     on: 'A steady colon.',
     tick: 'The colon blinks every second.',
-    wiggle: 'The colon twists one way, then the other.',
-    twinkle: 'The colon grows into a burst and back.',
+    twinkle: 'A star twinkles in place of the colon.',
     pacman: 'Pacman eats the chosen sprite; Solo shows it alone (automatic when the date fills the line).',
   };
 

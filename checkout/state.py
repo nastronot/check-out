@@ -84,7 +84,7 @@ def defaults() -> dict:
         # --- dynamic mode: weather location + the clock colon ---
         "weather_lat": None,             # decimal degrees, -90..90, or null
         "weather_lon": None,             # decimal degrees, -180..180, or null
-        "dynamic_colon": "tick",         # "on" | "tick" | "wiggle" | "twinkle"
+        "dynamic_colon": "tick",         # "on" | "tick" | "twinkle" | "pacman"
         "dynamic_colon_half": False,     # half speed: every colon loop takes 2 s
         "dynamic_pacman_solo": False,    # pacman colon: one sprite instead of both
         "dynamic_pacman_sprite": "ghost",  # the solo sprite: "ghost" | "pacman"
@@ -170,7 +170,7 @@ def _backfill(data: dict) -> dict:
     merged["weather_lat"] = _coord(merged.get("weather_lat"), 90.0)
     merged["weather_lon"] = _coord(merged.get("weather_lon"), 180.0)
     legacy = LEGACY_COLON_MODES.get(merged.get("dynamic_colon"))
-    if legacy:  # a name used while v1.4.0 was built (e.g. throb2 -> wiggle + half)
+    if legacy:  # a retired name (e.g. wiggle, throb2 -> twinkle + half speed)
         merged["dynamic_colon"], merged["dynamic_colon_half"] = legacy
     merged["dynamic_colon_half"] = bool(merged.get("dynamic_colon_half"))
     # The earlier single key "weather_pacman" (both | ghost | pacman) splits into

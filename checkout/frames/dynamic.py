@@ -13,8 +13,6 @@ would change):
   marker glyph (the line is exactly 20 cells).
 - ``tick``    — the same, with the ``:`` blanking for half of each loop.
   (twinkle also ends with the marker.)
-- ``wiggle``  — 12 frames: blank, dot, thin, twist-R, thin, dot, blank, dot, thin,
-  twist-L, thin, dot (then blank again) — the twists alternate sides.
 - ``twinkle`` — 6 frames straight up and down: blank, a dot, a diamond, four
   corner dots, the diamond, the dot.
 
@@ -51,10 +49,6 @@ _US_PER_S = 1_000_000
 
 _BLANK = " "
 _MARK = chr(GLYPH_CODES[weather.SLOT_MERIDIEM])   # AM or PM, per the loaded glyph
-_DOT = chr(GLYPH_CODES[weather.SLOT_COLON_DOT])
-_THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
-_PEAK_A = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_A])
-_PEAK_B = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_B])
 _TWINKLE_1 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_1])
 _TWINKLE_2 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_2])
 _TWINKLE_3 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_3])
@@ -63,8 +57,6 @@ _TWINKLE_3 = chr(GLYPH_CODES[weather.SLOT_TWINKLE_3])
 # wraps back to its first frame, so every frame is the same length.
 _LOOPS = {
     "tick": (":", _BLANK),
-    "wiggle": (_BLANK, _DOT, _THIN, _PEAK_A, _THIN, _DOT,
-               _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT),
     "twinkle": (_BLANK, _TWINKLE_1, _TWINKLE_2, _TWINKLE_3, _TWINKLE_2, _TWINKLE_1),
 }
 
