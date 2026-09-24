@@ -108,3 +108,136 @@ def test_weather_glyph_set_uses_the_shared_bitmaps():
         weather.SLOT_CURRENT: glyphs.LABEL_C, weather.SLOT_RAIN: glyphs.LABEL_R,
         weather.SLOT_DEGREE: glyphs.DEGREE,
     }
+
+
+# --- WeatherFetcher ------------------------------------------------------------
+class _Clock:
+    def __init__(self, t):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+def _fetcher(replies, t=OBSERVED):
+    """A fetcher with no thread whose HTTP returns ``replies`` in order
+    (an Exception instance is raised instead of returned)."""
+    calls = []
+
+    def get_json(url, timeout):
+        calls.append(url)
+        reply = replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    clock = _Clock(t)
+    f = weather.WeatherFetcher(get_json=get_json, clock=clock, autostart=False)
+    return f, clock, calls
+
+
+def test_idle_without_a_location():
+    f, _, calls = _fetcher([])
+    assert f.due_in(OBSERVED) is None
+    f.fetch_once()
+    assert calls == []
+
+
+def test_fetches_at_once_for_a_new_location_then_waits_for_the_refresh():
+    f, clock, calls = _fetcher([PAYLOAD])
+    f.set_location((41.88, -87.63))
+    assert f.due_in(clock()) == 0
+    f.fetch_once()
+    assert len(calls) == 1 and "latitude=41.8800" in calls[0]
+    assert f.latest().current == 82.4
+    assert f.due_in(clock()) == pytest.approx(900 + 60)
+
+
+def test_failure_keeps_the_last_reading_and_backs_off():
+    f, clock, _ = _fetcher([PAYLOAD, OSError("down"), OSError("down"), ValueError("junk")])
+    f.set_location((1.0, 2.0))
+    f.fetch_once()
+    clock.t = weather.next_fetch_at(f.latest())
+    f.fetch_once()
+    assert f.latest().current == 82.4            # kept
+    assert "down" in f.status()["error"]
+    assert f.due_in(clock()) == weather.RETRY_START_S
+    f.fetch_once()
+    assert f.due_in(clock()) == 2 * weather.RETRY_START_S
+    f.fetch_once()
+    assert f.due_in(clock()) == 4 * weather.RETRY_START_S
+
+
+def test_backoff_caps_at_fifteen_minutes():
+    f, clock, _ = _fetcher([OSError("x")] * 10)
+    f.set_location((1.0, 2.0))
+    for _ in range(10):
+        f.fetch_once()
+    assert f.due_in(clock()) == weather.RETRY_MAX_S
+
+
+def test_success_clears_the_error_and_backoff():
+    f, clock, _ = _fetcher([OSError("x"), PAYLOAD])
+    f.set_location((1.0, 2.0))
+    f.fetch_once()
+    f.fetch_once()
+    assert f.status()["error"] is None
+    assert f.due_in(clock()) > weather.RETRY_START_S
+
+
+def test_new_location_drops_the_old_reading():
+    f, _, _ = _fetcher([PAYLOAD])
+    f.set_location((1.0, 2.0))
+    f.fetch_once()
+    f.set_location((3.0, 4.0))
+    assert f.latest() is None
+    assert f.due_in(OBSERVED) == 0
+
+
+def test_reply_for_a_location_changed_mid_fetch_is_dropped():
+    f, clock, _ = _fetcher([])
+
+    def get_json(url, timeout):
+        f.set_location((9.0, 9.0))     # the user moved while we were waiting
+        return PAYLOAD
+
+    f._get_json = get_json
+    f.set_location((1.0, 2.0))
+    f.fetch_once()
+    assert f.latest() is None
+
+
+def test_leaving_and_returning_keeps_the_reading():
+    f, clock, _ = _fetcher([PAYLOAD])
+    f.set_location((1.0, 2.0))
+    f.fetch_once()
+    f.set_location(None)
+    assert f.due_in(clock()) is None
+    f.set_location((1.0, 2.0))
+    assert f.latest() is not None
+
+
+def test_status_reports_the_reading_and_times():
+    f, _, _ = _fetcher([PAYLOAD])
+    assert f.status() is None
+    f.set_location((1.0, 2.0))
+    f.fetch_once()
+    s = f.status()
+    assert (s["high"], s["low"], s["current"], s["rain"]) == (92.6, 74.2, 82.4, 82.0)
+    assert s["observed_at"].startswith("2026-09-24T01:45")
+    assert s["error"] is None
+
+
+def test_thread_fetches_and_stops():
+    import threading
+
+    got = threading.Event()
+
+    def get_json(url, timeout):
+        got.set()
+        return PAYLOAD
+
+    f = weather.WeatherFetcher(get_json=get_json)
+    f.set_location((1.0, 2.0))
+    assert got.wait(2)
+    f.stop()
