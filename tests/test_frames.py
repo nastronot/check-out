@@ -267,26 +267,25 @@ def _top(colon, us, second=12, half=False):
     return DynamicFrame(_FakeFetcher()).render(now, state)[0]
 
 
-_AM = chr(GLYPH_CODES[_weather.SLOT_AM])
-_PM = chr(GLYPH_CODES[_weather.SLOT_PM])
+# ONE slot holds the marker; whether it is drawn as AM or PM depends on which
+# bitmap the glyph set loaded there (weather.glyph_set(..., meridiem=...)).
+_MARK = chr(GLYPH_CODES[_weather.SLOT_MERIDIEM])
 
 
-def test_on_shows_the_clock_then_a_space_and_the_meridiem_glyph():
-    assert _top("on", 0) == "09/23/26 WED 08:33 " + _PM     # 20:33 -> PM, 20 cells
+def test_on_tick_twinkle_end_with_a_space_and_the_marker():
+    for colon in ("on", "tick", "twinkle"):
+        top = _top(colon, 0)
+        assert len(top) == 20 and top[18:] == " " + _MARK, colon
+    assert _top("on", 0) == "09/23/26 WED 08:33 " + _MARK
 
 
-def _meridiem(hour, colon="on"):
-    state = {**_WX, "dynamic_colon": colon}
-    return DynamicFrame(_FakeFetcher()).render(_T.replace(hour=hour), state)[0][19]
+def test_wiggle_has_no_marker():
+    assert len(_top("wiggle", 0)) == 18
 
 
-def test_meridiem_glyph_follows_the_hour():
-    assert [_meridiem(h) for h in (0, 11, 12, 23)] == [_AM, _AM, _PM, _PM]
-    assert _meridiem(9, "tick") == _AM
-
-
-def test_wiggle_and_twinkle_have_no_meridiem():
-    assert len(_top("wiggle", 0)) == 18 and len(_top("twinkle", 0)) == 18
+def test_meridiem_of_the_hour():
+    from checkout.frames.dynamic import meridiem
+    assert [meridiem(_T.replace(hour=h)) for h in (0, 11, 12, 23)] == ["am", "am", "pm", "pm"]
 
 
 def test_ampm_glyphs_match_the_drawn_frames():

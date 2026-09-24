@@ -12,6 +12,7 @@ would change):
 - ``on``      — the font's standard ``:``, steady, then a space and an AM/PM
   marker glyph (the line is exactly 20 cells).
 - ``tick``    — the same, with the ``:`` blanking for half of each loop.
+  (twinkle also ends with the marker.)
 - ``wiggle``  — 12 frames: blank, dot, thin, twist-R, thin, dot, blank, dot, thin,
   twist-L, thin, dot (then blank again) — the twists alternate sides.
 - ``twinkle`` — 6 frames straight up and down: blank, a dot, a diamond, four
@@ -49,8 +50,7 @@ NO_LOCATION = "SET LOCATION"
 _US_PER_S = 1_000_000
 
 _BLANK = " "
-_AM = chr(GLYPH_CODES[weather.SLOT_AM])
-_PM = chr(GLYPH_CODES[weather.SLOT_PM])
+_MARK = chr(GLYPH_CODES[weather.SLOT_MERIDIEM])   # AM or PM, per the loaded glyph
 _DOT = chr(GLYPH_CODES[weather.SLOT_COLON_DOT])
 _THIN = chr(GLYPH_CODES[weather.SLOT_COLON_THIN])
 _PEAK_A = chr(GLYPH_CODES[weather.SLOT_COLON_PEAK_A])
@@ -67,6 +67,11 @@ _LOOPS = {
                _BLANK, _DOT, _THIN, _PEAK_B, _THIN, _DOT),
     "twinkle": (_BLANK, _TWINKLE_1, _TWINKLE_2, _TWINKLE_3, _TWINKLE_2, _TWINKLE_1),
 }
+
+
+def meridiem(now: datetime) -> str:
+    """"am" before noon, else "pm" — picks which marker bitmap is loaded."""
+    return "am" if now.hour < 12 else "pm"
 
 
 def colon_mode(state: dict) -> str:
@@ -139,8 +144,8 @@ class DynamicFrame(Frame):
             top = pacman_top(state, now)
         else:
             top = short_date_time(now, colon=colon_char(state, now))
-            if colon_mode(state) in ("on", "tick"):
-                top += " " + (_AM if now.hour < 12 else _PM)
+            if colon_mode(state) in weather.MERIDIEM_FEATURES:
+                top += " " + _MARK
         if weather.location(state) is None:
             return top, NO_LOCATION
         return top, weather.bottom_line(self.fetcher.latest(), now.timestamp())

@@ -50,7 +50,8 @@ LEGACY_COLON_MODES = {
 # Dynamic's glyph sets (loaded by the daemon's mode-glyph swap): every time
 # feature keeps the 5 labels in slots 0-4 and loads its own glyphs above them —
 # wiggle: dot, thin colon, two twists (5-8); twinkle: three frames (5-7);
-# on/tick: AM/PM (5-6); pacman: sprite frames (5-8).
+# twinkle also the AM/PM marker (8); on/tick: the marker only (8); pacman:
+# sprite frames (5-8).
 (SLOT_HIGH, SLOT_LOW, SLOT_CURRENT, SLOT_RAIN, SLOT_DEGREE,
  SLOT_COLON_DOT, SLOT_COLON_THIN, SLOT_COLON_PEAK_A, SLOT_COLON_PEAK_B) = range(9)
 # Pacman needs up to 4 sprite frames, so its set uses slots 5-8 for them instead
@@ -58,9 +59,12 @@ LEGACY_COLON_MODES = {
 # chosen sprite's two frames, 7/8 hold pacman (duo only); WHICH bitmaps sit in
 # 5/6 depends on the cast (see glyph_set), so the frame code never changes.
 SLOT_SPRITE_A, SLOT_SPRITE_B, SLOT_PAC_A, SLOT_PAC_B = range(5, 9)
-# on/tick show the font's colon and an AM/PM marker, so their set is the labels
-# plus these two (switching to an animated colon loads that set instead).
-SLOT_AM, SLOT_PM = 5, 6
+# on/tick/twinkle end the top line with an AM/PM marker. ONE slot holds it: the
+# set loads AM or PM there (the key names which), so it reloads at noon and
+# midnight and never needs two slots.
+SLOT_MERIDIEM = 8
+MERIDIEM_FEATURES = ("on", "tick", "twinkle")
+_MARKERS = {"am": AM, "pm": PM}
 # twinkle is its own set too: the labels plus its three frames.
 SLOT_TWINKLE_1, SLOT_TWINKLE_2, SLOT_TWINKLE_3 = 5, 6, 7
 _LABEL_GLYPHS = {
@@ -92,16 +96,19 @@ _SOLO_SPRITE_FRAMES = {
 _WIGGLE_PEAKS = (COLON_TWIST_R, COLON_TWIST_L)
 
 
-def glyph_set(colon: str, cast: str = "duo-ghost") -> tuple[str, dict[int, list[int]]]:
+def glyph_set(colon: str, cast: str = "duo-ghost",
+              meridiem: str = "am") -> tuple[str, dict[int, list[int]]]:
     """``(family, {slot: rows})`` for a dynamic_colon value — and, for pacman,
     the CAST from ``pacman_cast``: "duo-<sprite>" (pacman eating the sprite) or
     "<sprite>" (solo). on/tick load the AM/PM markers; wiggle loads its twists; twinkle loads the twinkle peaks; each pacman cast
     loads its own sprite frames, and the family names it."""
+    marker = {SLOT_MERIDIEM: _MARKERS.get(meridiem, AM)}
     if colon in ("on", "tick"):
-        return "ampm", {**_LABEL_GLYPHS, SLOT_AM: AM, SLOT_PM: PM}
+        return f"clock-{meridiem}", {**_LABEL_GLYPHS, **marker}
     if colon == "twinkle":
-        return "twinkle", {**_LABEL_GLYPHS, SLOT_TWINKLE_1: TWINKLE_DOT,
-                           SLOT_TWINKLE_2: TWINKLE_DIAMOND, SLOT_TWINKLE_3: TWINKLE_CORNERS}
+        return f"twinkle-{meridiem}", {
+            **_LABEL_GLYPHS, SLOT_TWINKLE_1: TWINKLE_DOT, SLOT_TWINKLE_2: TWINKLE_DIAMOND,
+            SLOT_TWINKLE_3: TWINKLE_CORNERS, **marker}
     if colon == "pacman":
         solo = not cast.startswith("duo-")
         sprite = cast.removeprefix("duo-")

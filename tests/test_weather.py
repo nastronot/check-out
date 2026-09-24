@@ -139,10 +139,14 @@ def test_weather_glyph_sets_swap_only_the_peak_frames():
                weather.SLOT_TWINKLE_3: glyphs.TWINKLE_CORNERS}
     assert weather.glyph_set("wiggle") == ("wiggle", wiggle)
     labels5 = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
-    ampm = {**labels5, weather.SLOT_AM: glyphs.AM, weather.SLOT_PM: glyphs.PM}
     for colon in ("on", "tick"):
-        assert weather.glyph_set(colon) == ("ampm", ampm), colon
-    assert weather.glyph_set("twinkle") == ("twinkle", twinkle)
+        assert weather.glyph_set(colon, meridiem="am") == (
+            "clock-am", {**labels5, weather.SLOT_MERIDIEM: glyphs.AM}), colon
+        assert weather.glyph_set(colon, meridiem="pm") == (
+            "clock-pm", {**labels5, weather.SLOT_MERIDIEM: glyphs.PM}), colon
+    assert weather.glyph_set("twinkle", meridiem="pm") == (
+        "twinkle-pm", {**twinkle, weather.SLOT_MERIDIEM: glyphs.PM})
+    assert len(weather.glyph_set("twinkle")[1]) == 9      # exactly full
     labels = {k: v for k, v in base.items() if k <= weather.SLOT_DEGREE}
     pacs = {weather.SLOT_PAC_A: glyphs.PACMAN_CLOSED, weather.SLOT_PAC_B: glyphs.PACMAN_OPEN}
 

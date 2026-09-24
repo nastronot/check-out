@@ -84,14 +84,15 @@ the earlier `weather_pacman` key and development colon names migrate on load.
 - **Colon:** the colon cell changes CHARACTER, one frame list per setting
   (`frames/dynamic.py` `_LOOPS`), spread evenly over a 1 s loop (2 s with
   `dynamic_colon_half`), locked to the wall clock: `on` = the font's standard `:`,
-  steady; `tick` = `:` then blank. On/tick end the line with a space and an
-  AM/PM marker glyph (`glyphs.AM`/`PM`, slots 5/6 — their own set, key
-  `("dynamic", "ampm")`), exactly 20 cells; `wiggle` = 12 frames, twists alternating
+  steady; `tick` = `:` then blank. On/tick/twinkle end the line with a space
+  and the AM/PM marker (exactly 20 cells); `wiggle` = 12 frames, twists alternating
   sides; `twinkle` = 6 frames straight up and down (dot, diamond, four corner
   dots). Every feature keeps the 5 labels in slots 0-4 and loads its own glyphs
   above them via `weather.glyph_set(colon)` (key `("dynamic", family)`):
-  on/tick 7/9 (AM, PM), wiggle 9/9 (dot, thin, 2 twists), twinkle 8/9 (3
-  frames), pacman duo 9/9, pacman solo 7/9. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
+  on/tick 6/9 (marker), wiggle 9/9 (dot, thin, 2 twists), twinkle 9/9 (3
+  frames + marker), pacman duo 9/9, pacman solo 7/9. The AM/PM marker (on,
+  tick, twinkle) is ONE slot (8) loaded with AM or PM — the key names which
+  (`clock-am`, `twinkle-pm`…), so it reloads at noon/midnight. `pacman` is a different LAYOUT: `9/23/26 WED 8:33`
   (`clock.compact_date_time`: no leading zeros on month/day/hour, one space
   between fields; 15-18 cells) left-aligned, then two sprite cells (18-19).
   **Duo:** pacman (19) eats the chosen sprite (18) — ghost glancing right, a

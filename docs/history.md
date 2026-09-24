@@ -736,3 +736,10 @@ labels + AM + PM); wiggle, twinkle and pacman are unchanged.
 corner dots (`TWINKLE_DOT/DIAMOND/CORNERS`), run straight up and down with a
 blank — 6 frames a loop. It has its own glyph set (8/9: the labels + 3 frames);
 the old burst glyphs were removed, and wiggle keeps the dot/thin/twist set.
+
+**AM/PM on twinkle, one marker slot.** Twinkle gained the AM/PM marker, which
+made it 10 glyphs with AM and PM both loaded. The marker is now ONE slot (8)
+holding whichever half of the day it is; the glyph-set key names it
+(`clock-am`, `twinkle-pm`), so the existing key-change swap reloads it at noon
+and midnight (one repaint each). On/tick use the same slot, dropping to 6/9;
+twinkle is exactly 9/9.

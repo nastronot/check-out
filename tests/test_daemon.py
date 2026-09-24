@@ -779,7 +779,7 @@ def test_mode_glyph_sets_round_trip_spectrum_weather_clock(monkeypatch, capsys):
     daemon.tick_once(drv, {"mode": "dynamic", "glyphs": user}, ctx,
                      now=datetime(2026, 6, 19, 12, 0, 1))
     defines = _parse_defines(_all_tx_bytes(capsys.readouterr().out))
-    assert ctx["mode_glyphs_key"] == ("dynamic", "ampm")
+    assert ctx["mode_glyphs_key"][1].startswith("clock-")
     assert len(defines) == len(weather.glyph_set("tick")[1])
 
     capsys.readouterr()
@@ -828,7 +828,7 @@ def test_weather_status_reports_glyphs_and_weather(monkeypatch):
                      now=datetime(2026, 9, 23, 20, 33, 12, 100_000))
     s = written[-1]
     assert s["mode"] == "dynamic"
-    assert set(s["mode_glyphs"]) == {str(n) for n in range(7)}   # labels + AM + PM
+    assert set(s["mode_glyphs"]) == {"0", "1", "2", "3", "4", "8"}   # labels + marker
     assert s["weather"]["error"] is None
 
 
@@ -944,14 +944,14 @@ def test_switching_colon_features_loads_each_ones_glyphs(monkeypatch):
     drv = _RecordingDefines()
     ctx = daemon._new_ctx()
     daemon.tick_once(drv, state, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("dynamic", "ampm")
+    assert ctx["mode_glyphs_key"][1].startswith("clock-")
     drv.defined.clear()
     daemon.tick_once(drv, {**state, "dynamic_colon": "on"}, ctx, now=NOW)
     assert drv.defined == {}                         # on/tick share the am/pm set
     daemon.tick_once(drv, {**state, "dynamic_colon": "wiggle"}, ctx, now=NOW)
     assert ctx["mode_glyphs_key"] == ("dynamic", "wiggle")
     daemon.tick_once(drv, {**state, "dynamic_colon": "twinkle"}, ctx, now=NOW)
-    assert ctx["mode_glyphs_key"] == ("dynamic", "twinkle")
+    assert ctx["mode_glyphs_key"][1].startswith("twinkle-")
     assert drv.defined[5] == glyphs.TWINKLE_DOT
     assert drv.defined[7] == glyphs.TWINKLE_CORNERS
 
@@ -1014,4 +1014,19 @@ def test_widest_line_loads_the_solo_glyphs_automatically(monkeypatch):
     daemon.tick_once(drv, state, ctx, now=datetime(2026, 12, 31, 12, 33))   # 18 cells
     assert ctx["mode_glyphs_key"] == ("dynamic", "pacman-ghost")
     assert drv.defined[wx.SLOT_SPRITE_B] == glyphs.GHOST_C
+
+
+def test_marker_glyph_reloads_at_noon(monkeypatch):
+    from checkout import glyphs, weather as wx
+
+    _, _, state = _weather_setup(monkeypatch, colon="twinkle")
+    drv = _RecordingDefines()
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 24, 11, 59, 59))
+    assert drv.defined[wx.SLOT_MERIDIEM] == glyphs.AM
+    drv.defined.clear()
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 24, 11, 59, 59, 500_000))
+    assert drv.defined == {}                                   # same half: no reload
+    daemon.tick_once(drv, state, ctx, now=datetime(2026, 9, 24, 12, 0, 0))
+    assert drv.defined[wx.SLOT_MERIDIEM] == glyphs.PM
 
