@@ -270,6 +270,10 @@ This project uses these projects' **published facts** — command bytes and glyp
 bitmaps — each **independently bench-confirmed on our unit**. The driver and all
 other code here is original Python.
 
+**Weather data** by [Open-Meteo.com](https://open-meteo.com/), licensed
+**CC BY 4.0**, which requires crediting them (the README carries the credit).
+Free non-commercial API; keep the credit if the weather source changes.
+
 ## Hardware-confirm TODOs (bench)
 - [x] ~~Which character code(s) render the 9 user glyphs~~ — RESOLVED (v0.3.1):
   9 non-contiguous codes `0x15`–`0x1A`, `0x1C`–`0x1E` (`0x1B` skipped); bitmap

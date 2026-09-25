@@ -513,3 +513,7 @@ errors and no a11y warnings before commit.
 
 These are published facts (command bytes, glyph bitmaps), each independently
 bench-confirmed on our unit; the driver and all other code here is original.
+
+**Weather data** by [Open-Meteo.com](https://open-meteo.com/), licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Dynamic mode fetches
+it live from their free non-commercial API; it is not stored or redistributed.
