@@ -151,7 +151,6 @@ def build_url(lat: float, lon: float) -> str:
         "latitude": f"{lat:.4f}",
         "longitude": f"{lon:.4f}",
         "current": "temperature_2m",
-        # 24 hourly steps starting at the current hour (~1.1 KB reply).
         # 25 hourly steps starting at the current hour; parse() drops the first,
         # whose value covers the hour that already passed (~1.1 KB reply).
         "hourly": "temperature_2m,precipitation",
