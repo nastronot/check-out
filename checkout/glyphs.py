@@ -32,8 +32,8 @@ PULSE_1 = [0, 0, 4, 0, 4, 0, 0]              # pulse: the colon's two dots
 PULSE_2 = [0, 4, 4, 0, 4, 4, 0]              # pulse: two dots each way
 
 # AM / PM markers for the on/tick clock: the letter stacked over an M.
-AM = [14, 17, 31, 17, 10, 21, 21]
-PM = [14, 17, 15, 1, 10, 21, 21]
+AM = [4, 10, 31, 17, 27, 21, 17]
+PM = [14, 17, 15, 1, 27, 21, 17]
 
 # Pacman sprites (the weather clock's pacman colon mode), two frames each.
 GHOST_A = [0, 14, 31, 11, 31, 21, 0]        # eyes right (pacman's height)
