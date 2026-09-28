@@ -366,3 +366,20 @@ def test_show_changes_falls_back_to_a_full_frame_when_cheaper(driver, capsys):
 def test_glyphs_loaded_reinitializes(driver, capsys):
     driver.glyphs_loaded()
     assert capture_bytes(capsys) == [0x1F, 0x00, 0x01, 0x11]
+
+
+def test_open_locks_the_port_exclusively(monkeypatch):
+    """Two daemons must never share one tty (e.g. an unpinned IBM daemon opening
+    the HP after ttyUSB numbers swap): the port is opened with exclusive=True."""
+    import serial
+
+    seen = {}
+
+    def fake_serial(*args, **kwargs):
+        seen.update(kwargs)
+        raise serial.SerialException("stop here")
+
+    monkeypatch.setattr(serial, "Serial", fake_serial)
+    with pytest.raises(Exception):
+        VFDDriver(port="/dev/fake")
+    assert seen.get("exclusive") is True

@@ -226,7 +226,9 @@ class SerialDriver:
         import serial  # imported lazily so dry-run needs no pyserial
 
         try:
-            self._serial = serial.Serial(self.port, self.baud, timeout=0)
+            # exclusive: an flock, so a second daemon (e.g. an unpinned one that
+            # opened the other display after ttyUSB numbers swapped) fails to open.
+            self._serial = serial.Serial(self.port, self.baud, timeout=0, exclusive=True)
         except (serial.SerialException, OSError) as exc:
             raise VFDError(f"could not open {self.port}: {exc}") from exc
         # Re-assert raw mode on every open (a fresh open resets termios).

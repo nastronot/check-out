@@ -161,4 +161,19 @@ def test_bench_hp_isolates_its_files_and_port():
     assert "--port 8001" in body
     for key in ("STATE_PATH", "STATUS_PATH", "LIBRARY_PATH", "DEVICES_PATH", "SPECTRUM_SOCK"):
         assert f"CHECKOUT_{key}=" in body
-    assert "systemctl" not in body  # never touches the installed units
+    for verb in ("start", "stop", "restart", "enable", "disable"):
+        assert f"systemctl --user {verb}" not in body  # never touches the installed units
+
+
+def test_install_restarts_running_services():
+    # enable --now does not restart a running unit, so a new --display/--port or
+    # new code would not apply until the next login.
+    with open(os.path.join(DEPLOY, "install.sh"), encoding="utf-8") as fh:
+        assert 'systemctl --user restart "${SERVICES[@]}"' in fh.read()
+
+
+def test_bench_hp_refuses_an_unpinned_installed_daemon():
+    with open(os.path.join(DEPLOY, "bench-hp.sh"), encoding="utf-8") as fh:
+        body = fh.read()
+    assert "is-active --quiet checkout-daemon" in body
+    assert "CHECKOUT_PORT=/dev/serial/by-id/" in body

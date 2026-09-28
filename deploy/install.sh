@@ -104,6 +104,9 @@ fi
 echo
 systemctl --user daemon-reload
 systemctl --user enable --now "${SERVICES[@]}"
+# enable --now leaves a running unit alone; restart so new code and a new
+# --display/--port apply now, not at the next login.
+systemctl --user restart "${SERVICES[@]}"
 
 echo
 systemctl --user --no-pager status "${SERVICES[@]}" || true

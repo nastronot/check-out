@@ -28,6 +28,15 @@ if [ -z "${port}" ]; then
 	exit 1
 fi
 
+# An installed daemon on the default /dev/ttyUSB0 could open the HP after the
+# ttyUSB numbers swap. Require it to be pinned to a by-id path first.
+if systemctl --user is-active --quiet checkout-daemon 2>/dev/null &&
+	! grep -q '^CHECKOUT_PORT=/dev/serial/by-id/' "${HOME}/.config/checkout/env" 2>/dev/null; then
+	echo "ERROR: the installed checkout-daemon is not pinned to a /dev/serial/by-id port." >&2
+	echo "       Pin it first: deploy/install.sh --display ibm --port /dev/serial/by-id/<its adapter>" >&2
+	exit 1
+fi
+
 BENCH="${REPO_ROOT}/bench-hp"
 mkdir -p "${BENCH}"
 export CHECKOUT_DISPLAY=hp
