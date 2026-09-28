@@ -247,6 +247,8 @@ def status_defaults() -> dict:
     """A fresh status dict (what the daemon mirrors out)."""
     return {
         "alive": True,
+        "display": None,        # the daemon fills these; None -> UI shows the IBM label
+        "display_label": None,
         "mode": "clock",
         "top": "",
         "bottom": "",

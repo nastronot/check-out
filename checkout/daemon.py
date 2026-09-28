@@ -59,7 +59,7 @@ from .frames.message import MessageFrame
 from .frames.dynamic import DynamicFrame, colon_mode, meridiem, pacman_cast
 from .renderer import WIDTH, fit_line, render_lines, ticker_window
 from .state import load_state, save_status
-from . import news, spectrum, weather
+from . import displays, news, spectrum, weather
 from .frames import news_alert
 
 # status.json write throttle (ms between writes) derived from config.STATUS_HZ:
@@ -216,9 +216,10 @@ def _sync_glyphs(
     """Load the active mode's glyph set, or the user's glyphs, when it changes.
 
     Defining characters may reset extended mode / scroll, so every define is
-    followed by initialize() + a cache invalidation (settings and the frame are
-    then re-sent). Leaving a mode set clears ``last_glyphs`` via the invalidation,
-    which makes the user-glyph branch below re-define ``state.glyphs``.
+    followed by driver.glyphs_loaded() (IBM: re-init; HP: user set on) + a cache
+    invalidation (settings and the frame are then re-sent). Leaving a mode set
+    clears ``last_glyphs`` via the invalidation, which makes the user-glyph branch
+    below re-define ``state.glyphs``.
     """
     wanted = mode_glyph_set(mode, state, now)
     key = wanted[0] if wanted else None
@@ -227,7 +228,7 @@ def _sync_glyphs(
             log(f"loading glyph set {key} (user glyphs restored on exit)")
             for slot, rows in wanted[1].items():
                 driver.define_character(slot, rows)
-            driver.initialize()
+            driver.glyphs_loaded()
         _invalidate_caches(ctx)
         ctx["mode_glyphs_key"] = key
         ctx["mode_glyphs"] = dict(wanted[1]) if wanted else None
@@ -236,7 +237,7 @@ def _sync_glyphs(
         if glyphs != ctx["last_glyphs"]:
             if glyphs:
                 _apply_glyphs(driver, glyphs)
-                driver.initialize()
+                driver.glyphs_loaded()
                 _invalidate_caches(ctx)
             ctx["last_glyphs"] = dict(glyphs)
 
@@ -268,7 +269,7 @@ def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict,
         log("command: redefine_glyphs")
         glyphs = state.get("glyphs") or {}
         _apply_glyphs(driver, glyphs)
-        driver.initialize()      # defining glyphs may reset the display
+        driver.glyphs_loaded()   # IBM: re-init (a define may reset it); HP: user set on
         _invalidate_caches(ctx)
         ctx["last_glyphs"] = dict(glyphs)  # just defined them; don't re-define
         return True
@@ -386,6 +387,8 @@ def _write_status(
     save_status(
         {
             "alive": True,
+            "display": config.DISPLAY.strip().lower(),
+            "display_label": displays.driver_class().LABEL,
             "mode": state.get("mode"),
             "top": top,
             "bottom": bottom,
@@ -728,10 +731,11 @@ def open_driver(dry_run: bool) -> VFDDriver | None:
 
     Returns None if a shutdown is requested before a connection is made.
     """
+    displays.driver_class()  # a bad CHECKOUT_DISPLAY fails now, not in the retry loop
     backoff = config.RECONNECT_BACKOFF_START
     while not _stop:
         try:
-            driver = VFDDriver(dry_run=dry_run)
+            driver = displays.make_driver(dry_run)
             log(f"serial open on {driver.port} @ {driver.baud}")
             return driver
         except VFDError as exc:

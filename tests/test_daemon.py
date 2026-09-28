@@ -583,14 +583,21 @@ class _CountingDriver:
 
     port = "fake"
     baud = 9600
+    DISPLAY = "ibm"
+    LABEL = "IBM SUREPOS 2×20 VFD"
 
     def __init__(self):
         self.shows = 0
         self.blanks = 0
         self.defines = 0
+        self.inits = 0
+        self.loaded = 0
 
     def initialize(self):
-        pass
+        self.inits += 1
+
+    def glyphs_loaded(self):
+        self.loaded += 1
 
     def clear(self):
         pass
@@ -1126,3 +1133,44 @@ def test_status_says_when_an_alert_is_showing(monkeypatch):
     written, _, state = _news_setup(monkeypatch, alert=_HEAD)
     daemon.tick_once(_CountingDriver(), state, daemon._new_ctx(), now=_T)
     assert written[-1]["news"]["alerting"] is True
+
+
+def test_glyph_defines_end_with_glyphs_loaded_not_initialize(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = _spectrum_ctx()
+    ctx["spectrum_rx"] = _FakeRx([])
+    daemon.tick_once(drv, {"mode": "spectrum"}, ctx, now=NOW)
+    assert drv.defines > 0
+    assert drv.loaded == 1
+    assert getattr(drv, "inits", 0) == 0
+
+
+def test_user_glyphs_end_with_glyphs_loaded(monkeypatch):
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    daemon.tick_once(drv, {"mode": "clock", "glyphs": {"0": [31] * 7}}, ctx, now=NOW)
+    assert drv.defines == 1 and drv.loaded == 1 and getattr(drv, "inits", 0) == 0
+
+
+def test_reconnect_redefines_glyphs_then_loads_them(monkeypatch):
+    # An HP reconnect sends ESC @ (erases glyphs); the invalidation that follows
+    # must redefine them and call glyphs_loaded() again.
+    monkeypatch.setattr(daemon, "save_status", lambda s: None)
+    drv = _CountingDriver()
+    ctx = daemon._new_ctx()
+    state = {"mode": "clock", "glyphs": {"0": [31] * 7}}
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    daemon._invalidate_caches(ctx)
+    daemon.tick_once(drv, state, ctx, now=NOW)
+    assert drv.defines == 2 and drv.loaded == 2
+
+
+def test_status_reports_the_display(monkeypatch):
+    saved = []
+    monkeypatch.setattr(daemon, "save_status", saved.append)
+    monkeypatch.setattr(daemon.config, "DISPLAY", "hp")
+    daemon.tick_once(_CountingDriver(), {"mode": "clock"}, daemon._new_ctx(), now=NOW)
+    assert saved[-1]["display"] == "hp"
+    assert saved[-1]["display_label"] == "HP LD220 2×20 VFD"

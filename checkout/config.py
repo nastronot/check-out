@@ -7,6 +7,7 @@ differ without code changes.
 Env overrides:
   CHECKOUT_PORT        serial device          (default /dev/ttyUSB0)
   CHECKOUT_BAUD        serial baud rate        (default 9600)
+  CHECKOUT_DISPLAY     which display: ibm | hp (default ibm)
   CHECKOUT_TICK_MS     daemon loop period ms   (default 250)
   CHECKOUT_STATE_PATH  path to state.json      (default ./state.json)
 """
@@ -19,6 +20,9 @@ import os
 # WRITE-ONLY port. 9600 8N1. Never read from it.
 PORT: str = os.environ.get("CHECKOUT_PORT", "/dev/ttyUSB0")
 BAUD: int = int(os.environ.get("CHECKOUT_BAUD", "9600"))
+
+# Which display this machine drives: "ibm" (SurePOS / Futaba) or "hp" (LD220-HP).
+DISPLAY: str = os.environ.get("CHECKOUT_DISPLAY", "ibm")
 
 # Physical display geometry (2 lines x 20 chars).
 COLS: int = 20
