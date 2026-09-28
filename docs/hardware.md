@@ -4,6 +4,11 @@
 
 # Hardware reference
 
+Two displays: the **IBM SurePOS** (Futaba M202MD10C, below) and the **HP
+LD220-HP** (EPSON mode, at the end). `CHECKOUT_DISPLAY` picks one per machine.
+
+## IBM SurePOS (Futaba M202MD10C)
+
 - **Port / baud:** `/dev/ttyUSB0`, 9600 8N1, **WRITE-ONLY** — never read from it.
 - **Geometry:** 2 lines × 20 chars (40 char total budget).
 
@@ -111,3 +116,73 @@ Also seen: page 2 follows the standard CP850 table — `ø` 0x9B and `Ø`
 `× ± ∫` at 0xC5-0xCA, and a Cyrillic block at 0xD0-0xEF. Before using any of these,
 bench-confirm the exact byte and page, and let it through `driver._sanitize`
 (it replaces everything above 0x7E with `?`).
+
+
+## HP LD220-HP (EPSON command mode)
+
+Driver: `checkout/driver_epson.py` (`EpsonDriver`). Source: the OEM "VFD LD220
+User Manual V2.3" §4.1.2. There is no HP-branded command reference.
+
+### Bench facts (power-on self-test, 2026-09-28)
+
+| | |
+|---|---|
+| USB ID | `03f0:3524` — kernel `pl2303` driver, node `/dev/ttyUSB*` |
+| by-id path | `/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_22222222-if00-port0` |
+| Firmware | 6.6 · EEPROM OK · pass-through: none |
+| Serial | 9600, N, 8, 1 |
+| **Command mode** | **EPSON** (factory default) |
+| Character set | USA/Europe |
+| Power | **5 V USB bus power alone** (the manual: 5–12 V input). No 12 V supply |
+| Power-on screen | scrolling "have a nice day" welcome, until the host writes |
+
+`22222222` is a placeholder serial that many Prolific chips share. It is unique
+only while this is the one Prolific adapter on the machine.
+
+**check-out requires EPSON mode.** The mode lives in the display's memory, and
+only HP's Windows setup utility changes it. The self-test screen shows the
+current mode. In any other mode our bytes print as garbage.
+
+### Command bytes
+
+| Operation | Bytes | Notes |
+|---|---|---|
+| init | `1B 40` · `1F 01` · `1F 43 00` · `1B 25 01` | `ESC @` (**erases user glyphs**) · overwrite mode · cursor off · user set on |
+| move cursor | `1F 24 x y` | **1-based**: x = col 1–20, y = row 1–2 |
+| full frame | `1F 24 01 01` + 20 bytes + `1F 24 01 02` + 20 bytes | 48 bytes |
+| changed cells | `1F 24 x y` + run | merge gap 4; a full frame when that is no longer |
+| brightness | `1F 58 n` | n = 1–4 (state index 0–3 + 1) |
+| define glyph | `1B 26 01 c c 05 p1..p5` | one byte per column, left to right, bit 7 = top row |
+| user set on | `1B 25 01` | sent after defines (`glyphs_loaded()`) |
+| blank | `0C` | clears the glass |
+| self-test | `1F 40` | then re-init |
+| scroll mode | `1F 02` on / `1F 01` off | hidden in the UI |
+| code page | `1B 74 00` | page 0 only; other numbers unconfirmed |
+
+No hardware ticker: `start_ticker` writes the first 20 chars to the top row
+(marquee is hidden in the UI anyway).
+
+### Parked glyph codes
+
+EPSON defines a user glyph **at a printable code**. While the user set is on,
+that code draws the bitmap. The driver maps the logical codes `0x15–0x1E` to:
+
+| slot | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| code | `` ` `` 60 | `{` 7B | `\|` 7C | `}` 7D | `~` 7E | `^` 5E | `\` 5C | `[` 5B | `]` 5D |
+
+Real occurrences of those characters in text become lookalikes, so they never
+draw a glyph: `` ` ``→`'`, `{ [`→`(`, `} ]`→`)`, `|`→`!`, `~`→`-`, `^`→space,
+`\`→`/`.
+
+### Bench checks
+
+| # | Check | Result |
+|---|---|---|
+| 1 | init stops the welcome; `show()` lands both rows (1-based `1F 24`) | pending |
+| 2 | glyph bit order (top-left + bottom-right pixel test) | pending |
+| 3 | cursor stays hidden after `1F 43 00` across writes | pending |
+| 4 | `1F 58 1..4` gives four distinct levels | pending |
+| 5 | `0C` keeps glyph definitions | pending |
+| 6 | spectrum keeps up (48-byte frames, ~20 fps) | pending |
+| 7 | every mode by eye through the :8001 UI | pending |

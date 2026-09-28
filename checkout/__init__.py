@@ -1,3 +1,3 @@
-"""check-out — status board for a salvaged IBM SurePOS 2x20 VFD display."""
+"""check-out — status board for 2x20 VFD customer displays (IBM SurePOS, HP LD220-HP)."""
 
-__version__ = "1.7.0"
+__version__ = "1.8.0"

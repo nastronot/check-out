@@ -95,6 +95,13 @@ Three cooperating processes, coupled only through files and one socket. The
 The physical build, **bench-verified on this exact unit** (see [`spec.md`](spec.md)
 §1 for the full survey). Everything below was measured, not assumed.
 
+### Second display: HP LD220-HP (v1.8.0)
+check-out also drives an **HP LD220-HP** pole display (2×20 VFD, USB `03f0:3524`,
+EPSON command mode, powered from the USB port alone). Pick it per machine with
+`CHECKOUT_DISPLAY=hp`, or install with `deploy/install.sh --display hp`. Its
+command bytes and bench results are in [`docs/hardware.md`](docs/hardware.md).
+The rest of this section is the IBM unit.
+
 ### The display
 - **Unit:** IBM SurePOS 500 customer display, **P/N 15K2012** (iron-gray housing).
 - **VFD board:** Futaba **M202MD10C** family — 2 lines × 20 chars, blue-green VFD.
@@ -380,7 +387,8 @@ as environment variables.
 
 | Variable                 | Default                                   | Purpose                                 |
 |--------------------------|-------------------------------------------|-----------------------------------------|
-| `CHECKOUT_PORT`          | `/dev/ttyUSB0`                            | serial device                           |
+| `CHECKOUT_DISPLAY`       | `ibm`                                     | which display: `ibm` or `hp`            |
+| `CHECKOUT_PORT`          | `/dev/ttyUSB0`                            | serial device (use a `/dev/serial/by-id/` path) |
 | `CHECKOUT_BAUD`          | `9600`                                    | baud rate (the hard cap — see above)    |
 | `CHECKOUT_LOOP_HZ`       | `30`                                      | daemon fast-loop rate (Hz)              |
 | `CHECKOUT_STATUS_HZ`     | `6`                                       | `status.json` write rate (Hz)           |
@@ -424,6 +432,8 @@ you log in:
 
 ```bash
 deploy/install.sh      # build UI if needed, install + enable + start all three
+deploy/install.sh --display hp [--port /dev/serial/by-id/...]   # this machine has the HP
+deploy/bench-hp.sh     # temporary HP instance on :8001 next to the installed one
 deploy/uninstall.sh    # stop, disable, remove the unit files
 ```
 

@@ -3,9 +3,11 @@
 ## Overview
 `check-out` is a status board that drives a salvaged **IBM SurePOS 2x20 VFD**
 customer display (blue-green vacuum-fluorescent, 2 lines × 20 chars) over a
-write-only serial link. A long-running daemon owns the serial port, reads desired
-state from a JSON file each tick, renders the active frame to fit the 40-character
-budget, and writes it to the display. Phase 1 ships a working clock plus the
+write-only serial link — or, since v1.8.0, an **HP LD220-HP** pole display
+(`CHECKOUT_DISPLAY=ibm|hp`; one display per machine: IBM on dad, HP on work). A
+long-running daemon owns the serial port, reads desired state from a JSON file
+each tick, renders the active frame to fit the 40-character budget, and writes it
+to the display. Phase 1 ships a working clock plus the
 architecture seams (state file, frame interface) that a web UI plugs into later.
 The governing constraint: the port is **write-only at 9600 baud** and only the
 command bytes below are confirmed safe — never emit anything else.
@@ -29,7 +31,13 @@ daemon loop --> active frame --> renderer (fit to 2x20) --> driver --> serial
 status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + health)
 ```
 
-- `driver.py` — `VFDDriver`, owns **all** raw command bytes; nothing else emits bytes.
+- `driver.py` — `SerialDriver` (the port: open, raw mode, drain) + `VFDDriver` (IBM bytes).
+- `driver_epson.py` — `EpsonDriver`, the HP LD220-HP's EPSON-mode bytes. **Only these two
+  files emit bytes.** Both drivers keep the same public methods (a test enforces it).
+- `displays.py` — `CHECKOUT_DISPLAY` → driver class. Frames keep the logical glyph codes
+  `0x15–0x1E`; each driver maps them to wire bytes (the HP parks glyphs on `` ` { | } ~ ^ \ [ ] ``).
+  After defining glyphs the daemon calls `driver.glyphs_loaded()`, **never `initialize()`**:
+  the HP's init (`ESC @`) erases glyphs.
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
 - `frames/base.py` — `Frame` interface; `frames/{clock,message,ticker,weather}.py`.
 - `glyphs.py` — shared hand-drawn label/icon bitmaps (inverted L/R/H/C, degree, colon fade).
@@ -199,8 +207,11 @@ uvicorn web.app:app --port 8000 --no-access-log   # serves UI + /api; shares sta
 pip install -r requirements-audio.txt   # numpy + sounddevice (PortAudio)
 python -m checkout.audioviz --list      # enumerate input devices -> devices.json
 python -m checkout.audioviz             # capture + stream bars to the daemon (set mode "spectrum")
+
+# HP LD220-HP next to the installed IBM (setup only): daemon + audioviz + UI on :8001
+deploy/bench-hp.sh                      # own files under bench-hp/; Ctrl-C stops it
 ```
-Env overrides: `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_LOOP_HZ`,
+Env overrides: `CHECKOUT_DISPLAY` (`ibm` | `hp`), `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_LOOP_HZ`,
 `CHECKOUT_STATUS_HZ`, `CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`,
 `CHECKOUT_LIBRARY_PATH` (web-only), `CHECKOUT_UI_DIST`, `CHECKOUT_SPECTRUM_SOCK`,
 `CHECKOUT_DEVICES_PATH` (audioviz). Weather needs outbound HTTPS to
@@ -238,6 +249,11 @@ login: `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
   (warns if npm absent), `sed`-substitutes the real path into
   `~/.config/systemd/user/`, `daemon-reload`, then `enable --now` all three.
   `deploy/uninstall.sh` does `disable --now` + removes the units + reload.
+- **Display choice (v1.8.0):** `install.sh --display ibm|hp [--port PATH]` writes
+  `~/.config/checkout/env`, which the daemon unit reads via
+  `EnvironmentFile=-%h/.config/checkout/env`. Without `--port` it takes the only
+  `/dev/serial/by-id` entry, or stops if there are several. Always pin a by-id path
+  when two USB-serial adapters are plugged in: `ttyUSB0`/`ttyUSB1` can swap at boot.
 - **USER services, NOT lingering/headless (the rationale):** spectrum's system-
   audio capture taps the user's **PipeWire monitor**, which only exists inside an
   active login session. `loginctl enable-linger` is deliberately NOT run — the
@@ -265,6 +281,8 @@ See `docs/roadmap.md`.
   [Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
   (`charsetweb/cropped_<ascii>.jpg`), released into the public domain
   (**Unlicense**). Decoded by sampling each photo's 5×7 dot grid.
+- **HP command set:** the OEM "VFD LD220 User Manual V2.3" (§4.1.2, EPSON mode),
+  bundled in the `ld220` Ruby gem. Bench-confirmed items are marked in `docs/hardware.md`.
 
 This project uses these projects' **published facts** — command bytes and glyph
 bitmaps — each **independently bench-confirmed on our unit**. The driver and all
