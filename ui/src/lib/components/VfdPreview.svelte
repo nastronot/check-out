@@ -6,6 +6,7 @@
     LINE_LEN,
     lineToCells,
   } from '../font5x7';
+  import { displayLabel } from '../display';
   import { GLASS_BG, paintCell } from '../dotrender';
   import { spectrumStatusCells, type Cell } from '../spectrumbars';
   import type { GlyphMap, Status } from '../types';
@@ -199,7 +200,7 @@
     <div class="vfd__bloom" aria-hidden="true"></div>
   </div>
   <div class="vfd__caption">
-    <span class="tag">IBM SUREPOS 2×20 VFD</span>
+    <span class="tag">{displayLabel(status)}</span>
     <span class="vfd__cap-right">
       {status?.blank ? 'BLANK' : levelLabel}
     </span>

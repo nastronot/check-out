@@ -127,6 +127,9 @@ export interface AudioDevice {
 
 export interface Status {
   alive: boolean;
+  /** Which display the daemon drives ("ibm" | "hp"); absent before v1.8.0. */
+  display?: string | null;
+  display_label?: string | null;
   mode: string;
   top: string;
   bottom: string;
