@@ -33,6 +33,7 @@ Which display a machine has is a **per-machine setting**.
 | **Command mode** | **EPSON** |
 | Character set | USA/Europe |
 | Power-on screen | scrolling "have a nice day" welcome, until the host writes |
+| Power | **5 V USB bus power alone** — no 12 V supply needed (the manual: "5V to 12V" input). Looks brighter than the IBM by eye |
 
 `22222222` is a placeholder serial number that many Prolific chips share. It is
 still unique on dad, because the IBM's adapter is an FTDI chip. On a machine with
