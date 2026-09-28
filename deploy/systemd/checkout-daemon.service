@@ -9,6 +9,8 @@ Documentation=https://github.com/check-out
 [Service]
 Type=simple
 WorkingDirectory=__CHECKOUT_REPO__
+# Per-machine display choice, written by install.sh --display. Optional ("-").
+EnvironmentFile=-%h/.config/checkout/env
 ExecStart=__CHECKOUT_REPO__/.venv/bin/python -m checkout.daemon
 Restart=on-failure
 RestartSec=2

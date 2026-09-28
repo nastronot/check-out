@@ -9,6 +9,21 @@
 #
 set -euo pipefail
 
+# --- arguments ---------------------------------------------------------------
+DISPLAY_KIND=""
+DISPLAY_PORT=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--display) DISPLAY_KIND="${2:-}"; shift 2 ;;
+	--port) DISPLAY_PORT="${2:-}"; shift 2 ;;
+	*) echo "usage: install.sh [--display ibm|hp] [--port /dev/serial/by-id/...]" >&2; exit 2 ;;
+	esac
+done
+case "${DISPLAY_KIND}" in
+"" | ibm | hp) ;;
+*) echo "ERROR: --display must be ibm or hp, got '${DISPLAY_KIND}'" >&2; exit 2 ;;
+esac
+
 # --- resolve paths -----------------------------------------------------------
 # Repo root = the parent of this script's directory (deploy/).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,6 +74,31 @@ for svc in "${SERVICES[@]}"; do
 	sed "s|__CHECKOUT_REPO__|${REPO_ROOT}|g" "${src}" >"${dst}"
 	echo "installed ${dst}"
 done
+
+# --- per-machine display choice ----------------------------------------------
+ENV_FILE="${HOME}/.config/checkout/env"
+if [ -n "${DISPLAY_KIND}" ]; then
+	if [ -z "${DISPLAY_PORT}" ]; then
+		shopt -s nullglob
+		ports=(/dev/serial/by-id/*)
+		shopt -u nullglob
+		if [ "${#ports[@]}" -ne 1 ]; then
+			echo "ERROR: --port not given and ${#ports[@]} serial devices found:" >&2
+			printf '  %s\n' "${ports[@]}" >&2
+			echo "       re-run with --port <one of the above>" >&2
+			exit 1
+		fi
+		DISPLAY_PORT="${ports[0]}"
+	fi
+	mkdir -p "$(dirname "${ENV_FILE}")"
+	printf 'CHECKOUT_DISPLAY=%s\nCHECKOUT_PORT=%s\n' "${DISPLAY_KIND}" "${DISPLAY_PORT}" >"${ENV_FILE}"
+	echo "display: ${DISPLAY_KIND} on ${DISPLAY_PORT} (${ENV_FILE})"
+elif [ -f "${ENV_FILE}" ]; then
+	echo "display: keeping ${ENV_FILE} (no --display given):"
+	sed 's/^/  /' "${ENV_FILE}"
+else
+	echo "display: defaults (ibm, /dev/ttyUSB0) — no --display given"
+fi
 
 # --- enable + start ----------------------------------------------------------
 echo

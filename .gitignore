@@ -6,6 +6,7 @@ library.json
 .state-*.tmp
 .status-*.tmp
 .library-*.tmp
+bench-hp/
 
 # Node / Vite (web UI)
 node_modules/

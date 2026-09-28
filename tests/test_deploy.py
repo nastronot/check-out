@@ -19,7 +19,7 @@ SYSTEMD = os.path.join(DEPLOY, "systemd")
 
 SERVICES = ["checkout-daemon", "checkout-audioviz", "checkout-web"]
 PLACEHOLDER = "__CHECKOUT_REPO__"
-SCRIPTS = ["install.sh", "uninstall.sh"]
+SCRIPTS = ["install.sh", "uninstall.sh", "bench-hp.sh"]
 
 
 def _unit_path(name):
@@ -129,3 +129,36 @@ def test_install_substitutes_placeholder():
     assert "systemctl --user enable --now" in body
     # Lingering must NOT be enabled (start-on-login by design).
     assert "enable-linger" not in body
+
+
+def test_daemon_unit_reads_optional_env_file():
+    with open(_unit_path("checkout-daemon"), encoding="utf-8") as fh:
+        assert "EnvironmentFile=-%h/.config/checkout/env" in fh.read()
+
+
+def test_install_writes_display_env_file():
+    with open(os.path.join(DEPLOY, "install.sh"), encoding="utf-8") as fh:
+        body = fh.read()
+    assert "--display" in body and "--port" in body
+    assert ".config/checkout/env" in body
+    assert "CHECKOUT_DISPLAY=" in body and "CHECKOUT_PORT=" in body
+
+
+def test_install_rejects_a_bad_display_before_systemd():
+    result = subprocess.run(
+        ["bash", os.path.join(DEPLOY, "install.sh"), "--display", "hpp"],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "HOME": "/nonexistent-home"},
+    )
+    assert result.returncode == 2
+    assert "ibm" in result.stderr and "hp" in result.stderr
+
+
+def test_bench_hp_isolates_its_files_and_port():
+    with open(os.path.join(DEPLOY, "bench-hp.sh"), encoding="utf-8") as fh:
+        body = fh.read()
+    assert "CHECKOUT_DISPLAY=hp" in body
+    assert "--port 8001" in body
+    for key in ("STATE_PATH", "STATUS_PATH", "LIBRARY_PATH", "DEVICES_PATH", "SPECTRUM_SOCK"):
+        assert f"CHECKOUT_{key}=" in body
+    assert "systemctl" not in body  # never touches the installed units
