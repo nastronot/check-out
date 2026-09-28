@@ -361,3 +361,8 @@ def test_show_changes_falls_back_to_a_full_frame_when_cheaper(driver, capsys):
     driver.show_changes(("A" * 20, "A" * 20), ("B" * 20, "B" * 20))
     data = capture_bytes(capsys)
     assert data[:2] == [0x10, 0x00] and len(data) == 45   # exactly show()'s frame
+
+
+def test_glyphs_loaded_reinitializes(driver, capsys):
+    driver.glyphs_loaded()
+    assert capture_bytes(capsys) == [0x1F, 0x00, 0x01, 0x11]

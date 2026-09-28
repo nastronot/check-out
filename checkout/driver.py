@@ -190,8 +190,8 @@ def _pad(text: str) -> str:
     return text[:COLS].ljust(COLS)
 
 
-class VFDDriver:
-    """Owns the serial port and all outgoing command bytes.
+class SerialDriver:
+    """Owns a write-only serial port; each subclass owns one display's bytes.
 
     Use as a context manager so the port is always closed::
 
@@ -201,6 +201,9 @@ class VFDDriver:
     ``dry_run=True`` prints the outgoing byte stream as hex instead of opening
     the port, so the logic is exercisable on any machine with no display.
     """
+
+    DISPLAY = ""  # the CHECKOUT_DISPLAY name, e.g. "ibm"
+    LABEL = ""    # shown under the UI preview
 
     def __init__(
         self,
@@ -231,14 +234,8 @@ class VFDDriver:
         # Put the display into the known-good state (extended mode, no scroll).
         self.initialize()
 
-    def initialize(self) -> None:
-        """Send the mandatory init sequence: reset, extended-mode on, scroll off.
-
-        Bytes: ``0x1F 0x00 0x01 0x11``. This MUST run on every open/reconnect —
-        without extended mode + scroll-disable the display scrolls when the
-        bottom-right cell is written. One buffered write.
-        """
-        self._write(INIT_SEQUENCE)
+    def initialize(self) -> None:  # pragma: no cover - subclasses override
+        raise NotImplementedError
 
     def _force_raw_mode(self) -> None:
         """Disable the tty line discipline's OUTPUT post-processing.
@@ -279,7 +276,7 @@ class VFDDriver:
             finally:
                 self._serial = None
 
-    def __enter__(self) -> "VFDDriver":
+    def __enter__(self) -> "SerialDriver":
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -319,6 +316,26 @@ class VFDDriver:
             self._serial.flush()  # tcdrain: block until on the wire — paces writes
         except (serial.SerialException, OSError) as exc:
             raise VFDError(f"write to {self.port} failed: {exc}") from exc
+
+
+class VFDDriver(SerialDriver):
+    """The IBM SurePOS (Futaba M202MD10C) command set. See docs/hardware.md."""
+
+    DISPLAY = "ibm"
+    LABEL = "IBM SUREPOS 2×20 VFD"
+
+    def initialize(self) -> None:
+        """Send the mandatory init sequence: reset, extended-mode on, scroll off.
+
+        Bytes: ``0x1F 0x00 0x01 0x11``. This MUST run on every open/reconnect —
+        without extended mode + scroll-disable the display scrolls when the
+        bottom-right cell is written. One buffered write.
+        """
+        self._write(INIT_SEQUENCE)
+
+    def glyphs_loaded(self) -> None:
+        """After defining glyphs: re-init, since a define can drop extended mode."""
+        self.initialize()
 
     # --- public command surface ----------------------------------------------
     def clear(self) -> None:
