@@ -324,7 +324,7 @@ class VFDDriver(SerialDriver):
     """The IBM SurePOS (Futaba M202MD10C) command set. See docs/hardware.md."""
 
     DISPLAY = "ibm"
-    LABEL = "IBM SUREPOS 2×20 VFD"
+    LABEL = "IBM · SUREPOS 500"  # make · model, shown under the UI preview
 
     def initialize(self) -> None:
         """Send the mandatory init sequence: reset, extended-mode on, scroll off.

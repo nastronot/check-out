@@ -33,12 +33,13 @@
     <div class="masthead__meta">
       {#if showBumpbarNav(bumpbarInstalled, route)}
         <nav class="nav">
-          <a href="#/" aria-current={route === 'board' ? 'page' : undefined}>board</a>
+          <a href="#/" aria-current={route === 'board' ? 'page' : undefined}>display</a>
           <span class="nav__dot">·</span>
           <a href="#/bumpbar" aria-current={route === 'bumpbar' ? 'page' : undefined}>bump bar</a>
+          <span class="nav__dot">·</span>
         </nav>
       {/if}
-      <span class="masthead__sub">phosphor status board · v{version}</span>
+      <span class="masthead__sub">v{version}</span>
     </div>
   </header>
 
@@ -104,7 +105,7 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     align-items: baseline;
-    gap: 6px 18px;
+    gap: 6px 8px;
   }
 
   /* Two screens: board and bump bar. Same small-caps voice as the sub line. */

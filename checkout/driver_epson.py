@@ -112,7 +112,7 @@ class EpsonDriver(SerialDriver):
     """HP LD220-HP, EPSON command mode. Same public surface as VFDDriver."""
 
     DISPLAY = "hp"
-    LABEL = "HP LD220 2×20 VFD"
+    LABEL = "HP · LD220-HP"      # make · model, shown under the UI preview
 
     def __init__(self, *args, **kwargs) -> None:
         # The driver's copy of the 9 bitmaps: glyphs_loaded() always re-sends all

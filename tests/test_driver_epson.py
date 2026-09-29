@@ -22,7 +22,7 @@ def hp():
 
 def test_identity():
     assert EpsonDriver.DISPLAY == "hp"
-    assert EpsonDriver.LABEL == "HP LD220 2×20 VFD"
+    assert EpsonDriver.LABEL == "HP · LD220-HP"
     assert VFDDriver.DISPLAY == "ibm"
 
 

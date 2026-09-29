@@ -584,7 +584,7 @@ class _CountingDriver:
     port = "fake"
     baud = 9600
     DISPLAY = "ibm"
-    LABEL = "IBM SUREPOS 2×20 VFD"
+    LABEL = "IBM · SUREPOS 500"
 
     def __init__(self):
         self.shows = 0
@@ -1173,4 +1173,4 @@ def test_status_reports_the_display(monkeypatch):
     monkeypatch.setattr(daemon.config, "DISPLAY", "hp")
     daemon.tick_once(_CountingDriver(), {"mode": "clock"}, daemon._new_ctx(), now=NOW)
     assert saved[-1]["display"] == "hp"
-    assert saved[-1]["display_label"] == "HP LD220 2×20 VFD"
+    assert saved[-1]["display_label"] == "HP · LD220-HP"
