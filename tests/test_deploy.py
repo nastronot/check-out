@@ -174,6 +174,14 @@ def test_install_restarts_running_services():
         assert 'systemctl --user restart "${SERVICES[@]}"' in fh.read()
 
 
+def test_install_checks_the_serial_port_group():
+    # work was never added to uucp, so its daemon could not open the HP.
+    with open(os.path.join(DEPLOY, "install.sh"), encoding="utf-8") as fh:
+        body = fh.read()
+    assert "stat -L -c %G" in body
+    assert "sudo usermod -aG" in body and "sudo setfacl" in body
+
+
 def test_bench_hp_refuses_an_unpinned_installed_daemon():
     with open(os.path.join(DEPLOY, "bench-hp.sh"), encoding="utf-8") as fh:
         body = fh.read()

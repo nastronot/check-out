@@ -106,6 +106,8 @@ elif [ -f "${ENV_FILE}" ]; then
 else
 	echo "display: defaults (ibm, /dev/ttyUSB0) — no --display given"
 fi
+SERIAL_PORT="${DISPLAY_PORT:-$(sed -n 's/^CHECKOUT_PORT=//p' "${ENV_FILE}" 2>/dev/null || true)}"
+SERIAL_PORT="${SERIAL_PORT:-/dev/ttyUSB0}"
 
 # --- bump bar: its Python dependency BEFORE the unit starts ----------------
 # (a started unit without evdev would crash-loop into systemd's start limit)
@@ -133,6 +135,20 @@ if [[ " ${SERVICES[*]} " == *" checkout-bumpbar "* ]] &&
 	echo "bump bar: one sudo step gives you access to the bar (and only the bar):"
 	echo "  sudo install -m 644 ${REPO_ROOT}/deploy/udev/70-checkout-bumpbar.rules /etc/udev/rules.d/"
 	echo "  sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input"
+fi
+
+# --- serial port: the daemon needs the port's group (uucp on Arch) ----------
+# `id -nG USER` reads the group database, so it sees a group added this session.
+# The running services don't: they keep the groups of the user manager, which
+# started at login — so the ACL line lets the daemon in now, before a re-login.
+if [ -e "${SERIAL_PORT}" ]; then
+	port_group="$(stat -L -c %G "${SERIAL_PORT}")"
+	if ! id -nG "${USER}" | tr ' ' '\n' | grep -qx "${port_group}"; then
+		echo
+		echo "serial: you are not in '${port_group}', which owns ${SERIAL_PORT}. One sudo step:"
+		echo "  sudo usermod -aG ${port_group} ${USER} && sudo setfacl -m u:${USER}:rw $(readlink -f "${SERIAL_PORT}")"
+		echo "  (the group applies after a full logout; the ACL lets the daemon in now)"
+	fi
 fi
 
 cat <<EOF

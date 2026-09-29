@@ -271,6 +271,11 @@ with `sudo`:
 ```bash
 sudo usermod -aG uucp "$USER"   # then re-login
 ```
+The services don't pick the group up at a plain re-login: they run under the
+systemd user manager, which keeps the groups it started with until every session
+ends. Until then `sudo setfacl -m u:$USER:rw /dev/ttyUSBn` lets the daemon in (lost
+on unplug/reboot). `install.sh` prints both lines when you're missing the port's
+group; on dad and work chezmoi adds the group itself.
 
 ## Running as a service (v1.3.0, ordering fix v1.3.1)
 `deploy/` installs check-out as **three systemd USER services** (plus
