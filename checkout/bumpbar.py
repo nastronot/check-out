@@ -172,6 +172,8 @@ class Service:
         self.keypad = Keypad()
 
     def handle(self, code: int, value: int) -> None:
+        if value == 1 and button_for(code) is None:
+            _log(f"unmapped key code {code} (not in bumpbar_map.KEYCODES)")
         hit = self.keypad.feed(code, value, self.watcher.current())
         self.status.update(layer=self.keypad.layer)
         if hit is None:

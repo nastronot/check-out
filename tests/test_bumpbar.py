@@ -189,3 +189,10 @@ def test_run_reports_permission_error(tmp_path):
     ticks = iter([False, True])
     svc.run(stop=lambda: next(ticks))
     assert "Permission denied" in json.loads((tmp_path / "s.json").read_text())["error"]
+
+
+def test_handle_logs_an_unmapped_key(tmp_path, capsys):
+    svc = make_service(tmp_path)
+    svc.handle(99, 1)
+    assert "unmapped key code 99" in capsys.readouterr().out
+    assert svc.runner.done == []
