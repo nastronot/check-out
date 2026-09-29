@@ -2,7 +2,8 @@
 
 Pure data + file I/O; no evdev import, so it loads on machines without a bar.
 The map has two layers: ``tap`` (a plain press) and ``shift`` (while the grey
-key is held). The grey key itself is the layer key and is never in the map.
+key was tapped: a one-shot shift). The grey key itself is the layer key and is
+never in the map.
 """
 
 from __future__ import annotations

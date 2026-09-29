@@ -98,7 +98,8 @@
   $: status = data?.status ?? null;
   $: press = status?.last_press ?? null;
   $: hit = press && isFlashing(press.at, now) ? press.button : '';
-  $: shiftHeld = !!status?.connected && status?.layer === 'shift';
+  // The grey key glows while the one-shot shift is armed (3 s, or until used).
+  $: shiftArmed = !!status?.connected && status?.layer === 'shift';
   $: groups = groupActions(data?.actions ?? []);
   $: current = data?.buttons.find((b) => b.id === selected) ?? null;
   $: isShift = !!data && selected === data.shift;
@@ -125,7 +126,7 @@
           {#each data.buttons as b (b.id)}
             <button
               class="key key--{b.color}"
-              class:key--hit={hit === b.id || (b.id === data.shift && shiftHeld)}
+              class:key--hit={hit === b.id || (b.id === data.shift && shiftArmed)}
               aria-pressed={selected === b.id}
               on:click={() => (selected = b.id)}
             >
@@ -133,7 +134,7 @@
               <span class="key__acts">
                 {#if b.id === data.shift}
                   <span class="key__act">shift</span>
-                  <span class="key__act key__act--alt">hold</span>
+                  <span class="key__act key__act--alt">then a key</span>
                 {:else}
                   <span class="key__act">{actionLabel(data.actions, data.map.tap[b.id])}</span>
                   <span class="key__act key__act--alt">⇧ {actionLabel(data.actions, data.map.shift[b.id])}</span>
@@ -149,7 +150,7 @@
           title={connected ? 'bar connected' : 'bar not connected'}
         ></span>
       </div>
-      <p class="field__hint pad-hint">Click a key to remap it. Hold the grey key for the ⇧ action.</p>
+      <p class="field__hint pad-hint">Click a key to remap it. Tap the grey key, then a key, for its ⇧ action.</p>
     {/if}
   </section>
 
@@ -159,14 +160,16 @@
       {#if data && current}
         {#if isShift}
           <p class="field__hint">
-            The grey key is the shift. Hold it and every other key does its ⇧ action.
+            The grey key is a one-shot shift: tap it, then tap another key within
+            3 seconds, and that key does its ⇧ action. Tap grey twice to cancel. The
+            bar sends every key as an instant tap, so the shift can't be held.
             It can't be remapped.
           </p>
         {:else}
           {#each data.layers as layer (layer)}
             <div class="field">
               <label class="field__label" for="act-{layer}">
-                {layer === 'tap' ? 'Tap' : 'With ⇧ held'}
+                {layer === 'tap' ? 'Tap' : 'After ⇧'}
               </label>
               <select
                 id="act-{layer}"

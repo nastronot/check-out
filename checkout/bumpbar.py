@@ -5,7 +5,8 @@
 
 It GRABS the bar's input nodes (EVIOCGRAB: exclusive, so no key reaches
 Hyprland or a focused window), maps each press through the two-layer key map
-(``bumpbar.json``, written by the web) and runs the action. It writes
+(``bumpbar.json``, written by the web; the grey key is a one-shot shift: tap
+it, then a key) and runs the action. It writes
 ``bumpbar-status.json`` for the page. Missing bar = idle and retry every 2 s, so
 the service is harmless on a machine without one — but it is only installed
 where a bar lives (install.sh --bumpbar).
@@ -29,6 +30,10 @@ from checkout.state import atomic_write_json
 
 RETRY_S = 2.0
 HEARTBEAT_S = 2.0
+# How long a tap on the grey key keeps the shift layer armed.
+SHIFT_WINDOW_S = 3.0
+# select() timeout: short enough that an expired shift clears on the page promptly.
+POLL_S = 0.5
 EV_KEY = 1  # linux input-event-codes.h
 
 
@@ -42,28 +47,40 @@ def _now_iso() -> str:
 
 class Keypad:
     """Layer logic. ``feed`` takes one key event (value 1 down, 2 auto-repeat,
-    0 up) and returns ``(button, layer, action)`` when an action should run."""
+    0 up) and returns ``(button, layer, action)`` when an action should run.
 
-    def __init__(self) -> None:
-        self._shift = False
+    The grey key is a ONE-SHOT shift. The M4220 sends every key as an instant
+    tap — down and up within ~40 ms however long it is held (bench 2026-09-28) —
+    so a held modifier can't be seen. Tap grey, then tap a key within
+    SHIFT_WINDOW_S: that key uses the shift layer. Grey twice cancels.
+    """
+
+    def __init__(self, clock=time.monotonic) -> None:
+        self.clock = clock
+        self._armed_until: float | None = None
 
     @property
     def layer(self) -> str:
-        return "shift" if self._shift else "tap"
+        if self._armed_until is not None and self.clock() <= self._armed_until:
+            return "shift"
+        self._armed_until = None
+        return "tap"
 
     def feed(self, code: int, value: int, keymap: dict):
         button = button_for(code)
-        if button is None:
+        if button is None or value == 0:
             return None
         if button == SHIFT:
-            self._shift = value != 0
-            return None
-        if value == 0:
+            if value == 1:
+                self._armed_until = (None if self.layer == "shift"
+                                     else self.clock() + SHIFT_WINDOW_S)
             return None
         layer = self.layer
         action = keymap[layer][button]
         if value == 2 and not BY_ID[action].repeat:
             return None
+        if value == 1:
+            self._armed_until = None
         return button, layer, action
 
 
@@ -207,7 +224,7 @@ class Service:
                 self.status.update(connected=True, device=devices[0].path,
                                    layer="tap", error=None)
             try:
-                ready, _, _ = select.select(devices, [], [], HEARTBEAT_S)
+                ready, _, _ = select.select(devices, [], [], POLL_S)
                 for dev in ready:
                     for ev in dev.read():
                         # Keys come from the keyboard node only; the System
@@ -219,6 +236,7 @@ class Service:
                 _close_all(devices)
                 devices = None
                 self.status.update(connected=False, layer="tap")
+            self.status.update(layer=self.keypad.layer)  # an armed shift expiring
             self.status.tick()
         _close_all(devices or [], ungrab=True)
 

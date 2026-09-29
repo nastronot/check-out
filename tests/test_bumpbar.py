@@ -19,13 +19,34 @@ def test_keypad_tap_and_release():
 
 
 def test_keypad_shift_layer():
-    k, m = bb.Keypad(), bm.default_map()
-    assert k.feed(H, 1, m) is None          # shift alone does nothing
+    # The bar sends every key as an instant tap (bench 2026-09-28), so the grey
+    # key is a ONE-SHOT shift: tap it, and the next key within the window uses
+    # the shift layer.
+    now = [0.0]
+    k, m = bb.Keypad(clock=lambda: now[0]), bm.default_map()
+    assert k.feed(H, 1, m) is None          # grey alone does nothing
+    assert k.feed(H, 0, m) is None          # its instant release keeps it armed
     assert k.layer == "shift"
+    now[0] = 1.0
     assert k.feed(J, 1, m) == ("serve", "shift", "media_play_pause")
-    assert k.feed(H, 0, m) is None
+    assert k.layer == "tap"                 # used up by one key
+    assert k.feed(J, 1, m) == ("serve", "tap", "open_headline")
+
+
+def test_keypad_shift_expires():
+    now = [0.0]
+    k, m = bb.Keypad(clock=lambda: now[0]), bm.default_map()
+    k.feed(H, 1, m)
+    now[0] = bb.SHIFT_WINDOW_S + 0.1
     assert k.layer == "tap"
     assert k.feed(J, 1, m) == ("serve", "tap", "open_headline")
+
+
+def test_keypad_grey_twice_cancels():
+    k, m = bb.Keypad(), bm.default_map()
+    k.feed(H, 1, m)
+    k.feed(H, 1, m)
+    assert k.layer == "tap"
 
 
 def test_keypad_repeat_only_for_repeat_actions():
