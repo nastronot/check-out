@@ -1,13 +1,9 @@
 <script lang="ts">
-  import CommandBar from './CommandBar.svelte';
-  import StatusReadout from './StatusReadout.svelte';
-  import type { AppState, Brightness, Health, Status } from '../types';
+  import type { AppState, Brightness } from '../types';
 
-  // Everything about the DEVICE rather than a mode, in one panel: brightness and
-  // blank, the fire-once commands (self-test / reset), and the daemon readout.
+  // The device settings that apply in every mode — brightness and blank — as the
+  // last section of the Control panel (not a panel of their own).
   export let state: AppState | null = null;
-  export let status: Status | null = null;
-  export let health: Health = { ok: false, daemon_alive: false };
   export let patch: (p: Partial<AppState>) => void;
 
   // Hardware vertical scroll and code page are HIDDEN (v1.4.0), not removed:
@@ -43,12 +39,9 @@
   const setCodePage = (e: Event) => patch({ code_page: num(e) });
 </script>
 
-<section class="panel">
-  <div class="panel__title">Display</div>
+{#if state}
+  <div class="subhead">Display</div>
 
-  {#if !state}
-    <p class="loading">connecting to daemon…</p>
-  {:else}
     <!-- Brightness -->
     <div class="field">
       <span class="field__label">Brightness</span>
@@ -104,26 +97,14 @@
         </select>
       </div>
     {/if}
-  {/if}
-
-  <div class="subhead">Commands</div>
-  <CommandBar />
-
-  <div class="subhead">Daemon</div>
-  <StatusReadout {status} {health} />
-</section>
+{/if}
 
 <style>
-  .loading {
-    color: var(--text-mute);
-    font-size: 13px;
-  }
-
   .switches {
-    margin-bottom: 14px;
+    margin-top: 14px;
   }
 
-  /* section headings inside the one Display panel */
+  /* the divider that opens this section of the Control panel */
   .subhead {
     margin: 18px 0 10px;
     padding-top: 14px;

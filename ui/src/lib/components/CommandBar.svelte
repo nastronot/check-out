@@ -18,40 +18,40 @@
   }
 </script>
 
-<!-- A section of the Display panel (not a panel of its own). -->
-<div class="commands">
-  <div class="row">
-    <button
-      class="btn"
-      disabled={busy !== ''}
-      on:click={() => fire('self_test')}
-    >
-      Self-test
-    </button>
-    <button
-      class="btn btn--danger"
-      disabled={busy !== ''}
-      on:click={() =>
-        fire('reset', 'Reset the display? This reinitializes the panel.')}
-    >
-      Reset
-    </button>
-  </div>
-  {#if lastFired}
-    <p class="last">last → <span>{lastFired}</span></p>
-  {/if}
-</div>
+<!-- Self-test / Reset as small buttons in the Control panel's header: rarely
+     used, so they take no space of their own. A failure shows as a red outline. -->
+<span class="cmds">
+  <button
+    class="btn"
+    class:btn--failed={lastFired.endsWith('(failed)')}
+    disabled={busy !== ''}
+    title="Run the display's built-in self-test"
+    on:click={() => fire('self_test')}
+  >
+    Self-test
+  </button>
+  <button
+    class="btn btn--danger"
+    disabled={busy !== ''}
+    title="Reinitialize the display"
+    on:click={() => fire('reset', 'Reset the display? This reinitializes the panel.')}
+  >
+    Reset
+  </button>
+</span>
 
 <style>
-  .last {
-    margin: 12px 0 4px;
-    font-size: 11px;
-    color: var(--text-mute);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+  .cmds {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
   }
 
-  .last span {
-    color: var(--phosphor);
+  .cmds .btn {
+    margin-left: 0;
+  }
+
+  .btn--failed {
+    border-color: var(--red-dead);
   }
 </style>

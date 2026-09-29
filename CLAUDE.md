@@ -136,13 +136,18 @@ mode list (`ControlPanel.svelte` `MODES`) because the hardware ticker scrolls
 only the top row at one fixed speed; its daemon path, state keys and panel still
 work — add `'marquee'` back to `MODES` to restore it.
 
-### UI layout (v1.4.0)
-Left column: preview, glyph editor (draw grid + 3x3 slot grid side by side at
-equal height — slot thumbnails use `GlyphCanvas fit="height"` — tools below),
-glyph library. Right column: Control, Saved messages, then ONE Display panel
-(brightness, blank, commands, daemon readout; `CommandBar` and `StatusReadout`
-render as its sections). HW scroll and code page are hidden behind
-`DisplayPanel.svelte` `SHOW_HW_SETTINGS = false` — kept, not removed.
+### UI layout (v1.4.0, consolidated v1.9.0)
+Two screens on hash routes (`App.svelte`): the display page (`#/`,
+`BoardPage.svelte`) and the bump bar page (`#/bumpbar`). Display page — left column:
+preview (a SurePOS-style black housing; its footer is make · model and a live/offline
+light + level, which replaced the old daemon readout), glyph editor (draw grid + 3x3
+slot grid side by side at equal height — slot thumbnails use `GlyphCanvas
+fit="height"` — tools below), glyph library. Right column: ONE Control panel, then
+Saved messages. Control = mode + its settings, then a "Display" section
+(`DisplaySettings.svelte`: brightness, blank) passed in its default slot, with
+Self-test / Reset (`CommandBar`) small in its header slot. HW scroll and code page
+are hidden behind `DisplaySettings.svelte` `SHOW_HW_SETTINGS = false` — kept, not
+removed.
 **Shared UI patterns (`app.css`) — use these, don't restyle per panel:** panel
 headers are dot + title left, any `.btn` pushed right; `.seg` rows fill the width
 with equal buttons, `.seg--sm` is the compact inline variant; `.ctl-row` +
@@ -189,7 +194,14 @@ machine** — `install.sh --bumpbar`, chezmoi enables it on dad only; work has n
   Desktop commands are argv lists, no shell, 5 s timeout; `hyprlock`/`xdg-open` are
   SPAWNED detached (a timeout would kill the lock screen). Uncaptured commands get
   /dev/null stdout+stderr: `wl-copy` forks a child that would hold a pipe open.
+- **Context keys (defaults):** PRINT = `mode_cycle` (clock/message → animation,
+  spectrum → layout, dynamic → colon feature); ROTATE PAGES = `mode_option` (message →
+  next saved message, spectrum → bars/line, dynamic → half speed, clock → nothing);
+  RECALL = `news_toggle` → daemon command `toggle_news`, which cancels ANY playing
+  alert (pressed or live) or else plays the newest. Grey → PRINT = screenshot.
 - **Page:** `#/bumpbar` (hash routes in `App.svelte`; the board is `BoardPage.svelte`).
+  The pad is drawn like the real bar — legends only; a key's actions are in the side
+  panel and its hover tooltip.
   The masthead link shows only when `/api/bumpbar` says `installed` (a status file
   exists), so work never shows it. `bench-hp.sh` points the bump bar paths into
   `bench-hp/`.

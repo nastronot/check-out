@@ -13,6 +13,8 @@
 
   export let status: Status | null = null;
   export let glyphs: GlyphMap = {};
+  /** Daemon liveness: the footer's status light (replaces the old readout). */
+  export let alive = false;
 
   // --- Preview dot geometry (logical px; the canvas is dpr-scaled to fit) -----
   // All tunable in one place — nudge to match the real glass. The two spacings
@@ -200,32 +202,53 @@
     <div class="vfd__bloom" aria-hidden="true"></div>
   </div>
   <div class="vfd__caption">
-    <span class="tag">{displayLabel(status)}</span>
-    <span class="vfd__cap-right">
-      {status?.blank ? 'BLANK' : levelLabel}
+    <span class="vfd__model">{displayLabel(status)}</span>
+    <span class="vfd__cap-right" title={alive ? 'the daemon is driving the display' : 'the daemon is not running'}>
+      <span class="led" class:led--on={alive} class:led--dead={!alive}></span>
+      {alive ? 'live' : 'offline'} · {status?.blank ? 'blank' : levelLabel.toLowerCase()}
     </span>
   </div>
 </div>
 
 <style>
+  /* The housing: the SurePOS's matte black plastic around a smoked window. */
   .vfd {
-    --frame: #11191a;
-    background: linear-gradient(180deg, #161f20, #0a1213);
-    border: 1px solid var(--bezel-hi);
-    border-radius: 12px;
-    padding: 16px 16px 12px;
+    background:
+      radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 60%),
+      linear-gradient(180deg, #1a1c1d, #0d0e0f);
+    border: 1px solid #2a2d2e;
+    border-radius: 14px;
+    padding: 18px 18px 12px;
     box-shadow:
-      var(--shadow-inset),
-      0 8px 30px rgba(0, 0, 0, 0.6);
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+      0 10px 32px rgba(0, 0, 0, 0.65);
   }
 
   .vfd__glass {
     position: relative;
-    border-radius: 7px;
+    border-radius: 5px;
     overflow: hidden;
     background: #03090a;
     border: 1px solid #000;
-    box-shadow: inset 0 0 36px rgba(0, 0, 0, 0.9);
+    /* the window is recessed into the housing */
+    box-shadow:
+      inset 0 0 36px rgba(0, 0, 0, 0.9),
+      0 0 0 3px #070808,
+      0 1px 0 4px rgba(255, 255, 255, 0.04);
+  }
+
+  /* smoked glass: a faint diagonal reflection across the window */
+  .vfd__glass::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0) 38%
+    );
   }
 
   canvas {
@@ -272,9 +295,25 @@
     margin-top: 10px;
   }
 
-  .vfd__cap-right {
+  /* The model name, printed small on the housing like a maker's badge. */
+  .vfd__model {
     font-size: 10px;
     letter-spacing: 0.18em;
+    color: #6b7174;
+  }
+
+  .vfd__cap-right {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
     color: var(--text-mute);
+  }
+
+  .vfd__cap-right .led {
+    width: 7px;
+    height: 7px;
   }
 </style>

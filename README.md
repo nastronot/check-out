@@ -322,10 +322,10 @@ key reaches the desktop, and turns each key into an action.
 |---|---|---|
 | DECREASE / INCREASE | brightness − / + | volume − / + |
 | PREVIOUS / NEXT | previous / next mode | previous / next track |
-| PRINT | screenshot → clipboard | — |
-| ROTATE PAGES | next saved message | next audio output |
+| PRINT | cycle the live mode's style: animation (clock, message), layout (spectrum), time feature (dynamic) | screenshot → clipboard |
+| ROTATE PAGES | the live mode's option: next saved message (message), bars/line (spectrum), half speed (dynamic) | next audio output |
 | TOGGLE SCREENS | blank / unblank | mic mute |
-| RECALL | replay the latest news alert | lock screen |
+| RECALL | play the latest news alert — or, while any alert runs, cancel it | lock screen |
 | SERVE | open the last headline | play / pause |
 
 **The grey key is a one-shot shift, not a held one.** The bar sends every key as

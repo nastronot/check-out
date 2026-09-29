@@ -245,7 +245,7 @@
 </script>
 
 <section class="panel">
-  <div class="panel__title">Control</div>
+  <div class="panel__title">Control<slot name="actions" /></div>
 
   {#if !state}
     <p class="loading">connecting to daemon…</p>
@@ -623,6 +623,8 @@
       </div>
     {/if}
   {/if}
+  <!-- Device settings that apply in every mode (brightness, blank). -->
+  <slot />
 </section>
 
 <style>

@@ -258,3 +258,10 @@ What the build and bench changed from the design above. `CLAUDE.md` and
 - **Switch:** it picks the bar's identity — `a`–`j` toward the RJ45, `k`–`t`
   toward the RJ11 (USB stays up) — most likely for chaining two bars. Both
   identities map to the same buttons.
+- **Context keys (Matt, after using it):** PRINT cycles the live mode's style,
+  ROTATE PAGES does the live mode's option, RECALL toggles news and cancels any
+  playing alert (daemon `toggle_news`). Screenshot moved to grey → PRINT.
+- **Design pass:** the pad is drawn like the real bar with legends only; the
+  Device panel became a one-line status under the pad. On the display page the
+  Display panel folded into Control and the daemon readout became the preview's
+  live light.

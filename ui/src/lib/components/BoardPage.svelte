@@ -2,7 +2,8 @@
   import { onDestroy, onMount } from 'svelte';
   import VfdPreview from './VfdPreview.svelte';
   import ControlPanel from './ControlPanel.svelte';
-  import DisplayPanel from './DisplayPanel.svelte';
+  import CommandBar from './CommandBar.svelte';
+  import DisplaySettings from './DisplaySettings.svelte';
   import GlyphEditorPanel from './GlyphEditorPanel.svelte';
   import SavedMessages from './SavedMessages.svelte';
   import GlyphLibrary from './GlyphLibrary.svelte';
@@ -37,7 +38,7 @@
        gap under the fixed-size preview. One column = one stack = no inflation. -->
   <div class="layout__left">
     <div class="layout__preview">
-      <VfdPreview status={$status} {glyphs} />
+      <VfdPreview status={$status} {glyphs} alive={$health.daemon_alive} />
     </div>
     <div class="layout__glyphs">
       <GlyphEditorPanel />
@@ -46,10 +47,13 @@
   </div>
 
   <div class="layout__controls">
-    <ControlPanel state={$appState} status={$status} patch={patchState} />
+    <!-- One Control panel: mode + its settings, then the device (brightness,
+         blank); Self-test / Reset sit small in its header. -->
+    <ControlPanel state={$appState} status={$status} patch={patchState}>
+      <CommandBar slot="actions" />
+      <DisplaySettings state={$appState} patch={patchState} />
+    </ControlPanel>
     <SavedMessages />
-    <!-- Display = device settings + commands + daemon readout, in one panel -->
-    <DisplayPanel state={$appState} status={$status} health={$health} patch={patchState} />
   </div>
 </main>
 

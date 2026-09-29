@@ -12,14 +12,15 @@
     type Layer,
   } from '../bumpbar';
 
-  // The bump bar page: a drawing of the real pad with each key's two actions,
-  // a Key panel to remap the selected key, and the service's Device readout.
+  // The bump bar page: the real pad drawn as it looks (legends only), one panel
+  // to remap the selected key, and a one-line status under the pad.
   // The web only WRITES bumpbar.json; the service picks it up on the next press.
   let data: BumpBar | null = null;
   let loadError = '';
   let saveError = '';
   let selected = 'next';
   let now = Date.now();
+
   // Map generation: bumped by every save. A poll SENT before a save must not
   // put the old map back when it lands after the save finished.
   let mapGen = 0;
@@ -62,46 +63,46 @@
     clearInterval(clockTimer);
   });
 
-  async function saveMap(next: BumpMap): Promise<void> {
-    if (!data) return;
-    data = { ...data, map: next };
+  async function store(write: () => Promise<BumpMap>): Promise<void> {
     mapGen += 1;
     try {
-      const stored = await putBumpbarMap(next);
+      const stored = await write();
       mapGen += 1;
       if (data) data = { ...data, map: stored };
       saveError = '';
     } catch (e) {
       saveError = String(e);
+      await poll();
     }
-    if (saveError) await poll();
   }
 
   function setAction(layer: Layer, button: string, e: Event): void {
     if (!data) return;
     const value = (e.currentTarget as HTMLSelectElement).value;
-    void saveMap({ ...data.map, [layer]: { ...data.map[layer], [button]: value } });
+    const next = { ...data.map, [layer]: { ...data.map[layer], [button]: value } };
+    data = { ...data, map: next };
+    void store(() => putBumpbarMap(next));
   }
 
-  async function resetMap(): Promise<void> {
-    if (!data) return;
-    mapGen += 1;
-    try {
-      const stored = await resetBumpbarMap();
-      mapGen += 1;
-      if (data) data = { ...data, map: stored };
-      saveError = '';
-    } catch (e) {
-      saveError = String(e);
-    }
-  }
+  const resetMap = () => void store(resetBumpbarMap);
 
-  function legendOf(b: BumpButton): string {
+  function legendOf(b: BumpButton | undefined | null): string {
+    if (!b) return '';
     return b.legend || 'SHIFT';
   }
 
   function hintOf(id: string): string {
     return data?.actions.find((a) => a.id === id)?.hint ?? '';
+  }
+
+  // The key's two actions, shown on hover (the drawing itself stays clean).
+  function tipOf(b: BumpButton): string {
+    if (!data) return '';
+    if (b.id === data.shift) return 'Shift: tap it, then a key';
+    return `${actionLabel(data.actions, data.map.tap[b.id])}  ·  shift: ${actionLabel(
+      data.actions,
+      data.map.shift[b.id],
+    )}`;
   }
 
   function ago(at: string, t: number): string {
@@ -122,22 +123,24 @@
   $: isShift = !!data && selected === data.shift;
   $: connected = !!data?.alive && !!status?.connected;
   $: errorText = saveError || data?.map_error || status?.error || '';
-  $: pressLegend = press
-    ? legendOf(data?.buttons.find((b) => b.id === press?.button) ?? { id: '', legend: press.button, color: 'grey' })
-    : '';
+  $: barState = !data
+    ? ''
+    : !data.installed
+      ? 'no bump bar service on this machine'
+      : !data.alive
+        ? 'service stopped'
+        : connected
+          ? 'connected'
+          : 'unplugged';
 </script>
 
 <main class="bb">
-  <section class="panel pad-panel">
-    <div class="panel__title">
-      Pad
-      <button class="btn" on:click={resetMap} disabled={!data}>Defaults</button>
-    </div>
-
+  <section class="pad">
     {#if !data}
       <p class="muted">{loadError ? `web API: ${loadError}` : 'loading…'}</p>
     {:else}
-      <!-- The real bar: brushed steel plate, 2×5 keys in their cap colours. -->
+      <!-- The real bar: a brushed stainless plate, ten keys in their cap
+           colours with printed legends, and the status LED hole below. -->
       <div class="plate">
         <div class="keys">
           {#each data.buttons as b (b.id)}
@@ -145,18 +148,13 @@
               class="key key--{b.color}"
               class:key--hit={hit === b.id || (b.id === data.shift && shiftArmed)}
               aria-pressed={selected === b.id}
+              aria-label={legendOf(b)}
+              title={tipOf(b)}
               on:click={() => (selected = b.id)}
             >
-              <span class="key__legend" class:key__legend--shift={!b.legend}>{b.legend || '⇧'}</span>
-              <span class="key__acts">
-                {#if b.id === data.shift}
-                  <span class="key__act">shift</span>
-                  <span class="key__act key__act--alt">then a key</span>
-                {:else}
-                  <span class="key__act">{actionLabel(data.actions, data.map.tap[b.id])}</span>
-                  <span class="key__act key__act--alt">⇧ {actionLabel(data.actions, data.map.shift[b.id])}</span>
-                {/if}
-              </span>
+              {#each b.legend.split(' ').filter(Boolean) as word}
+                <span>{word}</span>
+              {/each}
             </button>
           {/each}
         </div>
@@ -164,120 +162,81 @@
           class="plate__led"
           class:plate__led--idle={connected && !hit}
           class:plate__led--hit={connected && !!hit}
-          title={connected ? 'bar connected' : 'bar not connected'}
+          title={barState}
         ></span>
       </div>
-      <p class="field__hint pad-hint">Click a key to remap it. Tap the grey key, then a key, for its ⇧ action.</p>
-    {/if}
-  </section>
 
-  <div class="side">
-    <section class="panel">
-      <div class="panel__title">Key · {current ? legendOf(current) : '—'}</div>
-      {#if data && current}
-        {#if isShift}
-          <p class="field__hint">
-            The grey key is a one-shot shift: tap it, then tap another key within
-            3 seconds, and that key does its ⇧ action. Tap grey twice to cancel. The
-            bar sends every key as an instant tap, so the shift can't be held.
-            It can't be remapped.
-          </p>
-        {:else}
-          {#each data.layers as layer (layer)}
-            <div class="field">
-              <label class="field__label" for="act-{layer}">
-                {layer === 'tap' ? 'Tap' : 'Shift mod'}
-              </label>
-              <select
-                id="act-{layer}"
-                value={data.map[layer][current.id]}
-                on:change={(e) => current && setAction(layer, current.id, e)}
-              >
-                <optgroup label="check-out">
-                  {#each groups.checkout as a (a.id)}
-                    <option value={a.id}>{a.label}</option>
-                  {/each}
-                </optgroup>
-                <optgroup label="system">
-                  {#each groups.system as a (a.id)}
-                    <option value={a.id}>{a.label}</option>
-                  {/each}
-                </optgroup>
-              </select>
-              <span class="field__hint">{hintOf(data.map[layer][current.id])}</span>
-            </div>
-          {/each}
+      <!-- One line of status, not a panel. -->
+      <p class="status">
+        <span class="led" class:led--on={connected} class:led--dead={!connected}></span>
+        <span>{barState}</span>
+        {#if press && connected}
+          <span class="status__sep">·</span>
+          <span>
+            {press.layer === 'shift' ? 'shift ' : ''}{legendOf(
+              data.buttons.find((x) => x.id === press?.button),
+            )} → <span class="readout">{actionLabel(data.actions, press.action)}</span>
+          </span>
+          <span class="status__ago">{ago(press.at, now)}</span>
         {/if}
-      {:else}
-        <p class="muted">loading…</p>
-      {/if}
-    </section>
-
-    <section class="panel">
-      <div class="panel__title">Device</div>
-      {#if data && !data.installed}
-        <p class="field__hint">
-          No bump bar service has run on this machine. The map still saves; it
-          takes effect wherever <code>checkout-bumpbar</code> runs.
-        </p>
-      {:else if data}
-        <div class="rows">
-          <div class="ctl-row">
-            <span class="ctl-row__name">Service</span>
-            <span class="led" class:led--on={data.alive} class:led--dead={!data.alive}></span>
-            <span class="val">{data.alive ? 'live' : 'stopped'}</span>
-          </div>
-          <div class="ctl-row">
-            <span class="ctl-row__name">Bar</span>
-            <span class="led" class:led--on={connected} class:led--dead={!connected}></span>
-            <span class="val">{connected ? 'connected · grabbed' : 'unplugged'}</span>
-          </div>
-          {#if status?.device}
-            <div class="ctl-row">
-              <span class="ctl-row__name">Node</span>
-              <code class="node" title={status.device}>{status.device}</code>
-            </div>
-          {/if}
-          <div class="ctl-row">
-            <span class="ctl-row__name">Last</span>
-            {#if press}
-              <span class="val">
-                {press.layer === 'shift' ? '⇧ ' : ''}{pressLegend} →
-                <span class="readout">{actionLabel(data.actions, press.action)}</span>
-              </span>
-              <span class="tag">{ago(press.at, now)}</span>
-            {:else}
-              <span class="val muted">no press yet</span>
-            {/if}
-          </div>
-        </div>
-      {/if}
+      </p>
       {#if errorText}
         <p class="err">{errorText}</p>
       {/if}
-    </section>
-  </div>
+    {/if}
+  </section>
+
+  <section class="panel">
+    <div class="panel__title">
+      {current ? legendOf(current) : 'Key'}
+      <button class="btn" on:click={resetMap} disabled={!data} title="Put every key back to its default">Reset all</button>
+    </div>
+    {#if data && current}
+      {#if isShift}
+        <p class="note">
+          The grey key is a one-shot shift. Tap it, then tap another key within
+          3 seconds, and that key does its shift action. Volume and brightness
+          steps keep it armed. Tap grey twice to cancel.
+        </p>
+      {:else}
+        {#each data.layers as layer (layer)}
+          <div class="field">
+            <label class="field__label" for="act-{layer}">
+              {layer === 'tap' ? 'Tap' : 'Shift mod'}
+            </label>
+            <select
+              id="act-{layer}"
+              value={data.map[layer][current.id]}
+              on:change={(e) => current && setAction(layer, current.id, e)}
+            >
+              <optgroup label="check-out">
+                {#each groups.checkout as a (a.id)}
+                  <option value={a.id}>{a.label}</option>
+                {/each}
+              </optgroup>
+              <optgroup label="system">
+                {#each groups.system as a (a.id)}
+                  <option value={a.id}>{a.label}</option>
+                {/each}
+              </optgroup>
+            </select>
+            <span class="field__hint">{hintOf(data.map[layer][current.id])}</span>
+          </div>
+        {/each}
+      {/if}
+      <p class="field__hint pick">Click a key on the pad to change it.</p>
+    {:else}
+      <p class="muted">loading…</p>
+    {/if}
+  </section>
 </main>
 
 <style>
   .bb {
     display: grid;
-    grid-template-columns: 1.25fr 1fr;
-    gap: 20px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px;
     align-items: start;
-  }
-
-  /* Grid children may shrink below their content (the long device path), or
-     the page overflows sideways on a phone. */
-  .bb > * {
-    min-width: 0;
-  }
-
-  .side {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 0;
   }
 
   .muted {
@@ -285,166 +244,149 @@
     font-size: 12px;
   }
 
-  /* --- the plate: brushed stainless, like the real bar -------------------- */
+  /* --- the pad ----------------------------------------------------------- */
+  .pad {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+  }
+
+  /* Brushed stainless: fine horizontal grain over a soft top-lit sheen. */
   .plate {
     position: relative;
-    padding: 22px 22px 34px;
-    border-radius: 8px;
+    width: min(100%, 400px);
+    padding: 26px 22px 44px;
+    border-radius: 10px;
     background:
-      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px),
-      linear-gradient(160deg, #9aa0a2, #6f7577 45%, #8b9193 70%, #5e6466);
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 1px, rgba(0, 0, 0, 0.03) 1px 2px),
+      linear-gradient(180deg, #c9cccd 0%, #a9adaf 38%, #b8bbbc 62%, #9a9ea0 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.35),
-      inset 0 -2px 6px rgba(0, 0, 0, 0.35),
-      0 4px 14px rgba(0, 0, 0, 0.6);
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+      0 1px 0 #6d7173,
+      0 14px 34px rgba(0, 0, 0, 0.65);
   }
 
   .keys {
     display: grid;
-    /* minmax(0, …): long action labels ellipsise instead of widening a key. */
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 12px 14px;
+    gap: 14px 12px;
   }
 
+  /* A key cap: glossy plastic in a dark recess, legend printed in black. */
   .key {
-    --cap: #d9d9d4;
-    --ink: #1b1d1e;
+    --cap: #d6d6d2;
     appearance: none;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    gap: 8px;
-    min-height: 84px;
-    padding: 9px 10px 8px;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 2.05 / 1;
+    padding: 4px 6px;
     border: none;
-    border-radius: 6px;
+    border-radius: 5px;
     cursor: pointer;
-    text-align: center;
-    font-family: var(--mono);
-    color: var(--ink);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--cap) 82%, white), var(--cap) 55%, color-mix(in srgb, var(--cap) 80%, black));
+    font-family: Arial, 'Helvetica Neue', 'Liberation Sans', sans-serif;
+    font-weight: 700;
+    font-size: clamp(11px, 3.1vw, 14px);
+    line-height: 1.12;
+    letter-spacing: 0.01em;
+    color: #151617;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 42%),
+      linear-gradient(180deg, var(--cap), color-mix(in srgb, var(--cap) 82%, black));
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.45),
-      0 3px 0 color-mix(in srgb, var(--cap) 45%, black),
-      0 5px 8px rgba(0, 0, 0, 0.45);
-    transition: transform 0.06s, box-shadow 0.12s, filter 0.12s;
+      0 0 0 2px rgba(40, 42, 44, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -3px 0 color-mix(in srgb, var(--cap) 70%, black),
+      0 3px 5px rgba(0, 0, 0, 0.35);
+    transition: transform 0.06s, filter 0.12s, box-shadow 0.12s;
   }
 
-  .key--red { --cap: #c8322b; --ink: #fff4f2; }
-  .key--green { --cap: #2f9e4f; --ink: #f2fff5; }
-  .key--grey { --cap: #d9d9d4; --ink: #1b1d1e; }
-  .key--blue { --cap: #3d7fd1; --ink: #f2f7ff; }
-  .key--dark { --cap: #55595c; --ink: #e6e8e8; }
+  .key--red { --cap: #d8413a; }
+  .key--green { --cap: #2fae57; }
+  .key--grey { --cap: #dcdcd8; }
+  .key--blue { --cap: #4a8ee0; }
+  .key--dark { --cap: #55585b; }
 
   .key:hover {
-    filter: brightness(1.06);
+    filter: brightness(1.05);
   }
 
   .key[aria-pressed='true'] {
     outline: 2px solid var(--phosphor);
-    outline-offset: 3px;
+    outline-offset: 4px;
   }
 
-  /* A press on the REAL bar lights the drawn key for FLASH_MS. */
+  /* A press on the REAL bar pushes the drawn key in for FLASH_MS. */
   .key--hit {
     transform: translateY(2px);
-    filter: brightness(1.2);
+    filter: brightness(1.15);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.45),
-      0 1px 0 color-mix(in srgb, var(--cap) 45%, black),
-      0 0 16px var(--phosphor);
+      0 0 0 2px rgba(40, 42, 44, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -1px 0 color-mix(in srgb, var(--cap) 70%, black),
+      0 0 18px var(--phosphor);
   }
 
-  .key__legend {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    line-height: 1.15;
-  }
-
-  .key__legend--shift {
-    font-size: 20px;
-    line-height: 0.8;
-  }
-
-  /* The two actions, in the display's own phosphor-on-black voice. */
-  .key__acts {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    padding: 4px 6px;
-    border-radius: 3px;
-    background: #04090a;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
-  }
-
-  .key__act {
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    color: var(--phosphor);
-    text-shadow: 0 0 6px var(--phosphor-deep);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .key__act--alt {
-    color: var(--phosphor-dim);
-    text-shadow: none;
-  }
-
-  /* The bar's status LED: green idle, red while a key is down, dark when off. */
+  /* The bar's status LED behind a small drilled hole. */
   .plate__led {
     position: absolute;
     left: 50%;
-    bottom: 12px;
-    width: 8px;
-    height: 8px;
-    margin-left: -4px;
+    bottom: 17px;
+    width: 7px;
+    height: 7px;
+    margin-left: -3.5px;
     border-radius: 50%;
-    background: #2a2f30;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
+    background: #3a3d3f;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
   .plate__led--idle {
-    background: #43e06a;
-    box-shadow: 0 0 8px #43e06a;
+    background: #44e36d;
+    box-shadow: 0 0 7px #44e36d, 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
   .plate__led--hit {
     background: #ff4b3a;
-    box-shadow: 0 0 8px #ff4b3a;
+    box-shadow: 0 0 7px #ff4b3a, 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
-  .pad-hint {
-    display: block;
-    margin-top: 12px;
-  }
-
-  /* --- device readout ------------------------------------------------------ */
-  .rows {
+  .status {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .val {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 8px;
+    margin: 18px 0 0;
     font-size: 12px;
-    color: var(--text);
+    color: var(--text-mute);
   }
 
-  .node {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .status__sep,
+  .status__ago {
+    color: var(--text-faint);
   }
 
   .err {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     font-size: 11px;
     color: var(--amber-warn);
+    text-align: center;
+  }
+
+  /* --- the key panel ------------------------------------------------------ */
+  .note {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-mute);
+  }
+
+  .pick {
+    display: block;
+    margin-top: 6px;
   }
 
   select {
@@ -453,17 +395,17 @@
 
   @media (max-width: 860px) {
     .bb {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
   @media (max-width: 600px) {
     .plate {
-      padding: 14px 12px 30px;
+      padding: 18px 14px 36px;
     }
 
     .keys {
-      gap: 10px;
+      gap: 11px 10px;
     }
   }
 </style>
