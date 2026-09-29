@@ -15,7 +15,6 @@ where a bar lives (install.sh --bumpbar).
 from __future__ import annotations
 
 import argparse
-import glob
 import os
 import select
 import signal
@@ -52,7 +51,8 @@ class Keypad:
     The grey key is a ONE-SHOT shift. The M4220 sends every key as an instant
     tap — down and up within ~40 ms however long it is held (bench 2026-09-28) —
     so a held modifier can't be seen. Tap grey, then tap a key within
-    SHIFT_WINDOW_S: that key uses the shift layer. Grey twice cancels.
+    SHIFT_WINDOW_S: that key uses the shift layer. Grey twice cancels. A shifted
+    ``repeat`` action (volume, brightness) re-arms the window, so steps chain.
     """
 
     def __init__(self, clock=time.monotonic) -> None:
@@ -80,7 +80,10 @@ class Keypad:
         if value == 2 and not BY_ID[action].repeat:
             return None
         if value == 1:
-            self._armed_until = None
+            # A shifted volume/brightness step keeps the shift armed so the next
+            # step needs no grey tap; any other action uses the shift up.
+            keep = layer == "shift" and BY_ID[action].repeat
+            self._armed_until = self.clock() + SHIFT_WINDOW_S if keep else None
         return button, layer, action
 
 
@@ -138,12 +141,35 @@ class StatusWriter:
         self._write()
 
 
-def device_nodes(kbd_path: str) -> list[str]:
-    """The keyboard node plus its sibling event nodes (the "System Control"
-    interface), so a stray Power/Sleep code is grabbed too. Keyboard first."""
-    base = kbd_path.rsplit("-event", 1)[0]
-    others = sorted(p for p in glob.glob(glob.escape(base) + "*-event*") if p != kbd_path)
-    return [kbd_path, *others]
+def _usb_device(sysfs: str, event: str) -> str | None:
+    """The USB device directory an input node belongs to: inputN's parents are
+    input/ → the HID device → the USB interface → the USB device."""
+    try:
+        real = os.path.realpath(os.path.join(sysfs, event, "device"), strict=True)
+    except OSError:
+        return None
+    for _ in range(4):
+        real = os.path.dirname(real)
+    return real
+
+
+def device_nodes(kbd_path: str, sysfs: str = "/sys/class/input",
+                 devdir: str = "/dev/input") -> list[str]:
+    """The keyboard node plus every other input node of the same USB device
+    ("System Control", "Consumer Control"), so none of its codes reach the
+    desktop. Walks sysfs: udev makes only one by-id link per USB interface, so
+    by-id alone misses one. Keyboard first."""
+    kbd_event = os.path.basename(os.path.realpath(kbd_path))
+    usb = _usb_device(sysfs, kbd_event)
+    if usb is None:
+        return [kbd_path]
+    try:
+        events = [e for e in os.listdir(sysfs) if e.startswith("event") and e != kbd_event]
+    except OSError:
+        return [kbd_path]
+    siblings = sorted((e for e in events if _usb_device(sysfs, e) == usb),
+                      key=lambda e: int(e[5:]) if e[5:].isdigit() else 0)
+    return [kbd_path, *(os.path.join(devdir, e) for e in siblings)]
 
 
 def open_devices(kbd_path: str):

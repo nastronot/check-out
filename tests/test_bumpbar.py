@@ -42,6 +42,25 @@ def test_keypad_shift_expires():
     assert k.feed(J, 1, m) == ("serve", "tap", "open_headline")
 
 
+def test_keypad_repeat_actions_keep_shift_armed():
+    # Stepping the volume: grey, then DECREASE three times = three volume steps.
+    now = [0.0]
+    k, m = bb.Keypad(clock=lambda: now[0]), bm.default_map()
+    k.feed(H, 1, m)
+    for t in (1.0, 3.5, 6.0):                  # each step re-arms the window
+        now[0] = t
+        assert k.feed(A, 1, m) == ("decrease", "shift", "volume_down")
+    now[0] = 6.0 + bb.SHIFT_WINDOW_S + 0.1
+    assert k.feed(A, 1, m) == ("decrease", "tap", "brightness_down")
+
+
+def test_keypad_other_shift_actions_use_it_up():
+    k, m = bb.Keypad(), bm.default_map()
+    k.feed(H, 1, m)
+    assert k.feed(J, 1, m)[1] == "shift"       # play/pause
+    assert k.layer == "tap"
+
+
 def test_keypad_grey_twice_cancels():
     k, m = bb.Keypad(), bm.default_map()
     k.feed(H, 1, m)
@@ -85,13 +104,40 @@ def test_status_writer_writes_on_change_and_heartbeat(tmp_path):
     assert json.loads(p.read_text())["alive"] is False
 
 
-def test_device_nodes_finds_siblings(tmp_path):
-    name = "usb-Heng_Yu_Technology_M4220"
-    for suffix in ("-event-kbd", "-event-if01", "-hidraw", "-if01-hidraw"):
-        (tmp_path / (name + suffix)).write_text("")
-    nodes = bb.device_nodes(str(tmp_path / (name + "-event-kbd")))
-    assert [os.path.basename(n) for n in nodes] == [
-        name + "-event-kbd", name + "-event-if01"]
+def _fake_sysfs(tmp_path):
+    """/sys/class/input + /dev/input for the bar (event25 kbd, 26, 27 on the same
+    USB device 5-2.4) and an unrelated keyboard (event6)."""
+    sysfs, devdir = tmp_path / "sys" / "class" / "input", tmp_path / "dev" / "input"
+    sysfs.mkdir(parents=True)
+    (devdir / "by-id").mkdir(parents=True)
+    usb = tmp_path / "sys" / "devices" / "usb5" / "5-2" / "5-2.4"
+    other = tmp_path / "sys" / "devices" / "usb5" / "5-1"
+    for ev, parent in (("event25", usb / "5-2.4:1.0" / "0003:0F39:0101.000C" / "input" / "input32"),
+                       ("event26", usb / "5-2.4:1.1" / "0003:0F39:0101.000D" / "input" / "input33"),
+                       ("event27", usb / "5-2.4:1.1" / "0003:0F39:0101.000D" / "input" / "input34"),
+                       ("event6", other / "5-1:1.0" / "0003:046D:C548.0001" / "input" / "input6")):
+        parent.mkdir(parents=True)
+        (sysfs / ev).mkdir()
+        (sysfs / ev / "device").symlink_to(parent)
+        (devdir / ev).write_text("")
+    kbd = devdir / "by-id" / "usb-Heng_Yu_Technology_M4220-event-kbd"
+    kbd.symlink_to(devdir / "event25")
+    return str(kbd), str(sysfs), str(devdir)
+
+
+def test_device_nodes_finds_every_node_of_the_same_usb_device(tmp_path):
+    # udev makes one by-id link per interface, so "Consumer Control" (event27)
+    # has none; the sysfs walk still finds it. The unrelated keyboard is left alone.
+    kbd, sysfs, devdir = _fake_sysfs(tmp_path)
+    nodes = bb.device_nodes(kbd, sysfs=sysfs, devdir=devdir)
+    assert nodes[0] == kbd
+    assert [os.path.basename(n) for n in nodes[1:]] == ["event26", "event27"]
+
+
+def test_device_nodes_without_sysfs_is_just_the_keyboard(tmp_path):
+    kbd = tmp_path / "kbd"
+    kbd.write_text("")
+    assert bb.device_nodes(str(kbd), sysfs=str(tmp_path / "nope")) == [str(kbd)]
 
 
 class FakeRunner:
