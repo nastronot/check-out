@@ -5,13 +5,17 @@
 set -euo pipefail
 
 UNIT_DST="${HOME}/.config/systemd/user"
-SERVICES=(checkout-daemon checkout-audioviz checkout-web)
+SERVICES=(checkout-daemon checkout-audioviz checkout-web checkout-bumpbar)
 
 echo "Removing check-out user services from ${UNIT_DST}"
 
 if command -v systemctl >/dev/null 2>&1; then
-	# disable --now stops + removes the enable symlinks; tolerate already-gone units.
-	systemctl --user disable --now "${SERVICES[@]}" 2>/dev/null || true
+	# disable --now stops + removes the enable symlinks. One unit per call: a unit
+	# that was never installed (checkout-bumpbar on a machine with no bar) makes
+	# systemctl refuse the whole list.
+	for svc in "${SERVICES[@]}"; do
+		systemctl --user disable --now "${svc}" 2>/dev/null || true
+	done
 fi
 
 for svc in "${SERVICES[@]}"; do

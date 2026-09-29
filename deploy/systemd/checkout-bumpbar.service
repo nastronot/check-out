@@ -1,0 +1,19 @@
+[Unit]
+Description=check-out bump bar (TG3 M4220 keys drive check-out + desktop)
+Documentation=https://github.com/check-out
+# Opt-in: installed only on a machine with a bar (install.sh --bumpbar). NO
+# ordering to the other checkout-* units (see checkout-audioviz.service for the
+# boot-time cycle that ordering once caused): it reaches the web API per press
+# and tolerates it being down, and it idles (2 s retry) while the bar is
+# unplugged. A USER service so desktop actions (grim, wl-copy, hyprlock) reach
+# the logged-in Wayland session.
+
+[Service]
+Type=simple
+WorkingDirectory=__CHECKOUT_REPO__
+ExecStart=__CHECKOUT_REPO__/.venv/bin/python -m checkout.bumpbar
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

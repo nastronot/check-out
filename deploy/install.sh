@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# install.sh — install check-out as three systemd USER services.
+# install.sh — install check-out as systemd USER services.
 #
 # Installs checkout-daemon, checkout-audioviz, and checkout-web as ~/.config
-# user units that start on login. USER (not system) services so they inherit
+# user units that start on login, plus checkout-bumpbar with --bumpbar (only a
+# machine with a TG3 bump bar; once installed, later runs keep it). USER (not system) services so they inherit
 # the logged-in user's PipeWire session — required for spectrum monitor capture.
 # We deliberately do NOT enable lingering (see the note at the end).
 #
@@ -12,11 +13,13 @@ set -euo pipefail
 # --- arguments ---------------------------------------------------------------
 DISPLAY_KIND=""
 DISPLAY_PORT=""
+BUMPBAR=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--display) DISPLAY_KIND="${2:-}"; shift 2 ;;
 	--port) DISPLAY_PORT="${2:-}"; shift 2 ;;
-	*) echo "usage: install.sh [--display ibm|hp] [--port /dev/serial/by-id/...]" >&2; exit 2 ;;
+	--bumpbar) BUMPBAR=1; shift ;;
+	*) echo "usage: install.sh [--display ibm|hp] [--port /dev/serial/by-id/...] [--bumpbar]" >&2; exit 2 ;;
 	esac
 done
 case "${DISPLAY_KIND}" in
@@ -32,6 +35,10 @@ UNIT_SRC="${SCRIPT_DIR}/systemd"
 UNIT_DST="${HOME}/.config/systemd/user"
 
 SERVICES=(checkout-daemon checkout-audioviz checkout-web)
+# Bump bar: opt-in (only a machine with a bar). Kept on re-runs once installed.
+if [ "${BUMPBAR}" = 1 ] || [ -f "${UNIT_DST}/checkout-bumpbar.service" ]; then
+	SERVICES+=(checkout-bumpbar)
+fi
 
 echo "check-out service installer"
 echo "  repo root : ${REPO_ROOT}"
@@ -111,6 +118,21 @@ systemctl --user restart "${SERVICES[@]}"
 echo
 systemctl --user --no-pager status "${SERVICES[@]}" || true
 
+# --- bump bar: its Python dependency + the one-time udev rule -----------------
+if [[ " ${SERVICES[*]} " == *" checkout-bumpbar "* ]]; then
+	echo
+	if ! "${REPO_ROOT}/.venv/bin/python" -c 'import evdev' 2>/dev/null; then
+		echo "bump bar: installing evdev into the venv..."
+		"${REPO_ROOT}/.venv/bin/pip" install -q -r "${REPO_ROOT}/requirements-bumpbar.txt"
+		systemctl --user restart checkout-bumpbar
+	fi
+	if [ ! -f /etc/udev/rules.d/70-checkout-bumpbar.rules ]; then
+		echo "bump bar: one sudo step gives you access to the bar (and only the bar):"
+		echo "  sudo install -m 644 ${REPO_ROOT}/deploy/udev/70-checkout-bumpbar.rules /etc/udev/rules.d/"
+		echo "  sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input"
+	fi
+fi
+
 cat <<EOF
 
 check-out is installed and running as user services.
@@ -119,7 +141,7 @@ check-out is installed and running as user services.
   Logs   : journalctl --user -u checkout-daemon -f
            journalctl --user -u checkout-audioviz -f
            journalctl --user -u checkout-web -f
-  Stop   : systemctl --user stop checkout-daemon checkout-audioviz checkout-web
+  Stop   : systemctl --user stop ${SERVICES[*]}
   Status : systemctl --user status checkout-daemon
 
 NOTE: lingering is intentionally NOT enabled. These run as user services that

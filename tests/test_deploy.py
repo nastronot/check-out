@@ -17,7 +17,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEPLOY = os.path.join(REPO_ROOT, "deploy")
 SYSTEMD = os.path.join(DEPLOY, "systemd")
 
-SERVICES = ["checkout-daemon", "checkout-audioviz", "checkout-web"]
+SERVICES = ["checkout-daemon", "checkout-audioviz", "checkout-web", "checkout-bumpbar"]
 PLACEHOLDER = "__CHECKOUT_REPO__"
 SCRIPTS = ["install.sh", "uninstall.sh", "bench-hp.sh"]
 
@@ -68,7 +68,8 @@ def test_no_ordering_between_units(svc):
     # state.json), so any After=/Before=/Wants=/Requires= among them is both
     # unnecessary and — with the [Install] WantedBy=default.target — cycle-forming.
     forbidden_keys = ("after", "before", "wants", "requires", "requisite", "bindsto")
-    forbidden_targets = ("checkout-daemon", "checkout-audioviz", "checkout-web", "default.target")
+    forbidden_targets = ("checkout-daemon", "checkout-audioviz", "checkout-web",
+                         "checkout-bumpbar", "default.target")
     with open(_unit_path(svc), encoding="utf-8") as fh:
         for raw in fh:
             line = raw.strip()
@@ -87,6 +88,7 @@ def test_module_invocation_per_service():
         "checkout-daemon": "-m checkout.daemon",
         "checkout-audioviz": "-m checkout.audioviz",
         "checkout-web": "uvicorn web.app:app",
+        "checkout-bumpbar": "-m checkout.bumpbar",
     }
     for svc, needle in expected.items():
         with open(_unit_path(svc), encoding="utf-8") as fh:
@@ -177,3 +179,40 @@ def test_bench_hp_refuses_an_unpinned_installed_daemon():
         body = fh.read()
     assert "is-active --quiet checkout-daemon" in body
     assert "CHECKOUT_PORT=/dev/serial/by-id/" in body
+
+
+# --- bump bar (v1.9.0): opt-in, one device only ---------------------------
+UDEV_RULE = os.path.join(DEPLOY, "udev", "70-checkout-bumpbar.rules")
+
+
+def test_udev_rule_matches_only_the_bar_and_uses_uaccess():
+    with open(UDEV_RULE, encoding="utf-8") as fh:
+        text = fh.read()
+    rules = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    assert len(rules) == 1
+    assert 'ATTRS{idVendor}=="0f39"' in rules[0]
+    assert 'ATTRS{idProduct}=="0101"' in rules[0]
+    assert 'TAG+="uaccess"' in rules[0]
+    # A per-device ACL for the seat user, never a group/mode that opens every keyboard.
+    assert "MODE" not in rules[0] and "GROUP" not in rules[0]
+
+
+def test_install_makes_bumpbar_opt_in():
+    with open(os.path.join(DEPLOY, "install.sh"), encoding="utf-8") as fh:
+        body = fh.read()
+    assert "--bumpbar" in body
+    # The default set stays the three core units; the bar is added only on request.
+    assert "SERVICES=(checkout-daemon checkout-audioviz checkout-web)" in body
+    assert "SERVICES+=(checkout-bumpbar)" in body
+
+
+def test_uninstall_removes_bumpbar():
+    with open(os.path.join(DEPLOY, "uninstall.sh"), encoding="utf-8") as fh:
+        assert "checkout-bumpbar" in fh.read()
+
+
+def test_bench_hp_isolates_bumpbar_files():
+    with open(os.path.join(DEPLOY, "bench-hp.sh"), encoding="utf-8") as fh:
+        body = fh.read()
+    assert 'CHECKOUT_BUMPBAR_PATH="${BENCH}/bumpbar.json"' in body
+    assert 'CHECKOUT_BUMPBAR_STATUS_PATH="${BENCH}/bumpbar-status.json"' in body

@@ -45,6 +45,9 @@ export CHECKOUT_STATE_PATH="${BENCH}/state.json"
 export CHECKOUT_STATUS_PATH="${BENCH}/status.json"
 export CHECKOUT_LIBRARY_PATH="${BENCH}/library.json"
 export CHECKOUT_DEVICES_PATH="${BENCH}/devices.json"
+# Its own bump bar files: the :8001 UI must not show (or remap) the IBM's bar.
+export CHECKOUT_BUMPBAR_PATH="${BENCH}/bumpbar.json"
+export CHECKOUT_BUMPBAR_STATUS_PATH="${BENCH}/bumpbar-status.json"
 export CHECKOUT_SPECTRUM_SOCK="${XDG_RUNTIME_DIR:-/tmp}/checkout-spectrum-hp.sock"
 
 cd "${REPO_ROOT}"

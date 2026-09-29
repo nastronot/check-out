@@ -1,0 +1,7 @@
+# check-out: give the logged-in user access to the TG3 M4220 bump bar ONLY.
+# uaccess = a per-device ACL for the active seat's user, applied by
+# 73-seat-late.rules, so this file must sort before 73. NOT the input group:
+# that would let every program the user runs read every keyboard.
+# Install: sudo install -m 644 deploy/udev/70-checkout-bumpbar.rules /etc/udev/rules.d/
+#          sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input
+SUBSYSTEM=="input", ATTRS{idVendor}=="0f39", ATTRS{idProduct}=="0101", TAG+="uaccess"
