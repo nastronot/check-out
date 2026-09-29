@@ -48,7 +48,6 @@ _LOOKALIKE = {
 _REPLACEMENT = ord("?")
 
 GLYPH_COLS = 5
-GLYPH_WIDTH_BYTE = 0x05  # the "a" byte before each character's 5 column bytes
 
 _MERGE_GAP = 4                        # a cursor move is 4 bytes here, not 2
 _FULL_FRAME_BYTES = ROWS * (4 + COLS)  # 48
@@ -75,12 +74,12 @@ def _goto(pos: int) -> bytes:
 
 
 def _columns(rows) -> bytes:
-    """7 editor rows (low 5 bits = columns 1..5) -> 5 column bytes, bit 7 = top.
+    """7 editor rows (low 5 bits = columns 1..5) -> 5 column bytes, bit 0 = top.
 
-    ASSUMED Epson convention — bench check 2 confirms or corrects it.
+    Bench-confirmed 2026-09-28 (NOT the Epson DM-D convention of bit 7 = top).
     """
     return bytes(
-        sum(((rows[r] >> c) & 1) << (7 - r) for r in range(GLYPH_ROWS))
+        sum(((rows[r] >> c) & 1) << r for r in range(GLYPH_ROWS))
         for c in range(GLYPH_COLS)
     )
 
@@ -154,7 +153,11 @@ class EpsonDriver(SerialDriver):
         self._write(VERTICAL_SCROLL_MODE if enabled else OVERWRITE_MODE)
 
     def define_character(self, slot_index: int, rows) -> None:
-        """ESC & 1 c c 05 p1..p5 — one glyph at its parked code."""
+        """ESC & 1 c c p1..p5 — one glyph at its parked code.
+
+        No width byte before p1..p5, despite the manual's "a=5": the bench unit
+        read a leading 05 as column 1.
+        """
         if not (0 <= slot_index < MAX_USER_GLYPHS):
             raise ValueError(f"glyph slot {slot_index} out of range 0..{MAX_USER_GLYPHS - 1}")
         rows = list(rows)
@@ -165,7 +168,7 @@ class EpsonDriver(SerialDriver):
         except (TypeError, ValueError) as exc:
             raise ValueError(f"glyph rows must be ints: {exc}") from None
         code = PARKED_CODES[slot_index]
-        self._write(bytes([ESC, 0x26, 0x01, code, code, GLYPH_WIDTH_BYTE]) + _columns(rows))
+        self._write(bytes([ESC, 0x26, 0x01, code, code]) + _columns(rows))
 
     def select_code_page(self, page) -> None:
         """ESC t 0 only: the manual's other page numbers are unconfirmed."""

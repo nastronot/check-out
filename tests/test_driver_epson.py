@@ -128,14 +128,15 @@ def test_define_character_column_bytes(hp, capsys):
     # top-left pixel (row 0, col 1) and bottom-right pixel (row 6, col 5)
     rows = [0x01, 0, 0, 0, 0, 0, 0x10]
     hp.define_character(0, rows)
-    # ESC & 1 c c  05  col1..col5 ; bit 7 = top row
-    assert tx(capsys) == [0x1B, 0x26, 0x01, 0x60, 0x60, 0x05,
-                          0x80, 0x00, 0x00, 0x00, 0x02]
+    # ESC & 1 c c  col1..col5 ; bit 0 = top row, NO width byte (bench 2026-09-28:
+    # a leading 05 was read as column 1 and drew a raised colon)
+    assert tx(capsys) == [0x1B, 0x26, 0x01, 0x60, 0x60,
+                          0x01, 0x00, 0x00, 0x00, 0x40]
 
 
 def test_define_character_full_block(hp, capsys):
     hp.define_character(8, [0x1F] * 7)
-    assert tx(capsys) == [0x1B, 0x26, 0x01, 0x5D, 0x5D, 0x05] + [0xFE] * 5
+    assert tx(capsys) == [0x1B, 0x26, 0x01, 0x5D, 0x5D] + [0x7F] * 5
 
 
 def test_define_character_validates(hp):
