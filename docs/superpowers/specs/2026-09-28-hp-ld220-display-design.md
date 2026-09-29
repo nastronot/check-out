@@ -95,6 +95,13 @@ dad's current install working unchanged. `CHECKOUT_PORT` already exists.
 
 ## EpsonDriver byte plan (EPSON mode, manual §4.1.2)
 
+> **Superseded on the bench, 2026-09-28.** The glyph parts of this plan were wrong
+> about the hardware: there is no width byte, bit 0 is the top row, and each
+> `ESC &` replaces the whole user set. The parked codes and lookalikes below were
+> replaced by one define at `'0'..'8'` plus per-cell `ESC % 1/0` switching. The
+> authoritative description is `docs/hardware.md` → "User glyphs — how the bench
+> unit really behaves". The rest of this plan held.
+
 | Operation | Bytes | Notes |
 |---|---|---|
 | `initialize()` | `1B 40` · `1F 01` · `1F 43 00` · `1B 25 01` | init (erases glyphs) · overwrite mode · cursor off · user set on |

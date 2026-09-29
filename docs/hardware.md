@@ -147,14 +147,14 @@ current mode. In any other mode our bytes print as garbage.
 
 | Operation | Bytes | Notes |
 |---|---|---|
-| init | `1B 40` · `1F 01` · `1F 43 00` · `1B 25 01` | `ESC @` (**erases user glyphs**) · overwrite mode · cursor off · user set on |
+| init | `1B 40` · `1F 01` · `1F 43 00` · `1B 25 00` | `ESC @` (**erases user glyphs**) · overwrite mode · cursor off · user set off |
 | move cursor | `1F 24 x y` | **1-based**: x = col 1–20, y = row 1–2 |
-| full frame | `1F 24 01 01` + 20 bytes + `1F 24 01 02` + 20 bytes | 48 bytes |
+| full frame | `1F 24 01 01` + row + `1F 24 01 02` + row | 48 bytes of text; + 3 bytes per user-set switch |
 | changed cells | `1F 24 x y` + run | merge gap 4; a full frame when that is no longer |
 | brightness | `1F 58 n` | n = 1–4 (state index 0–3 + 1) |
-| define glyph | `1B 26 01 c c 05 p1..p5` | one byte per column, left to right, bit 7 = top row |
-| user set on | `1B 25 01` | sent after defines (`glyphs_loaded()`) |
-| blank | `0C` | clears the glass |
+| define glyphs | `1B 26 01 30 38` + 9 × 5 column bytes | **all 9 in one command**; per column bit 0 = top row; **no width byte** |
+| user set on / off | `1B 25 01` / `1B 25 00` | switched per written character (see below) |
+| blank | `0C` | clears the glass; glyph definitions survive |
 | self-test | `1F 40` | then re-init |
 | scroll mode | `1F 02` on / `1F 01` off | hidden in the UI |
 | code page | `1B 74 00` | page 0 only; other numbers unconfirmed |
@@ -162,27 +162,38 @@ current mode. In any other mode our bytes print as garbage.
 No hardware ticker: `start_ticker` writes the first 20 chars to the top row
 (marquee is hidden in the UI anyway).
 
-### Parked glyph codes
+### User glyphs — how the bench unit really behaves (2026-09-28)
 
-EPSON defines a user glyph **at a printable code**. While the user set is on,
-that code draws the bitmap. The driver maps the logical codes `0x15–0x1E` to:
+Three things differ from the manual and the Epson convention. Each was found
+with a probe on the glass:
 
-| slot | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|---|---|
-| code | `` ` `` 60 | `{` 7B | `\|` 7C | `}` 7D | `~` 7E | `^` 5E | `\` 5C | `[` 5B | `]` 5D |
+1. **No width byte.** The manual's `[a(p1..p5)] … a=5` reads like a `05` before
+   each character's pattern. The unit took that `05` as column 1 (a
+   top-left + bottom-right test drew a raised colon instead).
+2. **Bit 0 is the top row** of each column byte (Epson DM-D uses bit 7). An
+   asymmetric `F` test glyph drew exactly as designed.
+3. **Each `ESC &` replaces the whole user set.** Nine one-glyph defines left
+   only the last one; four glyphs in one ranged command all survived. So the
+   driver keeps the 9 bitmaps itself and `glyphs_loaded()` re-sends all of them
+   in one command at the contiguous codes `'0'..'8'` (slot n = digit n).
 
-Real occurrences of those characters in text become lookalikes, so they never
-draw a glyph: `` ` ``→`'`, `{ [`→`(`, `} ]`→`)`, `|`→`!`, `~`→`-`, `^`→space,
-`\`→`/`.
+**`ESC %` applies to characters as they are written**, not to what is already
+shown: a row written with the set off kept plain `{|}~` after the set was
+switched back on. So the driver switches the set on only around glyph cells and
+off before any real `0`–`8`, and every write ends with it off. Text prints
+unchanged, digits included; no character is given up to the glyphs.
 
 ### Bench checks
 
 | # | Check | Result |
 |---|---|---|
-| 1 | init stops the welcome; `show()` lands both rows (1-based `1F 24`) | pending |
-| 2 | glyph bit order (top-left + bottom-right pixel test) | pending |
-| 3 | cursor stays hidden after `1F 43 00` across writes | pending |
-| 4 | `1F 58 1..4` gives four distinct levels | pending |
-| 5 | `0C` keeps glyph definitions | pending |
-| 6 | spectrum keeps up (48-byte frames, ~20 fps) | pending |
-| 7 | every mode by eye through the :8001 UI | pending |
+| 1 | init stops the welcome; `show()` lands both rows (1-based `1F 24`) | **pass** |
+| 2 | glyph format | **pass after fixes** — no width byte, bit 0 = top, one define for all 9 |
+| 3 | cursor stays hidden after `1F 43 00` across writes | **pass** — no trailing cursor-off needed |
+| 4 | `1F 58 1..4` gives four distinct levels | **pass** (pulse animation) |
+| 5 | `0C` keeps glyph definitions | **pass** (flash animation) |
+| 6 | spectrum keeps up | **pass** — "just like the IBM" |
+| 7 | every mode by eye | **pass** — spectrum ×3 layouts, weather ×4 colons, pacman duo/solo, news alert (throb), scrolling message with `[1] \| ~ 2026` |
+
+All seven checks passed on 2026-09-28 (firmware 6.6). The HP also looks brighter
+than the IBM at the same level, likely phosphor wear on the salvaged IBM.

@@ -35,7 +35,8 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
 - `driver_epson.py` — `EpsonDriver`, the HP LD220-HP's EPSON-mode bytes. **Only these two
   files emit bytes.** Both drivers keep the same public methods (a test enforces it).
 - `displays.py` — `CHECKOUT_DISPLAY` → driver class. Frames keep the logical glyph codes
-  `0x15–0x1E`; each driver maps them to wire bytes (the HP parks glyphs on `` ` { | } ~ ^ \ [ ] ``).
+  `0x15–0x1E`; each driver maps them to wire bytes. The HP defines all 9 in ONE command at
+  `'0'..'8'` (each define replaces the whole set) and switches them on per written cell.
   After defining glyphs the daemon calls `driver.glyphs_loaded()`, **never `initialize()`**:
   the HP's init (`ESC @`) erases glyphs.
 - `renderer.py` — pure fit/pad/center/ticker logic (no serial).
