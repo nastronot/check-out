@@ -74,3 +74,15 @@ def test_validate_rejects_non_string_actions(bad):
     # A hand-edited file must raise MapError (kept-last-good), never TypeError.
     with pytest.raises(bm.MapError):
         bm.validate_map(bad)
+
+
+def test_switch_toward_rj11_sends_k_to_t_for_the_same_keys():
+    # Bench 2026-09-28: with the bottom switch toward the RJ11 jack every key
+    # sends the letter 10 further on (NEXT g→q, PREVIOUS b→l, INCREASE f→p).
+    # Both identities map to the same buttons, so the switch position is moot.
+    k_to_t = (37, 38, 50, 49, 24, 25, 16, 19, 31, 20)   # k l m n o p q r s t
+    a_to_j = (30, 48, 46, 32, 18, 33, 34, 35, 23, 36)   # a b c d e f g h i j
+    for second, first in zip(k_to_t, a_to_j):
+        assert bm.button_for(second) == bm.button_for(first)
+    assert (bm.button_for(16), bm.button_for(38), bm.button_for(25)) == (
+        "next", "previous", "increase")

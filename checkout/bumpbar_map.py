@@ -34,9 +34,14 @@ BUTTONS: tuple[str, ...] = tuple(b[0] for b in _BUTTONS)
 
 # evdev key codes the firmware sends (column 1 = a-e, column 2 = f-j). Plain
 # ints (linux input-event-codes.h) so this module needs no evdev.
+# The bottom switch picks the bar's identity: toward the RJ45 it sends a-j,
+# toward the RJ11 the letter 10 further on, k-t (bench: g→q, b→l, f→p) — most
+# likely so two chained bars can be told apart. Both map to the same buttons.
 KEYCODES: dict[int, str] = {
     30: "decrease", 48: "previous", 46: "print", 32: "rotate", 18: "recall",  # a b c d e
     33: "increase", 34: "next", 35: "shift", 23: "toggle", 36: "serve",       # f g h i j
+    37: "decrease", 38: "previous", 50: "print", 49: "rotate", 24: "recall",  # k l m n o
+    25: "increase", 16: "next", 19: "shift", 31: "toggle", 20: "serve",       # p q r s t
 }
 
 _DEFAULT = {

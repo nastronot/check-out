@@ -255,5 +255,6 @@ What the build and bench changed from the design above. `CLAUDE.md` and
   link shows only where the service has run, because work has no bar.
 - **Reset lives on the Pad panel** ("Defaults"), which shows the map it resets.
 - **Every press is logged** to the journal; unmapped key codes are logged too.
-- **Switch:** flipping it toward the RJ11 did not drop the USB link. Its role is
-  still unconfirmed.
+- **Switch:** it picks the bar's identity — `a`–`j` toward the RJ45, `k`–`t`
+  toward the RJ11 (USB stays up) — most likely for chaining two bars. Both
+  identities map to the same buttons.

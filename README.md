@@ -351,7 +351,8 @@ sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input
 The udev rule gives the logged-in user access to **this device only**, rather
 than joining the `input` group, which would let every program read every
 keyboard. Bench facts (key codes, the RJ45 · switch · RJ11 port pair, the
-firmware's manager mode) are in [`docs/hardware.md`](docs/hardware.md).
+firmware's manager mode) are in [`docs/hardware.md`](docs/hardware.md). The bottom switch only changes
+which letters the keys send (`a`–`j` or `k`–`t`); both work.
 
 ---
 

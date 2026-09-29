@@ -215,7 +215,7 @@ reads it and drives check-out and desktop controls (see `CLAUDE.md`).
 | Keys | column 1 top→bottom `a b c d e`, column 2 `f g h i j` (evdev 30 48 46 32 18 / 33 34 35 23 36). The grey blank key is `h` |
 | **Key timing** | **every key is an instant tap**: key-down then key-up 30–40 ms later, however long it is held, and **no auto-repeat**. A held key cannot be seen, so the grey key is a one-shot shift (tap it, then a key) |
 | LED | green idle, red while a key is down |
-| Ports + switch | **RJ45 · switch · RJ11** along the bottom edge. With the switch toward the RJ45 the bar works over USB. Flipping it toward the RJ11 did **not** drop the USB link (no disconnect in the kernel log). TG3 and NCR bars carry powered RS-232 on an RJ11/RJ12 jack, so the switch most likely picks the serial jack — **inferred, not confirmed**. Leave it toward the RJ45 |
+| Ports + switch | **RJ45 · switch · RJ11** along the bottom edge. **The switch picks the bar's identity**: toward the RJ45 the keys send `a`–`j`; toward the RJ11 every key sends the letter 10 further on, `k`–`t` (bench: NEXT `g`→`q`, PREVIOUS `b`→`l`, INCREASE `f`→`p`), and the USB link never drops. Most likely so two bars chained through the RJ11 can be told apart (inferred). The service maps both identities to the same buttons, so either position works |
 
 **Manager mode:** holding the keys with *internal* numbers 2 and 9 for ~4 s turns
 the LED amber; the next key then changes firmware options (key table, buzzer,
