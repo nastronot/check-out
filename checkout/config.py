@@ -71,6 +71,21 @@ STATUS_PATH: str = os.environ.get("CHECKOUT_STATUS_PATH", "./status.json")
 # reads it; recalling a library item writes state.json via the existing path.
 LIBRARY_PATH: str = os.environ.get("CHECKOUT_LIBRARY_PATH", "./library.json")
 
+# --- Bump bar (v1.9.0) -------------------------------------------------------
+# BUMPBAR_PATH: the key map — the web WRITES it, the bump bar service reads it.
+# BUMPBAR_STATUS_PATH: the service WRITES it; the web reads it for the page.
+# Only machines with a bar run the service (install.sh --bumpbar).
+BUMPBAR_PATH: str = os.environ.get("CHECKOUT_BUMPBAR_PATH", "./bumpbar.json")
+BUMPBAR_STATUS_PATH: str = os.environ.get(
+    "CHECKOUT_BUMPBAR_STATUS_PATH", "./bumpbar-status.json"
+)
+BUMPBAR_DEVICE: str = os.environ.get(
+    "CHECKOUT_BUMPBAR_DEVICE",
+    "/dev/input/by-id/usb-Heng_Yu_Technology_M4220-event-kbd",
+)
+# Where the bump bar service reaches the web API (check-out actions go through it).
+API_URL: str = os.environ.get("CHECKOUT_API", "http://127.0.0.1:8000")
+
 # --- Frame rotation ----------------------------------------------------------
 # Single frame this phase; rotation lands in Phase 3.
 ROTATE: bool = False
