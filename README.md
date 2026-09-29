@@ -9,6 +9,10 @@ unit**. It drives the display over a **write-only 9600-baud serial link** from a
 long-running daemon, with an optional web control surface and a separate audio
 process. The constraint — two lines, twenty characters — is the aesthetic.
 
+Since v1.8.0 it also drives an **HP LD220-HP** pole display (USB, Epson command
+set), with every feature intact. Each machine runs one display, chosen with
+`CHECKOUT_DISPLAY` — see [HP LD220-HP](#hp-ld220-hp-second-display).
+
 > This README is the comprehensive reference: the physical build, the reverse-
 > engineered protocol, the architecture, and — most valuably — the **bench
 > findings**, the hard-won "why" that isn't in any datasheet. If you have the same
@@ -57,7 +61,7 @@ Three cooperating processes, coupled only through files and one socket. The
                │                       │            DAEMON  (checkout.daemon)     │
                └───────────────────────┤  ONE fast loop (~30 Hz):                │
                                        │   state.json → active frame → renderer  │
-                                       │   → VFDDriver → SERIAL  (sole owner)     │
+                                       │   → driver → SERIAL  (sole owner)        │
                                        │   emit-diff writes; status.json heartbeat│
                                        └───────────▲───────────────┬─────────────┘
                                                    │               │ 9600 8N1, write-only
@@ -95,12 +99,8 @@ Three cooperating processes, coupled only through files and one socket. The
 The physical build, **bench-verified on this exact unit** (see [`spec.md`](spec.md)
 §1 for the full survey). Everything below was measured, not assumed.
 
-### Second display: HP LD220-HP (v1.8.0)
-check-out also drives an **HP LD220-HP** pole display (2×20 VFD, USB `03f0:3524`,
-EPSON command mode, powered from the USB port alone). Pick it per machine with
-`CHECKOUT_DISPLAY=hp`, or install with `deploy/install.sh --display hp`. Its
-command bytes and bench results are in [`docs/hardware.md`](docs/hardware.md).
-The rest of this section is the IBM unit.
+This section and the protocol notes below are the IBM unit. The HP has its own
+section: [HP LD220-HP](#hp-ld220-hp-second-display).
 
 ### The display
 - **Unit:** IBM SurePOS 500 customer display, **P/N 15K2012** (iron-gray housing).
@@ -154,8 +154,8 @@ injection joins DATA (3↔3) and GND (5↔5) across the two breakouts and feeds 
 Single-byte control codes — **not** ESC/POS (`0x1B 0x40` printed a literal "@", so
 ESC-prefixed commands don't apply). The command table was recovered from the
 [SNMetamorph `FutabaVfdM202MD10C`](https://github.com/SNMetamorph/FutabaVfdM202MD10C)
-source (our exact board) and **bench-confirmed**. `driver.py` is the only code that
-emits these bytes.
+source (our exact board) and **bench-confirmed**. `driver.py` (IBM) and
+`driver_epson.py` (HP) are the only code that emits bytes.
 
 | Command                 | Bytes                                  |
 |-------------------------|----------------------------------------|
@@ -221,6 +221,89 @@ The built-in ticker (`0x05` + text + `0x0D`) is autonomous, but:
 > **impossible in hardware** — don't re-attempt it. (A single static bottom write
 > is fine; it's the repeated per-second write that halts the scroll.) The software
 > **`scroll`** mode exists precisely for "scrolling text + live clock" cases.
+
+---
+
+## HP LD220-HP (second display)
+
+An **HP LD220-HP** pole display: the same 2×20 blue-green VFD format, with its
+own command set. It is a separate machine's display (IBM on one desk, HP on
+another), not a second screen on one daemon: `CHECKOUT_DISPLAY=hp` picks
+`EpsonDriver` (`checkout/driver_epson.py`), and everything above the driver —
+frames, UI, spectrum, weather, news — is shared unchanged.
+
+### The unit
+- **USB, no adapter box:** a Prolific PL2303 inside, USB id **`03f0:3524`**,
+  kernel `pl2303` driver → `/dev/ttyUSB*`. 9600 8N1, write-only in practice.
+- **Powered by the USB port alone** (the manual rates it 5–12 V). No 12 V supply,
+  unlike the IBM.
+- **Command mode lives in the display** and is changed only by HP's Windows
+  setup utility. check-out needs **EPSON**, the factory default. The power-on
+  self-test shows it: `EPROM OK · PASST: NONE · FW 6.6 · RS232 9600,N,8,1 ·
+  COMMAND EPSON · CHAR USA/EUROPE`, then a scrolling welcome message.
+
+### Protocol notes (Epson mode)
+Escape-prefixed commands, from the OEM "VFD LD220 User Manual V2.3" §4.1.2 and
+corrected on the bench. Full table in [`docs/hardware.md`](docs/hardware.md).
+
+| Command | Bytes |
+|---|---|
+| Init (also **erases user glyphs**) | `1B 40` |
+| Overwrite mode / cursor off | `1F 01` / `1F 43 00` |
+| Move cursor (**1-based**) | `1F 24 col row` |
+| Brightness (4 levels) | `1F 58 1..4` |
+| Define all 9 glyphs | `1B 26 01 30 38` + 9 × 5 column bytes |
+| User glyphs on / off | `1B 25 01` / `1B 25 00` |
+| Clear | `0C` |
+
+The cursor stays hidden after one `1F 43 00`, so frames need no trailing
+cursor-off (the IBM needs `0x14` after every write).
+
+### User glyphs — the manual is wrong three ways
+
+> **Bench finding — no width byte.** The manual's `[a(p1..p5)] … a=5` reads like a
+> `05` before each glyph's five column bytes. The unit takes that `05` as column 1.
+
+> **Bench finding — bit 0 is the top row** of each column byte (Epson DM-D uses
+> bit 7). Tested with an `F` glyph, which looks wrong under any flip or mirror.
+
+> **Bench finding — every define replaces the whole set.** Nine one-glyph
+> defines left only the last glyph; the spectrum showed full blocks mixed with
+> raw characters. So the driver keeps all nine bitmaps and sends them in **one**
+> command at the codes `'0'..'8'`.
+
+> **Bench finding — "glyphs on" applies per written character.** Text written
+> with the set off stays plain after it is switched back on. So the driver turns
+> glyphs on only around glyph cells and off before any real digit. Nothing is
+> given up: `[ ] | ~` and `2026` print as themselves.
+
+All seven bench checks passed on 2026-09-28: rows, glyph format, hidden cursor,
+four brightness levels, glyphs surviving a clear, spectrum speed ("just like the
+IBM"), and every mode by eye.
+
+### Setting up a machine with the HP
+```bash
+sudo usermod -aG uucp "$USER"             # serial access, then log out and in
+python -m venv .venv && .venv/bin/pip install -r requirements.txt \
+    -r web/requirements.txt -r requirements-audio.txt
+deploy/install.sh --display hp            # finds the one serial device; UI on :8000
+```
+`install.sh --display` writes `~/.config/checkout/env` (`CHECKOUT_DISPLAY`,
+`CHECKOUT_PORT`), which the daemon unit reads. **On machines whose dotfiles are
+chezmoi-managed (dad, work), chezmoi owns the units and that env file** (a
+per-host template); there, `chezmoi update` replaces `install.sh`. Don't use both,
+or each will overwrite the other. With two USB-serial devices
+plugged in, pass `--port /dev/serial/by-id/...`: `ttyUSB0`/`ttyUSB1` can swap at
+boot. The port is opened with an exclusive lock, so two daemons can never share
+one display.
+
+**Testing both on one machine:** `deploy/bench-hp.sh` runs a temporary HP
+instance (daemon + audio + UI on **:8001**, its own files under `bench-hp/`)
+next to the installed IBM. It refuses to start until the installed daemon is
+pinned to a by-id port. Ctrl-C stops it.
+
+**Known limit:** the web preview draws text with the IBM's font (decoded from
+photos); the HP's font differs slightly. Glyphs preview exactly.
 
 ---
 
@@ -517,6 +600,9 @@ errors and no a11y warnings before commit.
   extended-mode init (`0x00 0x01`) that fixed the vertical-scroll behavior, the 9
   user-glyph codes (`0x15`–`0x1E`), and the brightness/code-page/cursor/reset
   commands. Extended-mode discovery credited to `abomin`.
+- **HP command set** — the OEM "VFD LD220 User Manual V2.3" (§4.1.2, Epson mode),
+  bundled in the [`ld220`](https://rubygems.org/gems/ld220) Ruby gem; three of its
+  glyph details were corrected on the bench (see above).
 - **Preview charset** — [Eigenbaukombinat/vfd_kassendisplay](https://github.com/Eigenbaukombinat/vfd_kassendisplay)
   (Unlicense): the real 5×7 glyph bitmaps, decoded from its per-character display
   photos.

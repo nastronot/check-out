@@ -255,6 +255,11 @@ login: `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
   `EnvironmentFile=-%h/.config/checkout/env`. Without `--port` it takes the only
   `/dev/serial/by-id` entry, or stops if there are several. Always pin a by-id path
   when two USB-serial adapters are plugged in: `ttyUSB0`/`ttyUSB1` can swap at boot.
+- **On dad and work, chezmoi owns all of this** (units, `~/.config/checkout/env` as a
+  per-host template, enabling wherever `~/dev/check-out/.venv` exists, and the
+  waybar panel's check-out section). **A unit change here must also land in the
+  chezmoi source** (`~/.local/share/chezmoi/dot_config/systemd/user/`), or the next
+  `chezmoi apply` silently reverts it. `install.sh` is for machines outside chezmoi.
 - **USER services, NOT lingering/headless (the rationale):** spectrum's system-
   audio capture taps the user's **PipeWire monitor**, which only exists inside an
   active login session. `loginctl enable-linger` is deliberately NOT run — the
