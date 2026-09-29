@@ -31,7 +31,7 @@ is written in check-out's existing visual language.
 | Second node | `…-event-if01`, named "M4220 System Control"; advertises `KEY_POWER`, `KEY_SLEEP`, `KEY_WAKEUP` |
 | Keys (Matt's reading) | column 1 top→bottom `a b c d e`, column 2 `f g h i j`. **To confirm by capture.** |
 | LED | green idle, red while a key is down |
-| Bottom switch | **unknown**; left toward the RJ45 port, the position that works |
+| Ports + switch | **RJ45 · switch · RJ11** along the bottom edge; switch toward the RJ45 (USB cable in use), the position that works. Likely a port selector (TG3 sells its RS-232 bars with an RJ11 plug) — **inferred, to confirm on the bench** |
 
 The TG3 programming sheet (below) documents a **manager mode**: hold the keys
 with *internal* numbers 2 and 9 for ~4 s and the LED turns amber; the next key
