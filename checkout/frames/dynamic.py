@@ -200,6 +200,14 @@ class DynamicFrame(Frame):
         self._start(latest, now, state or {})
         return True
 
+    def stop(self) -> bool:
+        """End a playing alert now (the screen returns to time/weather); False if
+        none was playing. The gap still counts from its start."""
+        if self._alert is None:
+            return False
+        self._alert = None
+        return True
+
     def alerting(self, now: datetime) -> bool:
         return self._alert is not None and _ms(now) < self._alert.ends_ms
 

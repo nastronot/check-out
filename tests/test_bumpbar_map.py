@@ -28,7 +28,9 @@ def test_default_map_matches_spec():
     assert m["tap"]["decrease"] == "brightness_down"
     assert m["tap"]["serve"] == "open_headline"
     assert m["shift"]["serve"] == "media_play_pause"
-    assert m["shift"]["print"] == "none"
+    assert m["tap"]["print"] == "mode_cycle" and m["tap"]["rotate"] == "mode_option"
+    assert m["tap"]["recall"] == "news_toggle"
+    assert m["shift"]["print"] == "screenshot"
     for layer in bm.LAYERS:
         assert set(m[layer]) == set(bm.BUTTONS) - {bm.SHIFT}
     m["tap"]["decrease"] = "none"

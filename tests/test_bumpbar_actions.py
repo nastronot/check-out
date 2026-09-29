@@ -255,3 +255,41 @@ def test_real_run_turns_any_os_error_into_action_error(tmp_path, monkeypatch):
         ba.real_run([str(script)])
     with pytest.raises(ba.ActionError):
         ba.real_spawn([str(script)])
+
+
+# --- context keys: RECALL toggles news, PRINT/ROTATE act on the live mode -------
+def test_news_toggle_sends_the_toggle_command():
+    r, api, _ = make()
+    r.do("news_toggle")
+    assert api.commands == ["toggle_news"]
+
+
+@pytest.mark.parametrize("state,expect", [
+    ({"mode": "clock", "animation": "none"}, {"animation": "flash"}),
+    ({"mode": "message", "animation": "pulse"}, {"animation": "none"}),       # wraps
+    ({"mode": "spectrum", "spectrum_layout": "full"}, {"spectrum_layout": "stereo_v"}),
+    ({"mode": "spectrum", "spectrum_layout": "stereo_h"}, {"spectrum_layout": "full"}),
+    ({"mode": "dynamic", "dynamic_colon": "tick"}, {"dynamic_colon": "twinkle"}),
+    ({"mode": "dynamic", "dynamic_colon": "pacman"}, {"dynamic_colon": "on"}),
+])
+def test_mode_cycle_steps_the_live_modes_style(state, expect):
+    r, api, _ = make(FakeApi(state=state))
+    r.do("mode_cycle")
+    assert api.puts == [expect]
+
+
+def test_mode_option_per_live_mode():
+    r, api, _ = make(FakeApi(state={"mode": "clock"}))
+    r.do("mode_option")                                  # clock: no function
+    assert api.puts == [] and api.recalls == []
+    api = FakeApi(state={"mode": "message"}, messages=[{"id": "a"}, {"id": "b"}])
+    r, api, _ = make(api)
+    r.do("mode_option")
+    r.do("mode_option")
+    assert api.recalls == ["a", "b"]                     # rotates saved messages
+    r, api, _ = make(FakeApi(state={"mode": "spectrum", "spectrum_style": "bars"}))
+    r.do("mode_option")
+    assert api.puts == [{"spectrum_style": "line"}]
+    r, api, _ = make(FakeApi(state={"mode": "dynamic", "dynamic_colon_half": False}))
+    r.do("mode_option")
+    assert api.puts == [{"dynamic_colon_half": True}]

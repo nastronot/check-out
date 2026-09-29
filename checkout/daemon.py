@@ -265,6 +265,17 @@ def _run_command(driver: VFDDriver, command: dict, state: dict, ctx: dict,
         shown = DYNAMIC_FRAME.show_latest(now or datetime.now(), state)
         log("command: show_news" + ("" if shown else " (no headline yet)"))
         return False
+    elif action == "toggle_news":
+        # The bump bar's RECALL: cancel an alert that is playing, else play the
+        # newest one. A second press stops it instead of restarting it.
+        when = now or datetime.now()
+        if DYNAMIC_FRAME.alerting(when):
+            DYNAMIC_FRAME.stop()
+            log("command: toggle_news (stopped)")
+        else:
+            shown = DYNAMIC_FRAME.show_latest(when, state)
+            log("command: toggle_news" + ("" if shown else " (no headline yet)"))
+        return False
     elif action == "redefine_glyphs":
         log("command: redefine_glyphs")
         glyphs = state.get("glyphs") or {}

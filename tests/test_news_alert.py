@@ -187,3 +187,13 @@ def test_show_latest_ignores_the_gap():
     f.tick(later, STATE)
     assert f.show_latest(later, STATE) and f.alerting(later)
 
+
+
+def test_stop_ends_a_playing_alert_and_the_screen_returns():
+    f = _frame(latest=HEAD)
+    f.tick(T0, STATE)
+    f.show_latest(T0, STATE)
+    assert f.stop() is True and not f.alerting(T0)
+    assert f.render(T0, STATE)[0].startswith("09/24/26")        # back to the time line
+    assert f.stop() is False                                      # nothing left to stop
+    assert f.shown()["title"] == HEAD.title                       # still remembered

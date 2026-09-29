@@ -1174,3 +1174,31 @@ def test_status_reports_the_display(monkeypatch):
     daemon.tick_once(_CountingDriver(), {"mode": "clock"}, daemon._new_ctx(), now=NOW)
     assert saved[-1]["display"] == "hp"
     assert saved[-1]["display_label"] == "HP · LD220-HP"
+
+
+def test_toggle_news_plays_then_cancels(monkeypatch):
+    # RECALL on the bump bar: first press plays the latest alert, a press while
+    # it runs cancels it and the screen returns (no restart from the top).
+    written, _, state = _news_setup(monkeypatch, latest=_HEAD)
+    ctx = daemon._new_ctx()
+    play = {**state, "command": {"id": "t1", "action": "toggle_news", "args": {}}}
+    daemon.tick_once(_CountingDriver(), play, ctx, now=_T)
+    assert daemon.DYNAMIC_FRAME.alerting(_T)
+    assert written[-1]["top"] == _na.banner()
+    later = _T + timedelta(seconds=2)
+    stop = {**state, "command": {"id": "t2", "action": "toggle_news", "args": {}}}
+    daemon.tick_once(_CountingDriver(), stop, ctx, now=later)
+    assert not daemon.DYNAMIC_FRAME.alerting(later)
+    assert written[-1]["top"] != _na.banner()
+
+
+def test_toggle_news_cancels_a_live_alert_it_did_not_start(monkeypatch):
+    written, _, state = _news_setup(monkeypatch, alert=_HEAD)   # arrives on its own
+    ctx = daemon._new_ctx()
+    daemon.tick_once(_CountingDriver(), state, ctx, now=_T)
+    assert daemon.DYNAMIC_FRAME.alerting(_T)
+    later = _T + timedelta(seconds=1)
+    stop = {**state, "command": {"id": "t3", "action": "toggle_news", "args": {}}}
+    daemon.tick_once(_CountingDriver(), stop, ctx, now=later)
+    assert not daemon.DYNAMIC_FRAME.alerting(later)
+    assert written[-1]["top"] != _na.banner()

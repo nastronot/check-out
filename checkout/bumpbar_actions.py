@@ -22,6 +22,9 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from typing import Callable
 
+from checkout.state import ANIMATIONS, SPECTRUM_LAYOUTS, SPECTRUM_STYLES
+from checkout.weather import COLON_MODES
+
 # The UI's visible modes, in its button order (marquee is hidden, see CLAUDE.md).
 MODES = ("clock", "message", "spectrum", "dynamic")
 
@@ -50,6 +53,12 @@ ACTIONS: tuple[Action, ...] = (
     Action("blank_toggle", "blank / unblank", "checkout", "Turn the glass off and on."),
     Action("message_next", "next saved message", "checkout", "Show the next saved message, wrapping."),
     Action("show_news", "replay news alert", "checkout", "Play the latest headline again."),
+    Action("news_toggle", "news alert on / off", "checkout",
+           "Play the latest headline; while any alert runs, cancel it."),
+    Action("mode_cycle", "cycle style", "checkout",
+           "Clock, message: animation · spectrum: layout · dynamic: time feature."),
+    Action("mode_option", "mode option", "checkout",
+           "Message: next saved message · spectrum: bars/line · dynamic: half speed."),
     Action("open_headline", "open last headline", "checkout", "Open the last headline shown in the browser."),
     Action("volume_down", "volume −", "system", "Output volume down 5%.", True),
     Action("volume_up", "volume +", "system", "Output volume up 5% (caps at 100%).", True),
@@ -254,6 +263,36 @@ class Runner:
 
     def _show_news(self) -> None:
         self.api.command("show_news")
+
+    def _news_toggle(self) -> None:
+        # The daemon decides: it knows whether ANY alert (pressed or live) runs.
+        self.api.command("toggle_news")
+
+    # Keys that act on the mode live on the glass.
+    def _mode_cycle(self) -> None:
+        state = self.api.get_state()
+        mode = state.get("mode")
+        if mode == "spectrum":
+            key, values = "spectrum_layout", SPECTRUM_LAYOUTS
+        elif mode == "dynamic":
+            key, values = "dynamic_colon", COLON_MODES
+        else:  # clock, message (and hidden marquee): the animation
+            key, values = "animation", ANIMATIONS
+        current = state.get(key)
+        i = values.index(current) + 1 if current in values else 0
+        self.api.put_state({key: values[i % len(values)]})
+
+    def _mode_option(self) -> None:
+        state = self.api.get_state()
+        mode = state.get("mode")
+        if mode == "message":
+            self._message_next()
+        elif mode == "spectrum":
+            style = state.get("spectrum_style")
+            self.api.put_state({"spectrum_style": "line" if style == "bars" else "bars"})
+        elif mode == "dynamic":
+            self.api.put_state({"dynamic_colon_half": not state.get("dynamic_colon_half", False)})
+        # clock: no function
 
     def _open_headline(self) -> None:
         shown = self.api.get_status().get("news_shown") or {}

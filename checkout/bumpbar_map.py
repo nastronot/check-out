@@ -48,13 +48,13 @@ _DEFAULT = {
     "tap": {
         "decrease": "brightness_down", "increase": "brightness_up",
         "previous": "mode_prev", "next": "mode_next",
-        "print": "screenshot", "rotate": "message_next",
-        "toggle": "blank_toggle", "recall": "show_news", "serve": "open_headline",
+        "print": "mode_cycle", "rotate": "mode_option",
+        "toggle": "blank_toggle", "recall": "news_toggle", "serve": "open_headline",
     },
     "shift": {
         "decrease": "volume_down", "increase": "volume_up",
         "previous": "media_prev", "next": "media_next",
-        "print": "none", "rotate": "audio_output_next",
+        "print": "screenshot", "rotate": "audio_output_next",
         "toggle": "mic_mute", "recall": "lock", "serve": "media_play_pause",
     },
 }

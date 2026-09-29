@@ -117,6 +117,10 @@ _DEFAULT_SCROLL_SOURCE = "message"
 # Spectrum render styles + stereo layouts (Bars/Line applies across all layouts).
 _SPECTRUM_STYLES = ("bars", "line")
 _SPECTRUM_LAYOUTS = ("full", "stereo_v", "stereo_h")
+# Public: the bump bar cycles through these (bumpbar_actions).
+ANIMATIONS = ("none", "flash", "blink", "pulse")
+SPECTRUM_STYLES = _SPECTRUM_STYLES
+SPECTRUM_LAYOUTS = _SPECTRUM_LAYOUTS
 
 
 # Keys renamed when mode "weather" became "dynamic" (v1.4.0): old -> new.
