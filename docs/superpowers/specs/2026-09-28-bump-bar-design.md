@@ -237,3 +237,23 @@ Validation rejects unknown action ids and remapping `shift` (400).
 
 Remapping `shift`; hold/long-press actions; free-form commands; a bump bar on
 work; the bar's buzzer or firmware settings.
+
+## Changes after the bench (2026-09-28)
+
+What the build and bench changed from the design above. `CLAUDE.md` and
+`docs/hardware.md` describe the shipped behaviour.
+
+- **One-shot shift, not a held one.** The bar sends every key as an instant tap
+  (down and up within ~40 ms, no auto-repeat), so "hold the grey key" is
+  impossible. Tap grey, then a key within 3 s; a shifted volume/brightness step
+  re-arms it; grey twice cancels. `repeat` no longer matters on this bar.
+- **Three nodes, found through sysfs.** A third node, "Consumer Control", has no
+  by-id link; the service grabs every input node on the bar's USB device.
+- **`pactl` for the output switch** (`--format=json list sinks`), not
+  `wpctl status` parsing.
+- **Opt-in install** (`install.sh --bumpbar`; chezmoi on dad only), and the page
+  link shows only where the service has run, because work has no bar.
+- **Reset lives on the Pad panel** ("Defaults"), which shows the map it resets.
+- **Every press is logged** to the journal; unmapped key codes are logged too.
+- **Switch:** flipping it toward the RJ11 did not drop the USB link. Its role is
+  still unconfirmed.

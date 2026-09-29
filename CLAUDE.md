@@ -53,6 +53,9 @@ status.json (daemon WRITES, web reads) <──┘   (mirror of the glass + healt
   Reusable: a future news ticker reads the same fetcher.
 - `frames/news_alert.py` — the NEWS ALERT screen's pure pieces (banner, headline window,
   duration, flash/throb curves).
+- `bumpbar.py` — the bump bar SERVICE (separate process): grabs the bar, one-shot shift,
+  runs actions, writes `bumpbar-status.json`. `bumpbar_map.py` — buttons, key codes, the
+  two-layer map (`bumpbar.json`). `bumpbar_actions.py` — the action catalogue + `Runner`.
 
 ### Single fast loop (v0.9.0)
 The daemon runs ONE fast loop (~30Hz, `config.LOOP_HZ`), NOT a 250ms tick. Each
@@ -168,6 +171,31 @@ refuses entity bombs and external entities (tests pin it). `status.json`
 only), `shown_at`. It is kept in every mode until the daemon restarts; the waybar
 panel reads it via `/api/status` for its **Read** button.
 
+### Bump bar (v1.9.0)
+A TG3 M4220 10-key keypad on dad (bench facts: `docs/hardware.md`). **Opt-in per
+machine** — `install.sh --bumpbar`, chezmoi enables it on dad only; work has no bar.
+- **Ownership:** the web WRITES `bumpbar.json` (the map), the service WRITES
+  `bumpbar-status.json`. The service never touches `state.json`: check-out actions go
+  through the web API (`/api/state`, `/api/command`, library recall), like the UI.
+- **Grab:** `EVIOCGRAB` on every input node of the bar's USB device, found through
+  sysfs (`device_nodes`) — by-id misses "Consumer Control". Keys come from the kbd node.
+- **One-shot shift:** the bar sends every key as an instant tap (~40 ms, no repeat), so
+  the grey key cannot be held. Tap grey → the next key within `SHIFT_WINDOW_S` (3 s)
+  uses the `shift` layer; a shifted `repeat` action (volume/brightness) re-arms it; grey
+  twice cancels. The `repeat` flag also gates auto-repeat for keypads that do repeat.
+- **Actions are a fixed catalogue** (`bumpbar_actions.ACTIONS`); the page can only pick
+  from it — **never add a free-form command**: any local process can reach :8000.
+  Desktop commands are argv lists, no shell, 5 s timeout; `hyprlock`/`xdg-open` are
+  SPAWNED detached (a timeout would kill the lock screen). Uncaptured commands get
+  /dev/null stdout+stderr: `wl-copy` forks a child that would hold a pipe open.
+- **Page:** `#/bumpbar` (hash routes in `App.svelte`; the board is `BoardPage.svelte`).
+  The masthead link shows only when `/api/bumpbar` says `installed` (a status file
+  exists), so work never shows it. `bench-hp.sh` points the bump bar paths into
+  `bench-hp/`.
+- **Access:** `deploy/udev/70-checkout-bumpbar.rules` (`uaccess`, this device only —
+  not the `input` group). Bench: stop the service, then `python -m checkout.bumpbar
+  --capture`. Every press is logged to the journal.
+
 ### UI caching (v1.4.0)
 `web/app.py` `_UIFiles` serves `index.html` as `Cache-Control: no-cache` and
 Vite's content-hashed `assets/*` as `immutable`. Without it a browser kept an old
@@ -201,6 +229,10 @@ python -m checkout.daemon             # live, opens the serial port
 pip install -r web/requirements.txt
 ( cd ui && npm install && npm run build )   # build the Svelte app -> ui/dist
 uvicorn web.app:app --port 8000 --no-access-log   # serves UI + /api; shares state/status json
+
+# Bump bar (dad only) — separate process, never opens the serial port
+pip install -r requirements-bumpbar.txt # evdev
+python -m checkout.bumpbar              # grabs the bar; UI page at /#/bumpbar
 # dev: `uvicorn web.app:app --reload --no-access-log` + `cd ui && npm run dev` (vite proxies /api)
 # --no-access-log: the UI polls /api/status ~2x/s; skip per-request 200 spam (errors/warnings still show)
 
@@ -215,7 +247,8 @@ deploy/bench-hp.sh                      # own files under bench-hp/; Ctrl-C stop
 Env overrides: `CHECKOUT_DISPLAY` (`ibm` | `hp`), `CHECKOUT_PORT`, `CHECKOUT_BAUD`, `CHECKOUT_LOOP_HZ`,
 `CHECKOUT_STATUS_HZ`, `CHECKOUT_STATE_PATH`, `CHECKOUT_STATUS_PATH`,
 `CHECKOUT_LIBRARY_PATH` (web-only), `CHECKOUT_UI_DIST`, `CHECKOUT_SPECTRUM_SOCK`,
-`CHECKOUT_DEVICES_PATH` (audioviz). Weather needs outbound HTTPS to
+`CHECKOUT_DEVICES_PATH` (audioviz), `CHECKOUT_BUMPBAR_PATH`, `CHECKOUT_BUMPBAR_STATUS_PATH`,
+`CHECKOUT_BUMPBAR_DEVICE`, `CHECKOUT_API` (bump bar service → web, default `http://127.0.0.1:8000`). Weather needs outbound HTTPS to
 `api.open-meteo.com` from the daemon. `CHECKOUT_TICK_MS` is legacy (the loop now
 uses `LOOP_HZ`; kept for `--once`).
 
@@ -227,7 +260,8 @@ sudo usermod -aG uucp "$USER"   # then re-login
 ```
 
 ## Running as a service (v1.3.0, ordering fix v1.3.1)
-`deploy/` installs check-out as **three systemd USER services** that start on
+`deploy/` installs check-out as **three systemd USER services** (plus
+`checkout-bumpbar` with `--bumpbar`, v1.9.0, same unit shape) that start on
 login: `checkout-daemon` (`python -m checkout.daemon`), `checkout-audioviz`
 (`python -m checkout.audioviz`), `checkout-web`
 (`uvicorn web.app:app --host 127.0.0.1 --port 8000 --no-access-log`). All three:

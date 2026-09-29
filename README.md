@@ -41,6 +41,10 @@ set), with every feature intact. Each machine runs one display, chosen with
   layout with a ghost and pacman beside the time (full or half speed).
 - **Web control surface** — a Svelte single-page app over a FastAPI backend with a
   **live pixel-accurate phosphor preview** of the glass.
+- **Bump bar** (v1.9.0) — a salvaged 10-key kitchen keypad drives the board and the
+  desktop: brightness, modes, blank, saved messages, news, plus volume, media,
+  mic mute, screenshot and lock through a one-shot shift key. Remappable from its
+  own page. See [Bump bar](#bump-bar-tg3-m4220).
 
 ---
 
@@ -304,6 +308,50 @@ pinned to a by-id port. Ctrl-C stops it.
 
 **Known limit:** the web preview draws text with the IBM's font (decoded from
 photos); the HP's font differs slightly. Glyphs preview exactly.
+
+---
+
+## Bump bar (TG3 M4220)
+
+A **TG3 KBA-M4220A** 10-key "bump bar" — the keypad a kitchen uses to clear
+orders off a screen — plugged into dad over its RJ45-to-USB cable. To Linux it
+is a plain USB keyboard typing `a`–`j`. `checkout-bumpbar` **grabs** it, so no
+key reaches the desktop, and turns each key into an action.
+
+| Key | Tap | Grey key, then this key |
+|---|---|---|
+| DECREASE / INCREASE | brightness − / + | volume − / + |
+| PREVIOUS / NEXT | previous / next mode | previous / next track |
+| PRINT | screenshot → clipboard | — |
+| ROTATE PAGES | next saved message | next audio output |
+| TOGGLE SCREENS | blank / unblank | mic mute |
+| RECALL | replay the latest news alert | lock screen |
+| SERVE | open the last headline | play / pause |
+
+**The grey key is a one-shot shift, not a held one.** The bar sends every key as
+an instant tap — down and up within ~40 ms, however long it is held — so a held
+modifier is invisible. Tap grey, then a key within 3 seconds. Volume and
+brightness steps keep the shift armed, so grey then DECREASE ×3 is three volume
+steps. Tap grey twice to cancel.
+
+**Remap** at `http://127.0.0.1:8000/#/bumpbar` (the **bump bar** link in the
+header shows only on a machine where the service has run). The page draws the
+pad in its real key colours, lists each key's two actions, and flashes a key
+when you press it on the real bar. It offers a fixed list of actions — never a
+typed command, since any local program can reach the UI.
+
+**Setup on a machine with a bar:**
+
+```bash
+deploy/install.sh --bumpbar     # adds checkout-bumpbar, installs evdev
+sudo install -m 644 deploy/udev/70-checkout-bumpbar.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input
+```
+
+The udev rule gives the logged-in user access to **this device only**, rather
+than joining the `input` group, which would let every program read every
+keyboard. Bench facts (key codes, the RJ45 · switch · RJ11 port pair, the
+firmware's manager mode) are in [`docs/hardware.md`](docs/hardware.md).
 
 ---
 

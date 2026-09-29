@@ -5,7 +5,8 @@
 # Hardware reference
 
 Two displays: the **IBM SurePOS** (Futaba M202MD10C, below) and the **HP
-LD220-HP** (EPSON mode, at the end). `CHECKOUT_DISPLAY` picks one per machine.
+LD220-HP** (EPSON mode). `CHECKOUT_DISPLAY` picks one per machine. Last, the
+**TG3 M4220 bump bar**, an input keypad on dad.
 
 ## IBM SurePOS (Futaba M202MD10C)
 
@@ -197,3 +198,37 @@ unchanged, digits included; no character is given up to the glyphs.
 
 All seven checks passed on 2026-09-28 (firmware 6.6). The HP also looks brighter
 than the IBM at the same level, likely phosphor wear on the salvaged IBM.
+
+## TG3 M4220 bump bar (input, v1.9.0)
+
+A 10-key kitchen "bump" keypad, **KBA-M4220A-BC15A** (NCR part 7182-1058-9900),
+plugged into dad. It is an input device, not a display: `checkout-bumpbar`
+reads it and drives check-out and desktop controls (see `CLAUDE.md`).
+
+### Bench facts (dad, 2026-09-28)
+
+| | |
+|---|---|
+| USB ID | `0f39:0101` — lsusb "TG3 Electronics M4220"; the HID chip reports "Heng Yu Technology" |
+| Link | the bar's RJ45 jack → an RJ45-to-USB cable. **The RJ45 is not Ethernet**: never plug a network or PoE cable into it |
+| Input nodes | three on one USB device: the keyboard (`…M4220-event-kbd`), "System Control" (`…-event-if01`, advertises Power/Sleep/Wake) and "Consumer Control" (no by-id link — udev links one node per interface). The service grabs all three, found through sysfs |
+| Keys | column 1 top→bottom `a b c d e`, column 2 `f g h i j` (evdev 30 48 46 32 18 / 33 34 35 23 36). The grey blank key is `h` |
+| **Key timing** | **every key is an instant tap**: key-down then key-up 30–40 ms later, however long it is held, and **no auto-repeat**. A held key cannot be seen, so the grey key is a one-shot shift (tap it, then a key) |
+| LED | green idle, red while a key is down |
+| Ports + switch | **RJ45 · switch · RJ11** along the bottom edge. With the switch toward the RJ45 the bar works over USB. Flipping it toward the RJ11 did **not** drop the USB link (no disconnect in the kernel log). TG3 and NCR bars carry powered RS-232 on an RJ11/RJ12 jack, so the switch most likely picks the serial jack — **inferred, not confirmed**. Leave it toward the RJ45 |
+
+**Manager mode:** holding the keys with *internal* numbers 2 and 9 for ~4 s turns
+the LED amber; the next key then changes firmware options (key table, buzzer,
+baud). If the LED goes amber, press nothing. Source: "TG3 Bump Bar Programming
+Instructions" (posmarket PDF).
+
+### Access
+
+`deploy/udev/70-checkout-bumpbar.rules` tags the bar's nodes `uaccess`, so the
+logged-in user gets an ACL on this device only (`getfacl /dev/input/event25`
+shows `user:matt:rw-`). One sudo install per machine; the file must sort before
+`73-seat-late.rules`, which applies the ACL. Not the `input` group, which would
+open every keyboard to every program.
+
+`python -m checkout.bumpbar --capture` prints raw key codes (stop the service
+first: only one process can grab the bar).
