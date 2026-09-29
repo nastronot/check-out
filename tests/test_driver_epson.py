@@ -3,7 +3,7 @@
 import pytest
 
 from checkout.driver import GLYPH_CODES, VFDDriver
-from checkout.driver_epson import PARKED_CODES, EpsonDriver
+from checkout.driver_epson import GLYPH_FIRST, EpsonDriver
 
 
 def tx(capsys) -> list[int]:
@@ -28,8 +28,9 @@ def test_identity():
 
 def test_initialize(hp, capsys):
     hp.initialize()
-    # ESC @ · US 01 overwrite · US C 0 cursor off · ESC % 1 user set on
-    assert tx(capsys) == [0x1B, 0x40, 0x1F, 0x01, 0x1F, 0x43, 0x00, 0x1B, 0x25, 0x01]
+    # ESC @ · US 01 overwrite · US C 0 cursor off · ESC % 0 user set OFF (it is
+    # switched on only around glyph cells)
+    assert tx(capsys) == [0x1B, 0x40, 0x1F, 0x01, 0x1F, 0x43, 0x00, 0x1B, 0x25, 0x00]
 
 
 def test_show_positions_each_row_one_based(hp, capsys):
@@ -99,14 +100,30 @@ def test_brightness_legacy_and_range(hp, capsys):
         hp.set_brightness(4)
 
 
-def test_glyph_codes_map_to_parked_codes(hp, capsys):
-    hp.show("".join(chr(c) for c in GLYPH_CODES), "")
-    assert tx(capsys)[4:13] == list(PARKED_CODES)
+def test_glyph_cells_switch_the_user_set_on_around_them(hp, capsys):
+    hp.show("A" + chr(GLYPH_CODES[0]) + chr(GLYPH_CODES[8]) + "B", "")
+    data = tx(capsys)
+    # A, ON, '0', '8', B + padding (letters/spaces are not redefined, so the set
+    # stays on), then OFF before the row ends
+    assert data[:30] == ([0x1F, 0x24, 1, 1, ord("A"), 0x1B, 0x25, 0x01, 0x30, 0x38,
+                          ord("B")] + [0x20] * 16 + [0x1B, 0x25, 0x00])
 
 
-def test_parked_characters_in_text_become_lookalikes(hp, capsys):
+def test_every_write_ends_with_the_user_set_off(hp, capsys):
+    hp.show(chr(GLYPH_CODES[3]) * 20, chr(GLYPH_CODES[3]) * 20)
+    data = tx(capsys)
+    assert data == ([0x1F, 0x24, 1, 1, 0x1B, 0x25, 0x01] + [0x33] * 20 + [0x1B, 0x25, 0x00]
+                    + [0x1F, 0x24, 1, 2, 0x1B, 0x25, 0x01] + [0x33] * 20 + [0x1B, 0x25, 0x00])
+
+
+def test_real_digits_after_a_glyph_switch_the_set_off_first(hp, capsys):
+    hp.show(chr(GLYPH_CODES[0]) + "5", "")
+    assert tx(capsys)[4:12] == [0x1B, 0x25, 0x01, 0x30, 0x1B, 0x25, 0x00, ord("5")]
+
+
+def test_punctuation_prints_as_itself(hp, capsys):
     hp.show("`{[}]|~^\\", "")
-    assert bytes(tx(capsys)[4:13]).decode() == "'(())!- /"
+    assert bytes(tx(capsys)[4:13]).decode() == "`{[}]|~^\\"
 
 
 def test_non_printables_become_question_marks(hp, capsys):
@@ -115,28 +132,52 @@ def test_non_printables_become_question_marks(hp, capsys):
 
 
 def test_no_control_byte_escapes_from_text(hp, capsys):
-    hp.show("".join(chr(i) for i in range(256))[:20], "".join(chr(i) for i in range(20, 40)))
+    # Only ESC % 0/1 (user set) and US $ x y (cursor) may appear; text bytes are
+    # printable. Walk the stream and reject any other control byte.
+    hp.show("".join(chr(i) for i in range(20)), "".join(chr(i) for i in range(20, 40)))
     hp.show("".join(chr(i) for i in range(128, 148)), "".join(chr(i) for i in range(0x15, 0x1F)))
     data = tx(capsys)
-    frames = [data[:48], data[48:]]
-    for f in frames:
-        cells = f[4:24] + f[28:48]
-        assert all(0x20 <= b <= 0x7E for b in cells)
+    i = 0
+    while i < len(data):
+        if data[i] == 0x1F:
+            assert data[i + 1] == 0x24
+            i += 4
+        elif data[i] == 0x1B:
+            assert data[i + 1] == 0x25 and data[i + 2] in (0, 1)
+            i += 3
+        else:
+            assert 0x20 <= data[i] <= 0x7E, hex(data[i])
+            i += 1
 
 
-def test_define_character_column_bytes(hp, capsys):
-    # top-left pixel (row 0, col 1) and bottom-right pixel (row 6, col 5)
-    rows = [0x01, 0, 0, 0, 0, 0, 0x10]
-    hp.define_character(0, rows)
-    # ESC & 1 c c  col1..col5 ; bit 0 = top row, NO width byte (bench 2026-09-28:
-    # a leading 05 was read as column 1 and drew a raised colon)
-    assert tx(capsys) == [0x1B, 0x26, 0x01, 0x60, 0x60,
-                          0x01, 0x00, 0x00, 0x00, 0x40]
+def test_define_character_only_stores(hp, capsys):
+    hp.define_character(0, [0x01, 0, 0, 0, 0, 0, 0x10])
+    assert tx(capsys) == []
 
 
-def test_define_character_full_block(hp, capsys):
+def test_glyphs_loaded_sends_all_nine_in_one_command(hp, capsys):
+    # One ESC & per load: each ESC & REPLACES the whole set on the bench unit.
+    # Columns: bit 0 = top row, no width byte (bench 2026-09-28).
+    hp.define_character(0, [0x01, 0, 0, 0, 0, 0, 0x10])  # top-left + bottom-right
     hp.define_character(8, [0x1F] * 7)
-    assert tx(capsys) == [0x1B, 0x26, 0x01, 0x5D, 0x5D] + [0x7F] * 5
+    hp.glyphs_loaded()
+    data = tx(capsys)
+    assert data[:5] == [0x1B, 0x26, 0x01, 0x30, 0x38]
+    assert len(data) == 5 + 9 * 5
+    assert data[5:10] == [0x01, 0x00, 0x00, 0x00, 0x40]
+    assert data[10:45] == [0] * 35
+    assert data[45:50] == [0x7F] * 5
+
+
+def test_glyphs_survive_in_the_driver_across_loads(hp, capsys):
+    # A mode set redefines only some slots; the others must be re-sent intact.
+    hp.define_character(2, [0x1F] * 7)
+    hp.glyphs_loaded()
+    hp.define_character(0, [0x01] * 7)
+    hp.glyphs_loaded()
+    last = tx(capsys)[50:]
+    assert last[5:10] == [0x7F, 0, 0, 0, 0]
+    assert last[15:20] == [0x7F] * 5
 
 
 def test_define_character_validates(hp):
@@ -148,11 +189,6 @@ def test_define_character_validates(hp):
         hp.define_character(0, ["x"] * 7)
 
 
-def test_glyphs_loaded_selects_user_set(hp, capsys):
-    hp.glyphs_loaded()
-    assert tx(capsys) == [0x1B, 0x25, 0x01]
-
-
 def test_blank_is_clear(hp, capsys):
     hp.blank()
     assert tx(capsys) == [0x0C]
@@ -160,7 +196,7 @@ def test_blank_is_clear(hp, capsys):
 
 def test_reset_and_self_test(hp, capsys):
     hp.reset()
-    init = [0x1B, 0x40, 0x1F, 0x01, 0x1F, 0x43, 0x00, 0x1B, 0x25, 0x01]
+    init = [0x1B, 0x40, 0x1F, 0x01, 0x1F, 0x43, 0x00, 0x1B, 0x25, 0x00]
     assert tx(capsys) == init
     hp.self_test()
     assert tx(capsys) == [0x1F, 0x40] + init

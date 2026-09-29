@@ -2,13 +2,18 @@
 
 Bench facts (self-test screen, 2026-09-28): USB 03f0:3524 (pl2303), 9600 8N1,
 firmware 6.6, command mode EPSON. Byte source: the OEM "VFD LD220 User Manual
-V2.3" §4.1.2. See docs/hardware.md.
+V2.3" §4.1.2, corrected on the bench. See docs/hardware.md.
 
-Frames carry user glyphs as the logical codes 0x15-0x1E (the IBM's real codes).
-EPSON defines user glyphs AT printable codes, so each slot is parked on a
-character check-out rarely shows; _sanitize maps logical -> parked codes, and
-real occurrences of a parked character become a lookalike so they never draw a
-glyph by accident.
+User glyphs, as the bench unit actually behaves:
+  * Each ``ESC &`` define REPLACES the whole user set, so all 9 glyphs are sent
+    in ONE command over a contiguous code range: slot n lives at ``'0' + n``.
+    ``define_character`` only stores a bitmap; ``glyphs_loaded`` sends the set.
+  * ``ESC % 1`` / ``ESC % 0`` (user set on/off) applies to characters as they
+    are WRITTEN, not to what is already on the glass. So every write switches
+    the set on only around glyph cells and ends with it off: a real digit in
+    text always prints as a digit.
+Frames carry glyphs as the logical codes 0x15-0x1E (the IBM's real codes);
+``_cells`` maps them to the '0'..'8' wire codes.
 """
 
 from __future__ import annotations
@@ -34,38 +39,57 @@ OVERWRITE_MODE = bytes([US, 0x01])
 VERTICAL_SCROLL_MODE = bytes([US, 0x02])
 CURSOR_HIDE = bytes([US, 0x43, 0x00])
 USER_SET_ON = bytes([ESC, 0x25, 0x01])
+USER_SET_OFF = bytes([ESC, 0x25, 0x00])
 CLEAR = bytes([0x0C])
 SELF_TEST = bytes([US, 0x40])
-INIT_SEQUENCE = INIT + OVERWRITE_MODE + CURSOR_HIDE + USER_SET_ON
+INIT_SEQUENCE = INIT + OVERWRITE_MODE + CURSOR_HIDE + USER_SET_OFF
 
-# Slot 0..8 -> the printable code it is parked on.
-PARKED_CODES = (0x60, 0x7B, 0x7C, 0x7D, 0x7E, 0x5E, 0x5C, 0x5B, 0x5D)
-_LOGICAL_TO_WIRE = dict(zip(GLYPH_CODES, PARKED_CODES))
-_LOOKALIKE = {
-    0x60: "'", 0x7B: "(", 0x5B: "(", 0x7D: ")", 0x5D: ")",
-    0x7C: "!", 0x7E: "-", 0x5E: " ", 0x5C: "/",
-}
+# Slot n is defined at, and displayed as, the code GLYPH_FIRST + n ('0'..'8').
+GLYPH_FIRST = 0x30
+GLYPH_LAST = GLYPH_FIRST + MAX_USER_GLYPHS - 1
+_LOGICAL_TO_WIRE = {code: GLYPH_FIRST + i for i, code in enumerate(GLYPH_CODES)}
 _REPLACEMENT = ord("?")
 
 GLYPH_COLS = 5
+_EMPTY_GLYPH = bytes(GLYPH_COLS)
 
-_MERGE_GAP = 4                        # a cursor move is 4 bytes here, not 2
-_FULL_FRAME_BYTES = ROWS * (4 + COLS)  # 48
+_MERGE_GAP = 4  # a cursor move is 4 bytes here, not 2
 
 
-def _sanitize(text: str) -> bytes:
-    out = bytearray()
+def _cells(text: str) -> list[tuple[int, bool]]:
+    """Text -> (wire code, is_glyph) per cell. Non-printables become '?'."""
+    out = []
     for ch in text:
         o = ord(ch)
         if o in _LOGICAL_TO_WIRE:
-            out.append(_LOGICAL_TO_WIRE[o])
-        elif o in _LOOKALIKE:
-            out.append(ord(_LOOKALIKE[o]))
+            out.append((_LOGICAL_TO_WIRE[o], True))
         elif 0x20 <= o <= 0x7E:
-            out.append(o)
+            out.append((o, False))
         else:
-            out.append(_REPLACEMENT)
-    return bytes(out)
+            out.append((_REPLACEMENT, False))
+    return out
+
+
+def _encode(cells: list[tuple[int, bool]]) -> bytes:
+    """Cells -> bytes, with the user set on only where a glyph needs it.
+
+    The set stays on across letters and spaces (they are not redefined) and is
+    switched off before a real '0'..'8' and at the end, so every write leaves it
+    off.
+    """
+    buf = bytearray()
+    on = False
+    for code, glyph in cells:
+        if glyph and not on:
+            buf += USER_SET_ON
+            on = True
+        elif not glyph and on and GLYPH_FIRST <= code <= GLYPH_LAST:
+            buf += USER_SET_OFF
+            on = False
+        buf.append(code)
+    if on:
+        buf += USER_SET_OFF
+    return bytes(buf)
 
 
 def _goto(pos: int) -> bytes:
@@ -90,8 +114,14 @@ class EpsonDriver(SerialDriver):
     DISPLAY = "hp"
     LABEL = "HP LD220 2×20 VFD"
 
+    def __init__(self, *args, **kwargs) -> None:
+        # The driver's copy of the 9 bitmaps: glyphs_loaded() always re-sends all
+        # of them, since one define replaces the whole set on the display.
+        self._glyphs = [_EMPTY_GLYPH] * MAX_USER_GLYPHS
+        super().__init__(*args, **kwargs)
+
     def initialize(self) -> None:
-        """ESC @, overwrite mode, cursor off, user glyph set on.
+        """ESC @, overwrite mode, cursor off, user set off.
 
         ESC @ erases user glyphs; the daemon redefines them after any
         initialize (reconnect / reset / self-test invalidate its caches).
@@ -99,8 +129,12 @@ class EpsonDriver(SerialDriver):
         self._write(INIT_SEQUENCE)
 
     def glyphs_loaded(self) -> None:
-        """After defining glyphs: switch the user set on. NOT initialize()."""
-        self._write(USER_SET_ON)
+        """Send all 9 stored glyphs in ONE define: ESC & 1 '0' '8' + 45 bytes."""
+        self._write(bytes([ESC, 0x26, 0x01, GLYPH_FIRST, GLYPH_LAST]) + b"".join(self._glyphs))
+
+    def _frame(self, top: str, bottom: str) -> bytes:
+        return (_goto(0) + _encode(_cells(_pad(top)))
+                + _goto(COLS) + _encode(_cells(_pad(bottom))))
 
     def clear(self) -> None:
         self._write(CLEAR)
@@ -111,15 +145,15 @@ class EpsonDriver(SerialDriver):
     def write_at(self, pos: int, text: str) -> None:
         if not (0 <= pos <= POS_MAX):
             raise ValueError(f"position {pos} out of range 0..{POS_MAX}")
-        self._write(_goto(pos) + _sanitize(text))
+        self._write(_goto(pos) + _encode(_cells(text)))
 
     def show(self, top: str, bottom: str) -> None:
-        self._write(_goto(0) + _sanitize(_pad(top)) + _goto(COLS) + _sanitize(_pad(bottom)))
+        self._write(self._frame(top, bottom))
 
     def show_changes(self, old: tuple[str, str], new: tuple[str, str]) -> None:
         """Rewrite only changed cells, as VFDDriver.show_changes (gap 4 here)."""
-        before = _sanitize(_pad(old[0])) + _sanitize(_pad(old[1]))
-        after = _sanitize(_pad(new[0])) + _sanitize(_pad(new[1]))
+        before = _cells(_pad(old[0])) + _cells(_pad(old[1]))
+        after = _cells(_pad(new[0])) + _cells(_pad(new[1]))
         runs: list[list[int]] = []
         for pos in range(ROWS * COLS):
             if before[pos] == after[pos]:
@@ -133,18 +167,16 @@ class EpsonDriver(SerialDriver):
             return
         buf = bytearray()
         for start, end in runs:
-            buf += _goto(start) + after[start:end]
-        if len(buf) >= _FULL_FRAME_BYTES:
-            self.show(*new)
-        else:
-            self._write(bytes(buf))
+            buf += _goto(start) + _encode(after[start:end])
+        full = self._frame(*new)
+        self._write(full if len(buf) >= len(full) else bytes(buf))
 
     def show_bottom(self, bottom: str) -> None:
-        self._write(_goto(COLS) + _sanitize(_pad(bottom)))
+        self._write(_goto(COLS) + _encode(_cells(_pad(bottom))))
 
     def start_ticker(self, text: str) -> None:
         """No hardware ticker on the HP: show the first 20 chars on the top row."""
-        self._write(_goto(0) + _sanitize(_pad(text)))
+        self._write(_goto(0) + _encode(_cells(_pad(text))))
 
     def set_brightness(self, level) -> None:
         self._write(bytes([US, 0x58, normalize_brightness(level) + 1]))
@@ -153,11 +185,7 @@ class EpsonDriver(SerialDriver):
         self._write(VERTICAL_SCROLL_MODE if enabled else OVERWRITE_MODE)
 
     def define_character(self, slot_index: int, rows) -> None:
-        """ESC & 1 c c p1..p5 — one glyph at its parked code.
-
-        No width byte before p1..p5, despite the manual's "a=5": the bench unit
-        read a leading 05 as column 1.
-        """
+        """Store glyph ``slot_index``; nothing is sent until glyphs_loaded()."""
         if not (0 <= slot_index < MAX_USER_GLYPHS):
             raise ValueError(f"glyph slot {slot_index} out of range 0..{MAX_USER_GLYPHS - 1}")
         rows = list(rows)
@@ -167,8 +195,7 @@ class EpsonDriver(SerialDriver):
             rows = [int(r) & GLYPH_PIXEL_MASK for r in rows]
         except (TypeError, ValueError) as exc:
             raise ValueError(f"glyph rows must be ints: {exc}") from None
-        code = PARKED_CODES[slot_index]
-        self._write(bytes([ESC, 0x26, 0x01, code, code]) + _columns(rows))
+        self._glyphs[slot_index] = _columns(rows)
 
     def select_code_page(self, page) -> None:
         """ESC t 0 only: the manual's other page numbers are unconfirmed."""
