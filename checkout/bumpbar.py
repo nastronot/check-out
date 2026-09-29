@@ -197,11 +197,13 @@ class Service:
             return
         button, layer, action = hit
         error = self.watcher.error
+        mark = "⇧ " if layer == "shift" else ""
         try:
             self.runner.do(action)
+            _log(f"{mark}{button} → {action}")
         except ActionError as exc:
             error = str(exc)
-            _log(f"{button} → {action}: {exc}")
+            _log(f"{mark}{button} → {action}: {exc}")
         self.status.update(error=error, last_press={
             "button": button, "layer": layer, "action": action, "at": _now_iso()})
 
