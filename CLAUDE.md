@@ -177,7 +177,7 @@ only), `shown_at`. It is kept in every mode until the daemon restarts; the wayba
 panel reads it via `/api/status` for its **Read** button.
 
 ### Bump bar (v1.9.0)
-A TG3 M4220 10-key keypad on dad (bench facts: `docs/hardware.md`). **Opt-in per
+A TG3 M4220 10-key keypad on dad (bench facts: `docs/hardware.md`), mounted **rotated 180°** (ports on top): `bumpbar_map.ROTATED` maps each key to the code of the position diagonally opposite. **Opt-in per
 machine** — `install.sh --bumpbar`, chezmoi enables it on dad only; work has no bar.
 - **Ownership:** the web WRITES `bumpbar.json` (the map), the service WRITES
   `bumpbar-status.json`. The service never touches `state.json`: check-out actions go

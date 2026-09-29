@@ -212,7 +212,8 @@ reads it and drives check-out and desktop controls (see `CLAUDE.md`).
 | USB ID | `0f39:0101` — lsusb "TG3 Electronics M4220"; the HID chip reports "Heng Yu Technology" |
 | Link | the bar's RJ45 jack → an RJ45-to-USB cable. **The RJ45 is not Ethernet**: never plug a network or PoE cable into it |
 | Input nodes | three on one USB device: the keyboard (`…M4220-event-kbd`), "System Control" (`…-event-if01`, advertises Power/Sleep/Wake) and "Consumer Control" (no by-id link — udev links one node per interface). The service grabs all three, found through sysfs |
-| Keys | column 1 top→bottom `a b c d e`, column 2 `f g h i j` (evdev 30 48 46 32 18 / 33 34 35 23 36). The grey blank key is `h` |
+| Keys | column 1 top→bottom `a b c d e`, column 2 `f g h i j` (evdev 30 48 46 32 18 / 33 34 35 23 36). The grey blank key is `h`. These are the bar's own positions, ports down |
+| **Mounting (2026-09-29)** | **rotated 180°, ports on top**, every cap moved so the legends read upright in the usual layout. Each position now holds the switch that sat diagonally opposite: DECREASE (top-left) sends `j`, SERVE (bottom-right) sends `a`, the grey key sends `c`. `bumpbar_map.ROTATED` selects this; set it `False` for a ports-down bar |
 | **Key timing** | **every key is an instant tap**: key-down then key-up 30–40 ms later, however long it is held, and **no auto-repeat**. A held key cannot be seen, so the grey key is a one-shot shift (tap it, then a key) |
 | LED | green idle, red while a key is down |
 | Ports + switch | **RJ45 · switch · RJ11** along the bottom edge. **The switch picks the bar's identity**: toward the RJ45 the keys send `a`–`j`; toward the RJ11 every key sends the letter 10 further on, `k`–`t` (bench: NEXT `g`→`q`, PREVIOUS `b`→`l`, INCREASE `f`→`p`), and the USB link never drops. Most likely so two bars chained through the RJ11 can be told apart (inferred). The service maps both identities to the same buttons, so either position works |

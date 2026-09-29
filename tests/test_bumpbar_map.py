@@ -14,13 +14,24 @@ def test_buttons_grid_and_shift():
     assert all({"id", "legend", "color"} <= set(b) for b in bm.button_info())
 
 
-def test_keycodes_follow_matts_reading():
-    # col 1 a-e top to bottom, col 2 f-j (evdev KEY_A=30 ... KEY_J=36)
-    assert [bm.button_for(c) for c in (30, 48, 46, 32, 18)] == [
+def test_keycodes_follow_matts_reading_rotated():
+    # The bar's own positions: col 1 a-e top to bottom, col 2 f-j (evdev
+    # KEY_A=30 ... KEY_J=36). Mounted rotated 180°, each button sends the code
+    # of the position diagonally opposite: DECREASE (top-left) sends j.
+    assert bm.ROTATED
+    assert [bm.button_for(c) for c in (36, 23, 35, 34, 33)] == [   # j i h g f
         "decrease", "previous", "print", "rotate", "recall"]
-    assert [bm.button_for(c) for c in (33, 34, 35, 23, 36)] == [
+    assert [bm.button_for(c) for c in (18, 32, 46, 48, 30)] == [   # e d c b a
         "increase", "next", "shift", "toggle", "serve"]
     assert bm.button_for(1) is None
+
+
+def test_keycodes_upright_mount():
+    up = bm._keycodes(rotated=False)
+    assert [up[c] for c in (30, 48, 46, 32, 18)] == [
+        "decrease", "previous", "print", "rotate", "recall"]
+    assert [up[c] for c in (33, 34, 35, 23, 36)] == [
+        "increase", "next", "shift", "toggle", "serve"]
 
 
 def test_default_map_matches_spec():
@@ -86,5 +97,6 @@ def test_switch_toward_rj11_sends_k_to_t_for_the_same_keys():
     a_to_j = (30, 48, 46, 32, 18, 33, 34, 35, 23, 36)   # a b c d e f g h i j
     for second, first in zip(k_to_t, a_to_j):
         assert bm.button_for(second) == bm.button_for(first)
+    # rotated mount: q, l, p sit at ROTATE PAGES, TOGGLE SCREENS, RECALL
     assert (bm.button_for(16), bm.button_for(38), bm.button_for(25)) == (
-        "next", "previous", "increase")
+        "rotate", "toggle", "recall")

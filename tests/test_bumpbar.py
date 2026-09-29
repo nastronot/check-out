@@ -8,13 +8,15 @@ from checkout import bumpbar as bb
 from checkout import bumpbar_map as bm
 from checkout.bumpbar_actions import ActionError
 
-A, F, G, H, J = 30, 33, 34, 35, 36  # decrease, increase, next, shift, serve
+# the a-j code of each button, whatever way the bar is mounted
+_CODE = {bm.KEYCODES[c]: c for pair in bm._WIRE_COLS[0] for c in pair}
+DEC, INC, NEXT, GREY, SERVE = (_CODE[b] for b in ("decrease", "increase", "next", "shift", "serve"))
 
 
 def test_keypad_tap_and_release():
     k, m = bb.Keypad(), bm.default_map()
-    assert k.feed(G, 1, m) == ("next", "tap", "mode_next")
-    assert k.feed(G, 0, m) is None
+    assert k.feed(NEXT, 1, m) == ("next", "tap", "mode_next")
+    assert k.feed(NEXT, 0, m) is None
     assert k.feed(99, 1, m) is None
 
 
@@ -24,54 +26,54 @@ def test_keypad_shift_layer():
     # the shift layer.
     now = [0.0]
     k, m = bb.Keypad(clock=lambda: now[0]), bm.default_map()
-    assert k.feed(H, 1, m) is None          # grey alone does nothing
-    assert k.feed(H, 0, m) is None          # its instant release keeps it armed
+    assert k.feed(GREY, 1, m) is None          # grey alone does nothing
+    assert k.feed(GREY, 0, m) is None          # its instant release keeps it armed
     assert k.layer == "shift"
     now[0] = 1.0
-    assert k.feed(J, 1, m) == ("serve", "shift", "media_play_pause")
+    assert k.feed(SERVE, 1, m) == ("serve", "shift", "media_play_pause")
     assert k.layer == "tap"                 # used up by one key
-    assert k.feed(J, 1, m) == ("serve", "tap", "open_headline")
+    assert k.feed(SERVE, 1, m) == ("serve", "tap", "open_headline")
 
 
 def test_keypad_shift_expires():
     now = [0.0]
     k, m = bb.Keypad(clock=lambda: now[0]), bm.default_map()
-    k.feed(H, 1, m)
+    k.feed(GREY, 1, m)
     now[0] = bb.SHIFT_WINDOW_S + 0.1
     assert k.layer == "tap"
-    assert k.feed(J, 1, m) == ("serve", "tap", "open_headline")
+    assert k.feed(SERVE, 1, m) == ("serve", "tap", "open_headline")
 
 
 def test_keypad_repeat_actions_keep_shift_armed():
     # Stepping the volume: grey, then DECREASE three times = three volume steps.
     now = [0.0]
     k, m = bb.Keypad(clock=lambda: now[0]), bm.default_map()
-    k.feed(H, 1, m)
+    k.feed(GREY, 1, m)
     for t in (1.0, 3.5, 6.0):                  # each step re-arms the window
         now[0] = t
-        assert k.feed(A, 1, m) == ("decrease", "shift", "volume_down")
+        assert k.feed(DEC, 1, m) == ("decrease", "shift", "volume_down")
     now[0] = 6.0 + bb.SHIFT_WINDOW_S + 0.1
-    assert k.feed(A, 1, m) == ("decrease", "tap", "brightness_down")
+    assert k.feed(DEC, 1, m) == ("decrease", "tap", "brightness_down")
 
 
 def test_keypad_other_shift_actions_use_it_up():
     k, m = bb.Keypad(), bm.default_map()
-    k.feed(H, 1, m)
-    assert k.feed(J, 1, m)[1] == "shift"       # play/pause
+    k.feed(GREY, 1, m)
+    assert k.feed(SERVE, 1, m)[1] == "shift"       # play/pause
     assert k.layer == "tap"
 
 
 def test_keypad_grey_twice_cancels():
     k, m = bb.Keypad(), bm.default_map()
-    k.feed(H, 1, m)
-    k.feed(H, 1, m)
+    k.feed(GREY, 1, m)
+    k.feed(GREY, 1, m)
     assert k.layer == "tap"
 
 
 def test_keypad_repeat_only_for_repeat_actions():
     k, m = bb.Keypad(), bm.default_map()
-    assert k.feed(G, 2, m) is None                                 # mode_next: once
-    assert k.feed(F, 2, m) == ("increase", "tap", "brightness_up")  # repeats
+    assert k.feed(NEXT, 2, m) is None                                 # mode_next: once
+    assert k.feed(INC, 2, m) == ("increase", "tap", "brightness_up")  # repeats
 
 
 def test_map_watcher_reloads_and_keeps_last_good(tmp_path):
@@ -159,7 +161,7 @@ def make_service(tmp_path, runner=None):
 
 def test_handle_press_runs_action_and_records(tmp_path):
     svc = make_service(tmp_path)
-    svc.handle(G, 1)
+    svc.handle(NEXT, 1)
     assert svc.runner.done == ["mode_next"]
     st = json.loads((tmp_path / "s.json").read_text())
     assert st["last_press"]["button"] == "next" and st["error"] is None
@@ -167,7 +169,7 @@ def test_handle_press_runs_action_and_records(tmp_path):
 
 def test_handle_press_api_error_sets_error(tmp_path):
     svc = make_service(tmp_path, runner=FakeRunner(fail=True))
-    svc.handle(G, 1)                       # must not raise
+    svc.handle(NEXT, 1)                       # must not raise
     st = json.loads((tmp_path / "s.json").read_text())
     assert "down" in st["error"]
 
@@ -222,7 +224,7 @@ class FakeDevice:
 
 
 def test_run_reads_keys_from_the_keyboard_node_only(tmp_path):
-    kbd = FakeDevice("/dev/kbd", [[FakeEvent(G, 1), FakeEvent(G, 0)]])
+    kbd = FakeDevice("/dev/kbd", [[FakeEvent(NEXT, 1), FakeEvent(NEXT, 0)]])
     sysctl = FakeDevice("/dev/if01", [[FakeEvent(116, 1)]])  # KEY_POWER: ignored
     runner = FakeRunner()
     status = bb.StatusWriter(str(tmp_path / "s.json"))
@@ -274,7 +276,7 @@ class ExplodingRunner:
 def test_an_action_os_error_is_not_an_unplug(tmp_path):
     # Only select()/read() failures mean the bar went away; an action or status
     # write failing must not drop and re-grab the bar.
-    kbd = FakeDevice("/dev/kbd", [[FakeEvent(G, 1)]])
+    kbd = FakeDevice("/dev/kbd", [[FakeEvent(NEXT, 1)]])
     opens = []
     status = bb.StatusWriter(str(tmp_path / "s.json"))
     svc = bb.Service(ExplodingRunner(), bb.MapWatcher(str(tmp_path / "m.json")), status,
