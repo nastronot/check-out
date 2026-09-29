@@ -1,36 +1,28 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import VfdPreview from './lib/components/VfdPreview.svelte';
-  import ControlPanel from './lib/components/ControlPanel.svelte';
-  import DisplayPanel from './lib/components/DisplayPanel.svelte';
-  import GlyphEditorPanel from './lib/components/GlyphEditorPanel.svelte';
-  import SavedMessages from './lib/components/SavedMessages.svelte';
-  import GlyphLibrary from './lib/components/GlyphLibrary.svelte';
-  import {
-    appState,
-    health,
-    loadState,
-    patchState,
-    refreshLibrary,
-    startPolling,
-    status,
-    stopPolling,
-  } from './lib/stores';
-
-  onMount(() => {
-    void loadState();
-    void refreshLibrary();
-    startPolling(500);
-  });
-  onDestroy(stopPolling);
-
-  // Preview mirrors /api/status. Glyph bitmaps: a mode's own set when one is
-  // loaded (weather), else the user's glyphs from the desired state (immediate
-  // while editing).
-  $: glyphs = $status?.mode_glyphs ?? $appState?.glyphs ?? {};
+  import BoardPage from './lib/components/BoardPage.svelte';
+  import BumpBarPage from './lib/components/BumpBarPage.svelte';
+  import { getBumpbar } from './lib/api';
+  import { routeFromHash, showBumpbarNav, type Route } from './lib/bumpbar';
 
   // App version (Vite-injected from package.json, so it never goes stale).
   const version = __APP_VERSION__;
+
+  // Two screens on hash routes: the board (#/) and the bump bar page (#/bumpbar).
+  let route: Route = routeFromHash(location.hash);
+  const onHash = () => (route = routeFromHash(location.hash));
+
+  // Show the bump bar link only where its service has run (dad, not work).
+  let bumpbarInstalled = false;
+  onMount(async () => {
+    window.addEventListener('hashchange', onHash);
+    try {
+      bumpbarInstalled = (await getBumpbar()).installed;
+    } catch {
+      /* older backend or web down: no link */
+    }
+  });
+  onDestroy(() => window.removeEventListener('hashchange', onHash));
 </script>
 
 <div class="shell">
@@ -38,35 +30,31 @@
     <div class="masthead__brand">
       <span class="masthead__logo" role="img" aria-label="check-out"></span>
     </div>
-    <span class="masthead__sub">phosphor status board · v{version}</span>
+    <div class="masthead__meta">
+      {#if showBumpbarNav(bumpbarInstalled, route)}
+        <nav class="nav">
+          <a href="#/" aria-current={route === 'board' ? 'page' : undefined}>board</a>
+          <span class="nav__dot">·</span>
+          <a href="#/bumpbar" aria-current={route === 'bumpbar' ? 'page' : undefined}>bump bar</a>
+        </nav>
+      {/if}
+      <span class="masthead__sub">phosphor status board · v{version}</span>
+    </div>
   </header>
 
-  <main class="layout">
-    <!-- LEFT column: one flex stack so the two columns size INDEPENDENTLY. A
-         previous 2-row grid let the tall right column (controls) span both rows
-         and distribute its excess height into the left rows, leaving a big empty
-         gap under the fixed-size preview. One column = one stack = no inflation. -->
-    <div class="layout__left">
-      <div class="layout__preview">
-        <VfdPreview status={$status} {glyphs} />
-      </div>
-      <div class="layout__glyphs">
-        <GlyphEditorPanel />
-        <GlyphLibrary />
-      </div>
-    </div>
-
-    <div class="layout__controls">
-      <ControlPanel state={$appState} status={$status} patch={patchState} />
-      <SavedMessages />
-      <!-- Display = device settings + commands + daemon readout, in one panel -->
-      <DisplayPanel state={$appState} status={$status} health={$health} patch={patchState} />
-    </div>
-  </main>
+  {#if route === 'bumpbar'}
+    <BumpBarPage />
+  {:else}
+    <BoardPage />
+  {/if}
 
   <footer class="footnote">
-    daemon owns the serial port · this UI only reads status.json &amp; writes
-    state.json
+    {#if route === 'bumpbar'}
+      the bump bar service owns the keypad · this page only writes bumpbar.json
+    {:else}
+      daemon owns the serial port · this UI only reads status.json &amp; writes
+      state.json
+    {/if}
   </footer>
 </div>
 
@@ -111,31 +99,52 @@
     color: var(--text-faint);
   }
 
-  .layout {
-    display: grid;
-    grid-template-columns: 1.25fr 1fr;
-    gap: 20px;
-    /* Each column is its OWN flex stack and aligns to the top; the taller column
-       sets the container height and the shorter one is NOT stretched, so neither
-       column gets dead space injected between its panels. */
-    align-items: start;
+  .masthead__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 6px 18px;
   }
 
-  .layout__left,
-  .layout__controls,
-  .layout__glyphs {
+  /* Two screens: board and bump bar. Same small-caps voice as the sub line. */
+  .nav {
     display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 0; /* let the column shrink instead of overflowing on narrow widths */
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
-  /* The preview keeps a fixed 2×20 aspect (set on the canvas); this wrapper adds
-     no extra height, so the preview box stays a constant size across mode/status
-     changes — no layout jump. */
-  .layout__preview {
-    display: flex;
-    flex-direction: column;
+  .nav a {
+    color: var(--text-mute);
+    text-decoration: none;
+  }
+
+  .nav a:hover {
+    color: var(--phosphor-ink);
+  }
+
+  .nav a[aria-current='page'] {
+    color: var(--phosphor);
+    text-shadow: 0 0 8px var(--phosphor-deep);
+  }
+
+  .nav__dot {
+    color: var(--text-faint);
+  }
+
+  /* Phone width: the nav + version line drop under the logo instead of
+     squeezing into a column beside it. */
+  @media (max-width: 600px) {
+    .masthead {
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .masthead__meta {
+      justify-content: flex-start;
+    }
   }
 
   .footnote {
@@ -146,24 +155,4 @@
     color: var(--text-faint);
   }
 
-  @media (max-width: 860px) {
-    .layout {
-      grid-template-columns: 1fr;
-    }
-    /* Flatten the left column into the grid so its children can interleave with
-       controls, then order them: preview → controls → glyph editor+library
-       (controls are the primary interaction, so they sit right under preview). */
-    .layout__left {
-      display: contents;
-    }
-    .layout__preview {
-      order: 1;
-    }
-    .layout__controls {
-      order: 2;
-    }
-    .layout__glyphs {
-      order: 3;
-    }
-  }
 </style>

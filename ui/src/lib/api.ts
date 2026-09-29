@@ -11,6 +11,7 @@ import type {
   LibraryMessage,
   Status,
 } from './types';
+import type { BumpBar, BumpMap } from './bumpbar';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -79,3 +80,18 @@ export const reorderGlyphs = (ids: string[]) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ ids }),
   });
+
+// --- bump bar (v1.9.0) -----------------------------------------------------
+/** Bump bar page: map + action catalogue + the service's status. */
+export const getBumpbar = () => req<BumpBar>('/api/bumpbar');
+
+/** Store the whole key map; the service picks it up on the next press. */
+export const putBumpbarMap = (map: BumpMap) =>
+  req<BumpMap>('/api/bumpbar/map', {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(map),
+  });
+
+export const resetBumpbarMap = () =>
+  req<BumpMap>('/api/bumpbar/map/reset', { method: 'POST' });
