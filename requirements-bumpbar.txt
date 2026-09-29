@@ -1,0 +1,2 @@
+# Bump bar service (checkout-bumpbar) — only on a machine with a bar.
+evdev>=2.0
