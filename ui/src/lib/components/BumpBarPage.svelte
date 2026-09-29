@@ -169,7 +169,7 @@
           {#each data.layers as layer (layer)}
             <div class="field">
               <label class="field__label" for="act-{layer}">
-                {layer === 'tap' ? 'Tap' : 'After ⇧'}
+                {layer === 'tap' ? 'Tap' : 'Shift mod'}
               </label>
               <select
                 id="act-{layer}"
