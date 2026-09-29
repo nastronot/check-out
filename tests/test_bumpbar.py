@@ -263,3 +263,55 @@ def test_handle_logs_an_unmapped_key(tmp_path, capsys):
     svc.handle(99, 1)
     assert "unmapped key code 99" in capsys.readouterr().out
     assert svc.runner.done == []
+
+
+# --- review fixes ----------------------------------------------------------------
+class ExplodingRunner:
+    def do(self, action):
+        raise OSError(28, "No space left on device")
+
+
+def test_an_action_os_error_is_not_an_unplug(tmp_path):
+    # Only select()/read() failures mean the bar went away; an action or status
+    # write failing must not drop and re-grab the bar.
+    kbd = FakeDevice("/dev/kbd", [[FakeEvent(G, 1)]])
+    opens = []
+    status = bb.StatusWriter(str(tmp_path / "s.json"))
+    svc = bb.Service(ExplodingRunner(), bb.MapWatcher(str(tmp_path / "m.json")), status,
+                     opener=lambda: opens.append(1) or [kbd], sleep=lambda s: None)
+    ticks = iter([False, False, True])
+    svc.run(stop=lambda: next(ticks))
+    assert opens == [1]
+    st = json.loads((tmp_path / "s.json").read_text())
+    assert st["connected"] is True and "No space left" in st["error"]
+
+
+def test_missing_evdev_is_reported_not_fatal(tmp_path):
+    def opener():
+        raise ModuleNotFoundError("No module named 'evdev'")
+
+    status = bb.StatusWriter(str(tmp_path / "s.json"))
+    svc = bb.Service(FakeRunner(), bb.MapWatcher(str(tmp_path / "m.json")), status,
+                     opener=opener, sleep=lambda s: None)
+    ticks = iter([False, True])
+    svc.run(stop=lambda: next(ticks))
+    assert "evdev" in json.loads((tmp_path / "s.json").read_text())["error"]
+
+
+def test_unplug_clears_the_device_and_an_absent_bar_clears_old_errors(tmp_path):
+    kbd = FakeDevice("/dev/kbd", [], unplug_after=True)
+    calls = iter(["perm", [kbd], None])
+
+    def opener():
+        c = next(calls)
+        if c == "perm":
+            raise PermissionError(13, "Permission denied")
+        return c
+
+    status = bb.StatusWriter(str(tmp_path / "s.json"))
+    svc = bb.Service(FakeRunner(), bb.MapWatcher(str(tmp_path / "m.json")), status,
+                     opener=opener, sleep=lambda s: None)
+    ticks = iter([False, False, False, True])   # perm error, connect+unplug, absent
+    svc.run(stop=lambda: next(ticks))
+    st = json.loads((tmp_path / "s.json").read_text())
+    assert st["connected"] is False and st["device"] is None and st["error"] is None

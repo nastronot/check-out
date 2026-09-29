@@ -4,6 +4,7 @@ import {
   FLASH_MS,
   groupActions,
   isFlashing,
+  isNewPress,
   routeFromHash,
   showBumpbarNav,
   type BumpAction,
@@ -48,12 +49,20 @@ describe('actionLabel', () => {
 });
 
 describe('isFlashing', () => {
-  const at = '2026-09-28T12:00:00+00:00';
-  const t = Date.parse(at);
-  it('is on for FLASH_MS after a press, then off', () => {
-    expect(isFlashing(at, t + 10)).toBe(true);
-    expect(isFlashing(at, t + FLASH_MS + 1)).toBe(false);
-    expect(isFlashing(null, t)).toBe(false);
-    expect(isFlashing('garbage', t)).toBe(false);
+  // The flash starts when the PAGE sees a new press, not at the press time:
+  // the 500 ms poll can arrive after a 400 ms window measured from the press.
+  it('is on for FLASH_MS after the page saw the press, then off', () => {
+    expect(isFlashing(1000, 1010)).toBe(true);
+    expect(isFlashing(1000, 1000 + FLASH_MS + 1)).toBe(false);
+    expect(isFlashing(null, 1000)).toBe(false);
+  });
+});
+
+describe('isNewPress', () => {
+  it('is true only when the press stamp changes to a real value', () => {
+    expect(isNewPress(null, '2026-09-28T12:00:00Z')).toBe(true);
+    expect(isNewPress('2026-09-28T12:00:00Z', '2026-09-28T12:00:00Z')).toBe(false);
+    expect(isNewPress('2026-09-28T12:00:00Z', '2026-09-28T12:00:01Z')).toBe(true);
+    expect(isNewPress('2026-09-28T12:00:00Z', null)).toBe(false);
   });
 });

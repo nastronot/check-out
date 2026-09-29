@@ -216,3 +216,42 @@ def test_real_run_reports_missing_program():
 def test_real_run_reports_failure():
     with pytest.raises(ba.ActionError, match="failed"):
         ba.real_run(["false"])
+
+
+# --- review fixes: session env, silent failures -------------------------------
+def test_parse_session_env_keeps_only_session_keys():
+    text = ("PATH=/usr/bin\nWAYLAND_DISPLAY=wayland-1\n"
+            "HYPRLAND_INSTANCE_SIGNATURE=abc_123\nDISPLAY=:0\nWAYLAND_DISPLAY_X=no\n")
+    assert ba.parse_session_env(text) == {
+        "WAYLAND_DISPLAY": "wayland-1", "HYPRLAND_INSTANCE_SIGNATURE": "abc_123",
+        "DISPLAY": ":0"}
+
+
+def test_session_env_overlays_the_live_session(monkeypatch):
+    # A service started at login, before Hyprland shared its variables, has
+    # none; each desktop command reads them fresh from the user manager.
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setattr(ba, "_show_environment", lambda: "WAYLAND_DISPLAY=wayland-9\n")
+    assert ba.session_env()["WAYLAND_DISPLAY"] == "wayland-9"
+
+
+def test_real_spawn_reports_a_program_that_dies_at_once(monkeypatch):
+    # hyprlock with no display exits immediately; "locked" must not be claimed.
+    monkeypatch.setattr(ba, "_show_environment", lambda: "")
+    with pytest.raises(ba.ActionError, match="exited"):
+        ba.real_spawn(["false"])
+
+
+def test_real_spawn_leaves_a_long_lived_program_running(monkeypatch):
+    monkeypatch.setattr(ba, "_show_environment", lambda: "")
+    ba.real_spawn(["sleep", "1"])  # still running after the check: no error
+
+
+def test_real_run_turns_any_os_error_into_action_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(ba, "_show_environment", lambda: "")
+    script = tmp_path / "not-executable"
+    script.write_text("#!/bin/sh\n")
+    with pytest.raises(ba.ActionError):
+        ba.real_run([str(script)])
+    with pytest.raises(ba.ActionError):
+        ba.real_spawn([str(script)])

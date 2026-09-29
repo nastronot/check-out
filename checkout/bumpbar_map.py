@@ -87,7 +87,7 @@ def validate_map(data) -> dict:
                 raise MapError("the grey key is the shift key and cannot be remapped")
             if button not in BUTTONS:
                 raise MapError(f"unknown button {button!r}")
-            if action not in ACTION_IDS:
+            if not isinstance(action, str) or action not in ACTION_IDS:
                 raise MapError(f"unknown action {action!r}")
             out[layer][button] = action
     return out

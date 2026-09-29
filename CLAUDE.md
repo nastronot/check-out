@@ -184,7 +184,8 @@ machine** — `install.sh --bumpbar`, chezmoi enables it on dad only; work has n
   uses the `shift` layer; a shifted `repeat` action (volume/brightness) re-arms it; grey
   twice cancels. The `repeat` flag also gates auto-repeat for keypads that do repeat.
 - **Actions are a fixed catalogue** (`bumpbar_actions.ACTIONS`); the page can only pick
-  from it — **never add a free-form command**: any local process can reach :8000.
+  from it — **never add a free-form command**: any local process can reach :8000, and
+  with the open CORS (`allow_origins=["*"]`) so can any web page in the browser.
   Desktop commands are argv lists, no shell, 5 s timeout; `hyprlock`/`xdg-open` are
   SPAWNED detached (a timeout would kill the lock screen). Uncaptured commands get
   /dev/null stdout+stderr: `wl-copy` forks a child that would hold a pipe open.

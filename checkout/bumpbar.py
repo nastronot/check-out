@@ -230,6 +230,9 @@ class Service:
         except ActionError as exc:
             error = str(exc)
             _log(f"{mark}{button} → {action}: {exc}")
+        except Exception as exc:  # an action must never take the service down
+            error = f"{action}: {exc}"
+            _log(f"{mark}{button} → {action}: unexpected {exc!r}")
         self.status.update(error=error, last_press={
             "button": button, "layer": layer, "action": action, "at": _now_iso()})
 
@@ -239,11 +242,17 @@ class Service:
             if devices is None:
                 try:
                     devices = self.opener()
+                    if devices is None:
+                        self.status.update(error=None)  # simply absent
+                except ImportError:
+                    self.status.update(error="python-evdev is not installed "
+                                             "(pip install -r requirements-bumpbar.txt)")
+                    devices = None
                 except OSError as exc:
                     self.status.update(error=f"cannot open the bar: {exc}")
                     devices = None
                 if devices is None:
-                    self.status.update(connected=False)
+                    self.status.update(connected=False, device=None)
                     self.status.tick()
                     self.sleep(RETRY_S)
                     continue
@@ -251,19 +260,25 @@ class Service:
                 self.keypad = Keypad()
                 self.status.update(connected=True, device=devices[0].path,
                                    layer="tap", error=None)
+            # Only select()/read() failing means the bar went away. Events are
+            # collected first and handled outside the try, so an action failing
+            # can never be mistaken for an unplug.
+            keys = []
             try:
                 ready, _, _ = select.select(devices, [], [], POLL_S)
                 for dev in ready:
                     for ev in dev.read():
-                        # Keys come from the keyboard node only; the System
-                        # Control node is grabbed just so its codes go nowhere.
+                        # Keys come from the keyboard node only; the other nodes
+                        # are grabbed just so their codes go nowhere.
                         if dev is devices[0] and ev.type == EV_KEY:
-                            self.handle(ev.code, ev.value)
+                            keys.append((ev.code, ev.value))
             except OSError:
                 _log("bar disconnected")
                 _close_all(devices)
                 devices = None
-                self.status.update(connected=False, layer="tap")
+                self.status.update(connected=False, device=None, layer="tap")
+            for code, value in keys:
+                self.handle(code, value)
             self.status.update(layer=self.keypad.layer)  # an armed shift expiring
             self.status.tick()
         _close_all(devices or [], ungrab=True)

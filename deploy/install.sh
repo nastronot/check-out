@@ -107,6 +107,14 @@ else
 	echo "display: defaults (ibm, /dev/ttyUSB0) — no --display given"
 fi
 
+# --- bump bar: its Python dependency BEFORE the unit starts ----------------
+# (a started unit without evdev would crash-loop into systemd's start limit)
+if [[ " ${SERVICES[*]} " == *" checkout-bumpbar "* ]] &&
+	! "${REPO_ROOT}/.venv/bin/python" -c 'import evdev' 2>/dev/null; then
+	echo "bump bar: installing evdev into the venv..."
+	"${REPO_ROOT}/.venv/bin/pip" install -q -r "${REPO_ROOT}/requirements-bumpbar.txt"
+fi
+
 # --- enable + start ----------------------------------------------------------
 echo
 systemctl --user daemon-reload
@@ -118,19 +126,13 @@ systemctl --user restart "${SERVICES[@]}"
 echo
 systemctl --user --no-pager status "${SERVICES[@]}" || true
 
-# --- bump bar: its Python dependency + the one-time udev rule -----------------
-if [[ " ${SERVICES[*]} " == *" checkout-bumpbar "* ]]; then
+# --- bump bar: the one-time udev rule (needs sudo, so it is printed) ---------
+if [[ " ${SERVICES[*]} " == *" checkout-bumpbar "* ]] &&
+	[ ! -f /etc/udev/rules.d/70-checkout-bumpbar.rules ]; then
 	echo
-	if ! "${REPO_ROOT}/.venv/bin/python" -c 'import evdev' 2>/dev/null; then
-		echo "bump bar: installing evdev into the venv..."
-		"${REPO_ROOT}/.venv/bin/pip" install -q -r "${REPO_ROOT}/requirements-bumpbar.txt"
-		systemctl --user restart checkout-bumpbar
-	fi
-	if [ ! -f /etc/udev/rules.d/70-checkout-bumpbar.rules ]; then
-		echo "bump bar: one sudo step gives you access to the bar (and only the bar):"
-		echo "  sudo install -m 644 ${REPO_ROOT}/deploy/udev/70-checkout-bumpbar.rules /etc/udev/rules.d/"
-		echo "  sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input"
-	fi
+	echo "bump bar: one sudo step gives you access to the bar (and only the bar):"
+	echo "  sudo install -m 644 ${REPO_ROOT}/deploy/udev/70-checkout-bumpbar.rules /etc/udev/rules.d/"
+	echo "  sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=input"
 fi
 
 cat <<EOF

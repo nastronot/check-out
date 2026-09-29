@@ -76,9 +76,13 @@ export function actionLabel(actions: BumpAction[], id: string): string {
 /** How long a key on the drawing lights after the real key is pressed. */
 export const FLASH_MS = 400;
 
-export function isFlashing(at: string | null | undefined, now = Date.now()): boolean {
-  if (!at) return false;
-  const t = Date.parse(at);
-  if (Number.isNaN(t)) return false;
-  return now - t >= 0 && now - t <= FLASH_MS;
+/** Whether a key lit at `start` (page time, ms) is still lit at `now`. */
+export function isFlashing(start: number | null, now = Date.now()): boolean {
+  if (start === null) return false;
+  return now - start >= 0 && now - start <= FLASH_MS;
+}
+
+/** A press the page has not flashed yet: the status's press stamp changed. */
+export function isNewPress(seen: string | null, at: string | null | undefined): boolean {
+  return !!at && at !== seen;
 }

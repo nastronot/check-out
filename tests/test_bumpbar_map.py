@@ -67,3 +67,10 @@ def test_save_then_load_roundtrip(tmp_path):
     assert saved["shift"]["print"] == "lock"
     assert bm.load_map(p) == saved
     assert json.loads(open(p).read()) == saved
+
+
+@pytest.mark.parametrize("bad", [{"tap": {"next": []}}, {"tap": {"next": None}}])
+def test_validate_rejects_non_string_actions(bad):
+    # A hand-edited file must raise MapError (kept-last-good), never TypeError.
+    with pytest.raises(bm.MapError):
+        bm.validate_map(bad)

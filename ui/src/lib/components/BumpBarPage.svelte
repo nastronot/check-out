@@ -5,6 +5,7 @@
     actionLabel,
     groupActions,
     isFlashing,
+    isNewPress,
     type BumpBar,
     type BumpButton,
     type BumpMap,
@@ -19,12 +20,30 @@
   let saveError = '';
   let selected = 'next';
   let now = Date.now();
-  let saving = 0; // in-flight map writes: a poll must not overwrite them
+  // Map generation: bumped by every save. A poll SENT before a save must not
+  // put the old map back when it lands after the save finished.
+  let mapGen = 0;
+  // Key flash: starts when the page first sees a new press (see isFlashing).
+  let seenPress: string | null = null;
+  let flashStart: number | null = null;
+  let flashKey = '';
+  let firstPoll = true;
 
   async function poll(): Promise<void> {
+    const gen = mapGen;
     try {
       const fresh = await getBumpbar();
-      data = saving && data ? { ...fresh, map: data.map } : fresh;
+      data = gen !== mapGen && data ? { ...fresh, map: data.map } : fresh;
+      const p = fresh.status?.last_press ?? null;
+      if (p && isNewPress(seenPress, p.at)) {
+        // The first poll only records the press already there: no stale flash.
+        if (!firstPoll) {
+          flashStart = Date.now();
+          flashKey = p.button;
+        }
+        seenPress = p.at;
+      }
+      firstPoll = false;
       loadError = '';
     } catch (e) {
       loadError = String(e);
@@ -46,15 +65,14 @@
   async function saveMap(next: BumpMap): Promise<void> {
     if (!data) return;
     data = { ...data, map: next };
-    saving += 1;
+    mapGen += 1;
     try {
       const stored = await putBumpbarMap(next);
+      mapGen += 1;
       if (data) data = { ...data, map: stored };
       saveError = '';
     } catch (e) {
       saveError = String(e);
-    } finally {
-      saving -= 1;
     }
     if (saveError) await poll();
   }
@@ -67,15 +85,14 @@
 
   async function resetMap(): Promise<void> {
     if (!data) return;
-    saving += 1;
+    mapGen += 1;
     try {
       const stored = await resetBumpbarMap();
+      mapGen += 1;
       if (data) data = { ...data, map: stored };
       saveError = '';
     } catch (e) {
       saveError = String(e);
-    } finally {
-      saving -= 1;
     }
   }
 
@@ -97,7 +114,7 @@
 
   $: status = data?.status ?? null;
   $: press = status?.last_press ?? null;
-  $: hit = press && isFlashing(press.at, now) ? press.button : '';
+  $: hit = isFlashing(flashStart, now) ? flashKey : '';
   // The grey key glows while the one-shot shift is armed (3 s, or until used).
   $: shiftArmed = !!status?.connected && status?.layer === 'shift';
   $: groups = groupActions(data?.actions ?? []);

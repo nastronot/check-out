@@ -2,8 +2,9 @@
 
 The catalogue is the ONLY list of actions. The web page offers exactly these, and
 the service runs exactly these — no free-form command is ever stored or run,
-because the web UI is reachable by any local process (a stored shell line would
-let anything that reaches port 8000 run programs as the user).
+because the web UI is reachable by any local process — and, with its open CORS,
+by any web page in the browser — so a stored shell line would let any of them
+run programs as the user.
 
 check-out actions go through the web API, like the UI's own buttons, so the web
 stays the only writer of state.json. Desktop actions are fixed argv lists that
@@ -14,6 +15,7 @@ injected so tests never touch the network or start a program.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import urllib.error
 import urllib.request
@@ -79,6 +81,41 @@ def catalogue() -> list[dict]:
 
 
 # --- process hooks -----------------------------------------------------------
+# The session variables a desktop command needs. The service starts at login,
+# BEFORE Hyprland shares these with the systemd user manager, and a process's
+# environment is fixed at start — so each command reads them fresh instead.
+_SESSION_KEYS = ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY",
+                 "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP")
+
+# How long a spawned program must survive to count as started (hyprlock with no
+# display dies at once; without this check "locked" would be claimed falsely).
+SPAWN_CHECK_S = 0.3
+
+
+def _show_environment() -> str:
+    try:
+        proc = subprocess.run(["systemctl", "--user", "show-environment"],
+                              capture_output=True, timeout=2, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return proc.stdout.decode(errors="replace")
+
+
+def parse_session_env(text: str) -> dict[str, str]:
+    """The session keys from ``systemctl --user show-environment`` output."""
+    env = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key in _SESSION_KEYS and value:
+            env[key] = value
+    return env
+
+
+def session_env() -> dict[str, str]:
+    """This process's environment with the live desktop session laid over it."""
+    return {**os.environ, **parse_session_env(_show_environment())}
+
+
 def real_run(argv: list[str], input: bytes | None = None, capture: bool = False) -> bytes:
     """Run a short command (no shell, 5 s timeout); return stdout when captured.
 
@@ -89,11 +126,13 @@ def real_run(argv: list[str], input: bytes | None = None, capture: bool = False)
     out = subprocess.PIPE if capture else subprocess.DEVNULL
     try:
         proc = subprocess.run(argv, input=input, stdout=out, stderr=out,
-                              timeout=CMD_TIMEOUT_S, check=False)
+                              timeout=CMD_TIMEOUT_S, check=False, env=session_env())
     except FileNotFoundError:
         raise ActionError(f"{argv[0]} is not installed") from None
     except subprocess.TimeoutExpired:
         raise ActionError(f"{argv[0]} timed out") from None
+    except OSError as exc:
+        raise ActionError(f"{argv[0]}: {exc.strerror or exc}") from None
     if proc.returncode != 0:
         detail = (proc.stderr or b"").decode(errors="replace").strip()
         raise ActionError(f"{argv[0]} failed ({proc.returncode}) {detail}".strip())
@@ -102,12 +141,22 @@ def real_run(argv: list[str], input: bytes | None = None, capture: bool = False)
 
 def real_spawn(argv: list[str]) -> None:
     """Start a long-lived program (hyprlock, xdg-open) detached — never under a
-    timeout, which would kill a lock screen after 5 s."""
+    timeout, which would kill a lock screen after 5 s. A program that exits
+    non-zero within SPAWN_CHECK_S is reported, not assumed started."""
     try:
-        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, start_new_session=True,
+                                env=session_env())
     except FileNotFoundError:
         raise ActionError(f"{argv[0]} is not installed") from None
+    except OSError as exc:
+        raise ActionError(f"{argv[0]}: {exc.strerror or exc}") from None
+    try:
+        code = proc.wait(timeout=SPAWN_CHECK_S)
+    except subprocess.TimeoutExpired:
+        return  # still running: started
+    if code != 0:
+        raise ActionError(f"{argv[0]} exited at once ({code})")
 
 
 # --- web API client ----------------------------------------------------------
