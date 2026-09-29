@@ -31,6 +31,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from checkout import bumpbar_map
+from checkout.bumpbar_actions import catalogue as bumpbar_catalogue
 from checkout.state import (
     load_state,
     load_status,
@@ -204,6 +206,60 @@ def remove_glyph(item_id: str) -> dict:
     except KeyError:
         raise HTTPException(status_code=404, detail="glyph not found") from None
     return {"ok": True}
+
+
+# --- bump bar (v1.9.0): the web WRITES bumpbar.json, the service writes its status
+def _read_json(path: str):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (FileNotFoundError, OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+@app.get("/api/bumpbar")
+def get_bumpbar() -> dict:
+    """Map + catalogue + the service's status. ``installed`` is False when the
+    service has never run here (a machine with no bar): the UI hides its link."""
+    from checkout import config as _config
+
+    status = _read_json(_config.BUMPBAR_STATUS_PATH)
+    map_error = None
+    try:
+        current = bumpbar_map.load_map(_config.BUMPBAR_PATH)
+    except bumpbar_map.MapError as exc:
+        current, map_error = bumpbar_map.default_map(), str(exc)
+    return {
+        "installed": status is not None,
+        "alive": _daemon_alive(status or {}),
+        "status": status,
+        "map": current,
+        "map_error": map_error,
+        "defaults": bumpbar_map.default_map(),
+        "actions": bumpbar_catalogue(),
+        "buttons": bumpbar_map.button_info(),
+        "shift": bumpbar_map.SHIFT,
+        "layers": list(bumpbar_map.LAYERS),
+    }
+
+
+@app.put("/api/bumpbar/map")
+def put_bumpbar_map(body: dict) -> dict:
+    """Validate + store the key map; the service picks it up on the next press."""
+    from checkout import config as _config
+
+    try:
+        return bumpbar_map.save_map(_config.BUMPBAR_PATH, body or {})
+    except bumpbar_map.MapError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@app.post("/api/bumpbar/map/reset")
+def reset_bumpbar_map() -> dict:
+    from checkout import config as _config
+
+    return bumpbar_map.save_map(_config.BUMPBAR_PATH, bumpbar_map.default_map())
 
 
 # --- static UI (mounted last so /api/* wins) -------------------------------
