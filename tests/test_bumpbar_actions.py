@@ -155,11 +155,11 @@ def test_system_commands_argv(action, argv):
     assert procs.runs == [(argv, None)]
 
 
-def test_lock_spawns_detached():
+def test_lock_goes_through_hypridle():
     r, _, procs = make()
     r.do("lock")
-    assert procs.spawns == [["hyprlock"]]
-    assert procs.runs == []
+    assert procs.runs == [(["loginctl", "lock-session"], None)]
+    assert procs.spawns == []
 
 
 def test_screenshot_focused_monitor_to_clipboard():

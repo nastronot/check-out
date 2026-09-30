@@ -67,7 +67,7 @@ ACTIONS: tuple[Action, ...] = (
     Action("media_next", "next track", "system", "Next track in the active player."),
     Action("media_play_pause", "play / pause", "system", "Play or pause the active player."),
     Action("screenshot", "screenshot", "system", "Focused monitor to the clipboard."),
-    Action("lock", "lock screen", "system", "Lock the session (hyprlock)."),
+    Action("lock", "lock screen", "system", "Lock the session (loginctl lock-session → hyprlock)."),
     Action("audio_output_next", "next audio output", "system", "Switch the default output device."),
 )
 
@@ -303,7 +303,8 @@ class Runner:
 
     # system
     def _lock(self) -> None:
-        self.spawn(["hyprlock"])
+        # Through hypridle, so the lock gets lock-guard.sh and its double-lock check.
+        self.run(["loginctl", "lock-session"])
 
     def _screenshot(self) -> None:
         argv = ["grim", "-"]
