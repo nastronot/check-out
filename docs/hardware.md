@@ -214,13 +214,20 @@ limit of display tube". On firmware 6.6 **none of them lights anything**:
 | one column | `AB 1F 23 01 03 CDEFGH` | `ABCDEFGH`, nothing lit: 4 bytes consumed, no effect |
 | bad column | `AB 1F 23 01 'C' DE` | `ABCDE`: m out of range → the byte is re-read as data |
 | punctuation | `AB 1F 2E 'C' DE …` | `ABDE…`: the command eats its character and draws neither it nor a mark |
+| columns 1–10 | `1F 23 01 01` … `1F 23 01 0A` | text kept, nothing lit |
+| columns 11–20 | `1F 23 01 0B` … `1F 23 01 14` | glass blank: m=12 is `0C` re-read as clear |
+| column 11 | `… 1F 23 01 0B 'X'` | X lands top-left: m=11 rejected, `0B` re-read as cursor home |
+| glyph bit 7 | `ESC &` with columns `80` | nothing lit: the glass has 7 dot rows only |
+
+**The firmware accepts columns 0–10, not the manual's 0–20**, so it was written
+for 10 annunciators. None of the ten lights on this glass, and the manual's
+tube spec (§2.1) lists only the 5×7 matrix. No other command mode in the manual
+has an annunciator command.
 
 **Never send these.** They do nothing visible, and a malformed one leaks its
-bytes as data: an out-of-range byte is re-read as a character, and if it is `0C`
-it clears the glass (two probes of back-to-back `1F 23` sequences blanked the
-screen this way; the second blank is not fully explained). Whether the shapes
-are unwired or merely unsupported by this firmware is unknown: only a non-EPSON
-mode (set by HP's Windows utility) or opening the unit could tell.
+bytes as data: an out-of-range byte is re-read as a character, so column 12
+(`0C`) clears the glass. Whether the shapes are unwired or need a command the
+manual omits is unknown: only opening the unit could tell.
 
 ## TG3 M4220 bump bar (input, v1.9.0)
 
