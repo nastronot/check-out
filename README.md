@@ -470,7 +470,7 @@ The first four end the line with an AM or PM glyph.
 
 **News alerts** (optional) pick **topics**, each backed by fixed feeds:
 **tech** = NYT Technology, BBC Technology and Phoronix; **politics** = NYT
-Politics; **mississippi** = Mississippi Today. Every few minutes (`Check`, default
+Politics; plus a **local** topic backed by a regional news site. Every few minutes (`Check`, default
 2) the daemon reads each feed's **lead story**. A new lead becomes an alert: the
 top line shows `NEWS ALERT` between bar glyphs, and the bottom line scrolls
 `OUTLET: headline` in from the right, then the screen returns to the weather.
