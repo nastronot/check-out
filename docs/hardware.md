@@ -199,6 +199,29 @@ unchanged, digits included; no character is given up to the glyphs.
 All seven checks passed on 2026-09-28 (firmware 6.6). The HP also looks brighter
 than the IBM at the same level, likely phosphor wear on the salvaged IBM.
 
+### Annunciators and punctuation — accepted, never lit (2026-10-14)
+
+The HP's glass carries extra segments besides the 5×7 cells: triangles and other
+shapes, visible unlit when the display is blank. The manual's EPSON commands for
+them are `US # n m` (`1F 23 n m`, annunciator at column m on/off, m=0 = all) and
+`US .` / `US ,` / `US ;` + char (`1F 2E` / `1F 2C` / `1F 3B`, a character with a
+period/comma/semicolon). It warns they "may not be available due to hardware
+limit of display tube". On firmware 6.6 **none of them lights anything**:
+
+| Probe | Bytes | Glass |
+|---|---|---|
+| all on | `1F 23 01 00` | nothing lit; no stray `#`, so the command was parsed |
+| one column | `AB 1F 23 01 03 CDEFGH` | `ABCDEFGH`, nothing lit: 4 bytes consumed, no effect |
+| bad column | `AB 1F 23 01 'C' DE` | `ABCDE`: m out of range → the byte is re-read as data |
+| punctuation | `AB 1F 2E 'C' DE …` | `ABDE…`: the command eats its character and draws neither it nor a mark |
+
+**Never send these.** They do nothing visible, and a malformed one leaks its
+bytes as data: an out-of-range byte is re-read as a character, and if it is `0C`
+it clears the glass (two probes of back-to-back `1F 23` sequences blanked the
+screen this way; the second blank is not fully explained). Whether the shapes
+are unwired or merely unsupported by this firmware is unknown: only a non-EPSON
+mode (set by HP's Windows utility) or opening the unit could tell.
+
 ## TG3 M4220 bump bar (input, v1.9.0)
 
 A 10-key kitchen "bump" keypad, **KBA-M4220A-BC15A** (NCR part 7182-1058-9900),
