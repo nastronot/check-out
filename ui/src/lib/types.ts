@@ -40,18 +40,28 @@ export interface WeatherStatus {
   error: string | null;
 }
 
-/** News alert brightness effect. */
 /** News topics offered in the UI; each is backed by curated feeds (news.TOPICS). */
 export type NewsTopic = 'tech' | 'politics' | 'mississippi';
+/** News alert brightness effect. */
 export type NewsEffect = 'none' | 'flash' | 'throb';
 
 /** status.news — each source's lead story + error, the newest lead, alert flag. */
+export interface NewsSource {
+  name?: string; // the outlet, as the ticker cites it
+  title: string | null;
+  link?: string | null; // http(s) only, else null
+  published: string | null;
+  error: string | null;
+}
 export interface NewsStatus {
-  sources: Record<string, { title: string | null; published: string | null; error: string | null }>;
-  latest: { source: string; title: string; published: string | null } | null;
+  sources: Record<string, NewsSource>;
+  latest: { source: string; name?: string; title: string; published: string | null } | null;
   error: string | null;
   alerting: boolean;
 }
+
+/** GET /api/news — each topic's feeds, in order (news.catalogue()). */
+export type NewsCatalogue = Record<NewsTopic, { key: string; name: string }[]>;
 
 /** {"0".."8"} -> 7 row ints (low 5 bits = columns 1..5). Shared with state.glyphs. */
 export type GlyphMap = Record<string, number[]>;

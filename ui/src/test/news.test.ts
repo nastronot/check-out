@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newsSummary } from '../lib/news';
+import { ago, feedRows, newsSummary } from '../lib/news';
 
 const src = (title: string | null, error: string | null = null) => ({
   title,
@@ -48,5 +48,47 @@ describe('newsSummary review fixes', () => {
   });
   it('says so when no sources are selected', () => {
     expect(newsSummary({ sources: {}, latest: null, error: null, alerting: false }, 0)).toMatch(/no topics/i);
+  });
+});
+
+describe('ago', () => {
+  const now = Date.parse('2026-11-08T06:00:00Z');
+  it('counts minutes, then hours, then days', () => {
+    expect(ago('2026-11-08T05:59:40Z', now)).toBe('now');
+    expect(ago('2026-11-08T05:48:00Z', now)).toBe('12m');
+    expect(ago('2026-11-08T03:00:00Z', now)).toBe('3h');
+    expect(ago('2026-11-05T06:00:00Z', now)).toBe('3d');
+    expect(ago(null, now)).toBe('');
+  });
+});
+
+describe('feedRows', () => {
+  const catalogue = {
+    tech: [{ key: 'ars', name: 'ARS' }],
+    politics: [{ key: 'politico', name: 'POLITICO' }, { key: 'pbs_politics', name: 'PBS' }],
+    mississippi: [{ key: 'mt', name: 'MT' }],
+  };
+  const now = Date.parse('2026-11-08T06:00:00Z');
+  const status = {
+    sources: {
+      politico: { name: 'POLITICO', title: 'GOP reckoning', link: 'https://politico.com/x',
+                  published: '2026-11-08T05:00:00Z', error: null },
+      pbs_politics: { name: 'PBS', title: null, link: null, published: null, error: 'OSError: timed out' },
+    },
+    latest: null, error: null, alerting: false,
+  };
+  it('lists every topic in catalogue order, unticked ones off', () => {
+    const rows = feedRows(catalogue, status, ['politics'], now);
+    expect(rows.map((r) => [r.topic, r.on])).toEqual([['tech', false], ['politics', true], ['mississippi', false]]);
+    expect(rows[0].feeds[0]).toMatchObject({ name: 'ARS', state: 'off', title: null });
+  });
+  it('shows each ticked feed\'s lead with its link and age, or its error', () => {
+    const [, politics] = feedRows(catalogue, status, ['politics'], now);
+    expect(politics.feeds[0]).toMatchObject({ state: 'ok', title: 'GOP reckoning', link: 'https://politico.com/x', age: '1h' });
+    expect(politics.feeds[1]).toMatchObject({ state: 'error', error: 'OSError: timed out' });
+  });
+  it('waits for a ticked feed not fetched yet, and for no catalogue shows nothing', () => {
+    expect(feedRows(catalogue, null, ['tech'], now)[0].feeds[0].state).toBe('waiting');
+    expect(feedRows(null, status, ['tech'], now)).toEqual([]);
   });
 });

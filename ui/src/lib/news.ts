@@ -1,11 +1,7 @@
-import type { NewsStatus } from './types';
+import type { NewsCatalogue, NewsStatus, NewsTopic } from './types';
 
-// Same labels as checkout/news.py SOURCES (they also prefix the ticker).
-const LABEL: Record<string, string> = {
-  ap: 'AP', bbc: 'BBC', nyt: 'NYT', mt: 'MT', wired: 'WIRED', hill: 'HILL', ai: 'ARS',
-  linux: 'PHORONIX', nyt_tech: 'NYT', bbc_tech: 'BBC', nyt_politics: 'NYT',
-};
-const label = (key: string) => LABEL[key] ?? key.toUpperCase();
+// The outlet name comes from status (news.SOURCES); the key is the fallback.
+const label = (n: NewsStatus, key: string) => n.sources[key]?.name ?? key.toUpperCase();
 
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -18,8 +14,59 @@ export function newsSummary(n: NewsStatus | null | undefined, selected?: number)
   if (!n?.latest) return 'Waiting for the first headlines…';
   const failed = Object.entries(n.sources)
     .filter(([, s]) => s.error)
-    .map(([k]) => label(k));
+    .map(([k]) => label(n, k));
   const tail = failed.length ? ` · ${failed.join(', ')} failed` : '';
   const when = n.latest.published ? ` · ${time(n.latest.published)}` : '';
-  return `${label(n.latest.source)} · ${n.latest.title}${when}${tail}`;
+  const name = n.latest.name ?? label(n, n.latest.source);
+  return `${name} · ${n.latest.title}${when}${tail}`;
+}
+
+/** "now", "12m", "3h", "2d" — how long ago `iso` was, from `now` (ms). */
+export function ago(iso: string | null, now: number): string {
+  if (!iso) return '';
+  const min = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+  if (min < 1) return 'now';
+  if (min < 60) return `${min}m`;
+  if (min < 48 * 60) return `${Math.floor(min / 60)}h`;
+  return `${Math.floor(min / 1440)}d`;
+}
+
+/** One feed in the Feeds list. `off`: its topic isn't ticked, so the daemon
+ *  doesn't fetch it; `waiting`: ticked, no reply yet. */
+export interface FeedRow {
+  key: string;
+  name: string;
+  state: 'off' | 'waiting' | 'ok' | 'error';
+  title: string | null;
+  link: string | null;
+  age: string;
+  error: string | null;
+}
+
+/** Every topic's feeds with their current lead story, in catalogue order. */
+export function feedRows(
+  catalogue: NewsCatalogue | null,
+  n: NewsStatus | null | undefined,
+  topics: NewsTopic[],
+  now: number,
+): { topic: NewsTopic; on: boolean; feeds: FeedRow[] }[] {
+  if (!catalogue) return [];
+  return (Object.keys(catalogue) as NewsTopic[]).map((topic) => {
+    const on = topics.includes(topic);
+    const feeds = catalogue[topic].map(({ key, name }): FeedRow => {
+      const s = on ? n?.sources[key] : undefined;
+      const title = s?.title ?? null;
+      const state = !on ? 'off' : !s ? 'waiting' : title ? 'ok' : s.error ? 'error' : 'waiting';
+      return {
+        key,
+        name,
+        state,
+        title,
+        link: s?.link ?? null,
+        age: ago(s?.published ?? null, now),
+        error: s?.error ?? null,
+      };
+    });
+    return { topic, on, feeds };
+  });
 }

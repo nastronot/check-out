@@ -9,6 +9,7 @@ import type {
   Library,
   LibraryGlyph,
   LibraryMessage,
+  NewsCatalogue,
   Status,
 } from './types';
 import type { BumpBar, BumpMap } from './bumpbar';
@@ -26,6 +27,9 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 export const getStatus = () => req<Status>('/api/status');
 export const getState = () => req<AppState>('/api/state');
 export const getHealth = () => req<Health>('/api/health');
+
+/** Each news topic's feeds (outlet names); the headlines come from status. */
+export const getNews = () => req<{ topics: NewsCatalogue }>('/api/news');
 
 /** Audio input devices for the spectrum SOURCE selector (from devices.json). */
 export const getDevices = () => req<{ devices: AudioDevice[] }>('/api/devices');

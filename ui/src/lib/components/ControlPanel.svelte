@@ -2,8 +2,9 @@
   import { lineBudget } from '../message';
   import { audioDevices, refreshDevices } from '../stores';
   import { parseCoord, weatherSummary } from '../weather';
-  import { newsSummary } from '../news';
-  import { postCommand } from '../api';
+  import { onMount } from 'svelte';
+  import { feedRows, newsSummary } from '../news';
+  import { getNews, postCommand } from '../api';
   import type {
     Align,
     AppState,
@@ -17,6 +18,7 @@
     Status,
     DynamicColon,
     DynamicPacmanSprite,
+    NewsCatalogue,
     NewsEffect,
     NewsTopic,
   } from '../types';
@@ -199,6 +201,18 @@
     }
   }
   $: newsLine = newsSummary(status?.news, state?.news_topics.length);
+
+  // The Feeds list: every topic's feeds (static, from /api/news) with each
+  // ticked feed's current lead (status.news). Ages refresh with each status poll.
+  let newsCatalogue: NewsCatalogue | null = null;
+  onMount(async () => {
+    try {
+      newsCatalogue = (await getNews()).topics;
+    } catch {
+      newsCatalogue = null; // older web process: no list, the rest still works
+    }
+  });
+  $: newsFeeds = feedRows(newsCatalogue, status?.news, state?.news_topics ?? [], status ? Date.now() : 0);
 
   // One line per colon choice: only the selected one is explained.
   const COLON_HINTS: Record<DynamicColon, string> = {
@@ -565,6 +579,37 @@
             </div>
           </div>
           <span class="field__hint">{newsLine}</span>
+          {#if newsFeeds.length}
+            <details class="feeds">
+              <summary>Feeds</summary>
+              {#each newsFeeds as group}
+                <div class="feeds__topic" class:feeds__topic--off={!group.on}>
+                  {group.topic}{group.on ? '' : ' · off'}
+                </div>
+                <ul>
+                  {#each group.feeds as f (f.key)}
+                    <li class="feed feed--{f.state}">
+                      <span class="feed__name">{f.name}</span>
+                      {#if f.state === 'ok'}
+                        {#if f.link}
+                          <a class="feed__title" href={f.link} target="_blank" rel="noopener noreferrer"
+                            title={f.title}>{f.title}</a
+                          >
+                        {:else}
+                          <span class="feed__title" title={f.title}>{f.title}</span>
+                        {/if}
+                        <span class="feed__age">{f.age}</span>
+                      {:else if f.state === 'error'}
+                        <span class="feed__title" title={f.error}>fetch failed</span>
+                      {:else if f.state === 'waiting'}
+                        <span class="feed__title">waiting…</span>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/each}
+            </details>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -666,6 +711,72 @@
 
   .switch.disabled {
     opacity: 0.4;
+  }
+
+  /* News Feeds list: topic heading, then OUTLET | headline | age per feed. */
+  .feeds summary {
+    cursor: pointer;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-mute);
+  }
+
+  .feeds__topic {
+    margin: 8px 0 2px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--phosphor-dim);
+  }
+
+  .feeds__topic--off {
+    color: var(--text-faint);
+  }
+
+  .feeds ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .feed {
+    display: grid;
+    grid-template-columns: 10ch minmax(0, 1fr) auto;
+    gap: 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .feed__name {
+    color: var(--text-mute);
+  }
+
+  .feed__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a.feed__title:hover {
+    color: var(--phosphor-ink);
+    text-decoration: underline;
+  }
+
+  .feed__age {
+    color: var(--text-faint);
+  }
+
+  .feed--off,
+  .feed--waiting {
+    color: var(--text-faint);
+  }
+
+  .feed--error .feed__title {
+    color: var(--red-dead);
   }
 
 </style>
