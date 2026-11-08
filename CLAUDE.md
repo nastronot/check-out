@@ -156,9 +156,11 @@ value at the right of a field label; hints (`.field__hint`) are one short line.
 
 ### News alerts (v1.5.0)
 Dynamic mode, `news_enabled`: the UI offers TOPICS (`news_topics`), each backed
-by curated feeds (`news.TOPICS`): **tech** = NYT Technology + BBC Technology
-(editorial order) + Phoronix; **politics** = NYT Politics (editorial);
-**mississippi** = Mississippi Today. Other outlets (AP, BBC/NYT top, Wired, The
+by curated feeds (`news.TOPICS`, v1.10.0): **tech** = NYT Tech, BBC Tech, Guardian
+Tech (editorial order) + Phoronix, 404 Media, Ars (time order); **politics** = NYT
+Politics, Guardian US politics, BBC US & Canada (editorial) + Politico, PBS
+(time); **mississippi** = Mississippi Today, Mississippi Free Press, WJTV, Magnolia
+Tribune, Darkhorse Press (all time order: each post alerts). Other outlets (AP, BBC/NYT top, Wired, The
 Hill, Ars AI) stay in `news.SOURCES`, unused by the UI. `NewsFetcher` polls every
 `news_interval_min` (default 2) for each feed's **lead story**; the first lead per
 feed is recorded silently, a later new lead becomes the pending alert, newest wins.
@@ -168,6 +170,13 @@ shown. The top shows `{g2}{g3}{g5}{g0} NEWS ALERT {g6}{g4}{g3}{g7}` (7 bar glyph
 glyph key `("dynamic", "news")`), the bottom `OUTLET: headline` scrolling in from
 off the right edge, 1 + `news_repeat` passes 6 spaces apart, ending once the last
 character leaves at the left (`news_alert._tape`), then back to time/weather.
+**Feeds list (v1.10.0):** `GET /api/news` (`news.catalogue()`) gives each
+topic's feeds; `status.json` `news.sources` carries each fetched feed's `name`,
+lead `title`, `link` (http(s) only, `news.safe_link`) and `published`. The UI's
+fold-out Feeds list joins the two; unticked topics show "off" (never fetched).
+**Conditional GET:** `_http_get_bytes` sends `If-None-Match`/`If-Modified-Since`
+and `Accept-Encoding: gzip`; a 304 re-parses the cached body. Large feeds
+(Darkhorse Press ~450 KB) would otherwise re-download every check.
 `news_effect` flash/throb goes through the generic `Frame.brightness` hook. The
 `show_news` command (UI **Show latest**) plays the newest lead. Headlines are
 cleaned to ASCII. The stdlib XML parser is used deliberately: expat ≥ 2.4.1

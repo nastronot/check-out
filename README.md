@@ -469,8 +469,10 @@ option):
 The first four end the line with an AM or PM glyph.
 
 **News alerts** (optional) pick **topics**, each backed by fixed feeds:
-**tech** = NYT Technology, BBC Technology and Phoronix; **politics** = NYT
-Politics; plus a **local** topic backed by a regional news site. Every few minutes (`Check`, default
+**tech** = NYT Technology, BBC Technology, Guardian Technology, Phoronix, 404
+Media and Ars Technica; **politics** = NYT Politics, Guardian US politics, BBC US
+& Canada, Politico and PBS NewsHour politics; plus a **local** topic backed by
+regional news sites. Every few minutes (`Check`, default
 2) the daemon reads each feed's **lead story**. A new lead becomes an alert: the
 top line shows `NEWS ALERT` between bar glyphs, and the bottom line scrolls
 `OUTLET: headline` in from the right, then the screen returns to the weather.
@@ -482,6 +484,9 @@ Panel settings:
 - **Speed** — the scroll step in ms. **Repeat** — extra passes of the headline.
 - **Flash** — `none`, `3x` or `continuous` brightness effect on the alert.
 - **Show latest** — plays the newest lead now.
+- **Feeds** — a fold-out list of every topic's feeds, each with its current lead
+  story (a link) and its age. Feeds in unticked topics show as off: the daemon
+  fetches only ticked topics.
 
 Headlines are cleaned to ASCII. The feeds are parsed with Python's standard XML
 parser on purpose: expat ≥ 2.4.1 refuses "entity bomb" and external-entity
