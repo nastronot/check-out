@@ -343,8 +343,8 @@ class _Reply:
     def __init__(self, body, headers):
         self._body, self.headers = body, headers
 
-    def read(self):
-        return self._body
+    def read(self, n=-1):
+        return self._body if n < 0 else self._body[:n]
 
     def __enter__(self):
         return self
@@ -402,4 +402,33 @@ def test_a_real_error_still_raises(monkeypatch):
     monkeypatch.setattr(news, "_CACHE", {})
     monkeypatch.setattr(news.urllib.request, "urlopen", _urlopen([(304, b"", {})], []))
     with pytest.raises(urllib.error.HTTPError):               # a 304 with nothing cached
+        news._http_get_bytes("https://feed.example/rss", 5)
+
+
+# --- size caps: a hostile feed can't fill memory ----------------------------------
+def test_a_gzip_bomb_is_refused_not_inflated(monkeypatch):
+    import gzip
+    monkeypatch.setattr(news, "_CACHE", {})
+    monkeypatch.setattr(news, "MAX_FEED_BYTES", 1000)
+    bomb = gzip.compress(b"\0" * 100_000)                    # ~100 bytes -> 100 KB
+    monkeypatch.setattr(news.urllib.request, "urlopen",
+                        _urlopen([(200, bomb, {"Content-Encoding": "gzip"})], []))
+    with pytest.raises(ValueError, match="inflates past"):
+        news._http_get_bytes("https://feed.example/rss", 5)
+
+
+def test_an_oversized_download_is_refused(monkeypatch):
+    monkeypatch.setattr(news, "_CACHE", {})
+    monkeypatch.setattr(news, "MAX_FEED_BYTES", 10)
+    monkeypatch.setattr(news.urllib.request, "urlopen",
+                        _urlopen([(200, b"<rss>" + b" " * 20 + b"</rss>", {})], []))
+    with pytest.raises(ValueError, match="larger than"):
+        news._http_get_bytes("https://feed.example/rss", 5)
+
+
+def test_a_corrupt_gzip_body_is_a_feed_error(monkeypatch):
+    monkeypatch.setattr(news, "_CACHE", {})
+    monkeypatch.setattr(news.urllib.request, "urlopen",
+                        _urlopen([(200, b"not gzip", {"Content-Encoding": "gzip"})], []))
+    with pytest.raises(ValueError, match="bad gzip"):
         news._http_get_bytes("https://feed.example/rss", 5)

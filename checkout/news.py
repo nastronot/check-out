@@ -14,7 +14,6 @@ anywhere", which changes every few minutes) is what makes a change alert-worthy.
 
 from __future__ import annotations
 
-import gzip
 import html
 import re
 import time
@@ -22,6 +21,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+import zlib
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -214,6 +214,23 @@ _SEEN_MAX = 200     # remembered story links, so a lead that returns never re-al
 _CACHE: dict[str, tuple[str | None, str | None, bytes]] = {}
 
 
+# The biggest feed in use is ~450 KB; a hostile or broken feed must not be able
+# to fill the daemon's memory, compressed (a gzip bomb) or not.
+MAX_FEED_BYTES = 8 * 1024 * 1024
+
+
+def _gunzip(data: bytes) -> bytes:
+    """Undo gzip, refusing output past MAX_FEED_BYTES instead of inflating it."""
+    inflater = zlib.decompressobj(16 + zlib.MAX_WBITS)    # 16+: expect a gzip header
+    try:
+        out = inflater.decompress(data, MAX_FEED_BYTES)
+    except zlib.error as exc:
+        raise ValueError(f"bad gzip body: {exc}") from None
+    if inflater.unconsumed_tail:
+        raise ValueError(f"feed inflates past {MAX_FEED_BYTES} bytes")
+    return out
+
+
 def _http_get_bytes(url: str, timeout: float) -> bytes:
     headers = {"User-Agent": "check-out news", "Accept-Encoding": "gzip"}
     cached = _CACHE.get(url)
@@ -226,9 +243,11 @@ def _http_get_bytes(url: str, timeout: float) -> bytes:
     request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read()
+            body = response.read(MAX_FEED_BYTES + 1)
+            if len(body) > MAX_FEED_BYTES:
+                raise ValueError(f"feed larger than {MAX_FEED_BYTES} bytes")
             if response.headers.get("Content-Encoding", "").lower() == "gzip":
-                body = gzip.decompress(body)
+                body = _gunzip(body)
             etag, modified = response.headers.get("ETag"), response.headers.get("Last-Modified")
     except urllib.error.HTTPError as exc:
         if exc.code == 304 and cached:
