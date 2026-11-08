@@ -43,7 +43,7 @@ from datetime import datetime
 from .. import weather
 from ..config import COLS
 from ..driver import GLYPH_CODES
-from ..news import SOURCES, Headline
+from ..news import SOURCES, Headline, safe_link
 from ..news import sources_for as news_sources_for
 from . import news_alert
 from .base import Frame
@@ -234,7 +234,7 @@ class DynamicFrame(Frame):
             "source": h.source,
             "outlet": source.name if source else h.source.upper(),
             "title": h.title,
-            "link": h.link if h.link.startswith(("https://", "http://")) else None,
+            "link": safe_link(h.link),
             "shown_at": datetime.fromtimestamp(self._shown.started_ms / 1000).astimezone().isoformat(),
         }
 

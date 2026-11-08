@@ -14,10 +14,12 @@ anywhere", which changes every few minutes) is what makes a change alert-worthy.
 
 from __future__ import annotations
 
+import gzip
 import html
 import re
 import time
 import unicodedata
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import deque
@@ -71,14 +73,38 @@ SOURCES: dict[str, Source] = {
     "nyt_politics": Source("nyt_politics", "NYT",
                            "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
                            pick="first"),                                                # ~38 posts
+    # --- added 2026-11-07. Measured that Saturday (posts / 24 h; weekdays run higher).
+    # Editorial order: only a change of lead story alerts.
+    "guardian_politics": Source("guardian_politics", "GUARDIAN",
+                                "https://www.theguardian.com/us-news/us-politics/rss",
+                                pick="first"),                                           # ~11 posts
+    "bbc_us": Source("bbc_us", "BBC", "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
+                     pick="first"),                                                      # ~6 posts
+    "guardian_tech": Source("guardian_tech", "GUARDIAN",
+                            "https://www.theguardian.com/uk/technology/rss", pick="first"),  # ~8 posts
+    # Time order: every new post alerts.
+    "politico": Source("politico", "POLITICO", "https://rss.politico.com/politics-news.xml",
+                       pick="first"),                                                    # ~1 (Sat)
+    "pbs_politics": Source("pbs_politics", "PBS",
+                           "https://www.pbs.org/newshour/feeds/rss/politics", pick="first"),  # ~7
+    "media404": Source("media404", "404 MEDIA", "https://www.404media.co/rss/", pick="first"),  # ~1
+    "ars": Source("ars", "ARS", "https://feeds.arstechnica.com/arstechnica/index",
+                  pick="first"),                                                         # ~2 (Sat)
+    "mfp": Source("mfp", "MFP", "https://www.mississippifreepress.org/feed/", pick="first"),  # ~1
+    "wjtv": Source("wjtv", "WJTV", "https://www.wjtv.com/feed/", pick="first"),           # ~3
+    "magnolia": Source("magnolia", "MAGNOLIA", "https://magnoliatribune.com/feed/",
+                       pick="first"),                                                    # ~1
+    # Darkhorse Press (Therese Apel): statewide crime/crash/local, ~11 a weekday.
+    "darkhorse": Source("darkhorse", "DARKHORSE", "https://darkhorsepressnow.com/feed/",
+                        pick="first"),
 }
 
 # What the UI offers: topics, each backed by quiet, curated feeds. The other
 # sources above stay available to code (a ticker, a future topic) but are off.
 TOPICS: dict[str, tuple[str, ...]] = {
-    "tech": ("nyt_tech", "bbc_tech", "linux"),
-    "politics": ("nyt_politics",),
-    "mississippi": ("mt",),
+    "tech": ("nyt_tech", "bbc_tech", "guardian_tech", "linux", "media404", "ars"),
+    "politics": ("nyt_politics", "guardian_politics", "bbc_us", "politico", "pbs_politics"),
+    "mississippi": ("mt", "mfp", "wjtv", "magnolia", "darkhorse"),
 }
 
 
@@ -90,6 +116,17 @@ def sources_for(topics) -> list[str]:
             if src not in out:
                 out.append(src)
     return out
+
+
+def catalogue() -> dict:
+    """Each UI topic's feeds, in order: key + outlet name. For the web UI."""
+    return {topic: [{"key": k, "name": SOURCES[k].name} for k in keys]
+            for topic, keys in TOPICS.items()}
+
+
+def safe_link(link: str) -> str | None:
+    """The link if it is http(s), else None — the UI makes it clickable."""
+    return link if link.startswith(("https://", "http://")) else None
 
 
 @dataclass(frozen=True)
@@ -169,10 +206,39 @@ HTTP_TIMEOUT_S = 8
 _SEEN_MAX = 200     # remembered story links, so a lead that returns never re-alerts
 
 
+# url -> (ETag, Last-Modified, body) from the last full download. Sending the
+# first two back lets an unchanged feed answer "304 Not Modified" with no body,
+# and the cached body is parsed again. Some feeds are large (Darkhorse Press is
+# ~450 KB, the full text of 75 posts), so this turns ~100 MB a day of re-downloads
+# into a few hundred bytes per check.
+_CACHE: dict[str, tuple[str | None, str | None, bytes]] = {}
+
+
 def _http_get_bytes(url: str, timeout: float) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "check-out news"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    headers = {"User-Agent": "check-out news", "Accept-Encoding": "gzip"}
+    cached = _CACHE.get(url)
+    if cached:
+        etag, modified, _ = cached
+        if etag:
+            headers["If-None-Match"] = etag
+        if modified:
+            headers["If-Modified-Since"] = modified
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read()
+            if response.headers.get("Content-Encoding", "").lower() == "gzip":
+                body = gzip.decompress(body)
+            etag, modified = response.headers.get("ETag"), response.headers.get("Last-Modified")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 304 and cached:
+            return cached[2]
+        raise
+    if etag or modified:
+        _CACHE[url] = (etag, modified, body)
+    else:
+        _CACHE.pop(url, None)
+    return body
 
 
 def _iso(ts: float | None) -> str | None:
@@ -225,7 +291,9 @@ class NewsFetcher(Poller):
                 return None
             sources = {
                 key: {
+                    "name": SOURCES[key].name,
                     "title": self._leads[key].title if key in self._leads else None,
+                    "link": safe_link(self._leads[key].link) if key in self._leads else None,
                     "published": _iso(self._leads[key].published) if key in self._leads else None,
                     "error": self._errors.get(key),
                 }
@@ -235,7 +303,8 @@ class NewsFetcher(Poller):
         return {
             "sources": sources,
             "latest": None if newest is None else {
-                "source": newest.source, "title": newest.title,
+                "source": newest.source, "name": SOURCES[newest.source].name,
+                "title": newest.title,
                 "published": _iso(newest.published)},
             "error": self.error,
         }

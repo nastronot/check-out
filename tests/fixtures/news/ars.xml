@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" version="2.0">
+    <channel>
+        <title>Ars Technica - All content</title>
+        <atom:link href="https://arstechnica.com/feed/" rel="self" type="application/rss+xml"/>
+        <link>https://arstechnica.com</link>
+        <description>All Ars Technica stories</description>
+        <lastBuildDate>Sun, 08 Nov 2026 00:12:19 +0000</lastBuildDate>
+        <language>en-US</language>
+        <sy:updatePeriod>
+            hourly        </sy:updatePeriod>
+        <sy:updateFrequency>
+            1        </sy:updateFrequency>
+        
+<image>
+	<url>https://cdn.arstechnica.net/wp-content/uploads/2016/10/cropped-ars-logo-512_480-60x60.png</url>
+	<title>Ars Technica</title>
+	<link>https://arstechnica.com</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+            <item>
+                <title>The Bantu expansion changed Africa. Scientists are still tracing how.</title>
+                <link>https://arstechnica.com/science/2026/11/the-migration-that-transformed-africas-languages-genes-and-cultures/</link>
+                                    <comments>https://arstechnica.com/science/2026/11/the-migration-that-transformed-africas-languages-genes-and-cultures/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Katarina Zimmer, Knowable Magazine]]>
+                </dc:creator>
+                <pubDate>Sat, 07 Nov 2026 12:15:55 +0000</pubDate>
+                		<category><![CDATA[Science]]></category>
+		<category><![CDATA[anthropology]]></category>
+		<category><![CDATA[Genetics]]></category>
+		<category><![CDATA[human origins]]></category>
+		<category><![CDATA[syndication]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/science/2026/11/the-migration-that-transformed-africas-languages-genes-and-cultures/</guid>
+
+                                    
+                                                                
+                                    
+                                    <slash:comments>43</slash:comments>
+                
+                
+                
+            </item>
+                    <item>
+                <title>British soldier ignored order to pull his SIM card, then got blackmailed</title>
+                <link>https://arstechnica.com/security/2026/11/british-soldier-ignored-order-to-pull-his-sim-card-then-got-blackmailed/</link>
+                                    <comments>https://arstechnica.com/security/2026/11/british-soldier-ignored-order-to-pull-his-sim-card-then-got-blackmailed/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Cyrus Farivar]]>
+                </dc:creator>
+                <pubDate>Sat, 07 Nov 2026 11:00:34 +0000</pubDate>
+                		<category><![CDATA[Security]]></category>
+		<category><![CDATA[Tech]]></category>
+		<category><![CDATA[Daniel Barton-Kennedy]]></category>
+		<category><![CDATA[sim card]]></category>
+		<category><![CDATA[soldier]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/security/2026/11/british-soldier-ignored-order-to-pull-his-sim-card-then-got-blackmailed/</guid>
+
+                                    
+                                                                
+                                    
+                                    <slash:comments>119</slash:comments>
+                
+                
+                
+            </item>
+                    <item>
+                <title>Doctors pull knife from man's eye that went through his brain—and he's fine now</title>
+                <link>https://arstechnica.com/health/2026/11/man-unexpectedly-recovers-from-a-knife-wound-through-his-eye-and-brain/</link>
+                                    <comments>https://arstechnica.com/health/2026/11/man-unexpectedly-recovers-from-a-knife-wound-through-his-eye-and-brain/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Beth Mole]]>
+                </dc:creator>
+                <pubDate>Fri, 06 Nov 2026 23:09:45 +0000</pubDate>
+                		<category><![CDATA[Health]]></category>
+		<category><![CDATA[BMJ]]></category>
+		<category><![CDATA[brain]]></category>
+		<category><![CDATA[eye]]></category>
+		<category><![CDATA[knife]]></category>
+		<category><![CDATA[surgery]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/health/2026/11/man-unexpectedly-recovers-from-a-knife-wound-through-his-eye-and-brain/</guid>
+
+                                    
+                                                                
+                                    
+                                    <slash:comments>81</slash:comments>
+                
+                
+                
+            </item>
+                    <item>
+                <title>Ships loiter near subsea cables amid Iran's warnings to Trump</title>
+                <link>https://arstechnica.com/gadgets/2026/11/ships-loiter-near-subsea-cables-amid-irans-warnings-to-trump/</link>
+                                    <comments>https://arstechnica.com/gadgets/2026/11/ships-loiter-near-subsea-cables-amid-irans-warnings-to-trump/#comments</comments>
+                
+                <dc:creator>
+                    <![CDATA[Jeremy Hsu]]>
+                </dc:creator>
+                <pubDate>Fri, 06 Nov 2026 22:41:37 +0000</pubDate>
+                		<category><![CDATA[Tech]]></category>
+		<category><![CDATA[donald trump iran war]]></category>
+		<category><![CDATA[Iran]]></category>
+		<category><![CDATA[Iran Revolutionary Guard Corps]]></category>
+		<category><![CDATA[subsea cable]]></category>
+		<category><![CDATA[subsea cables]]></category>
+		<category><![CDATA[undersea cable]]></category>
+		<category><![CDATA[undersea cable cuts]]></category>
+		<category><![CDATA[undersea cables]]></category>
+		<category><![CDATA[USA-Iran War]]></category>
+                <guid isPermaLink="true">https://arstechnica.com/gadgets/2026/11/ships-loiter-near-subsea-cables-amid-irans-warnings-to-trump/</guid>
+
+                                    
+                                                                
+                                    
+                                    <slash:comments>53</slash:comments>
+                
+                
+                
+            </item>
+</channel>
+</rss>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+    <channel>
+        <title>PBS News Hour - Politics</title>
+        <link>https://www.pbs.org/newshour/politics</link>
+                <description><![CDATA[Recent political news, analysis and reporting.]]></description>
+                <language>en-US</language>
+        <copyright>NewsHour Productions LLC. All Rights Reserved. 2026</copyright>
+        <pubDate>Sun, 08 Nov 2026 00:39:29 -0500</pubDate>
+                        <item>
+            <title><![CDATA[Sen. Chris Murphy's stroke at 53 highlights a trend: Strokes among younger adults have risen]]></title>
+            <link>https://www.pbs.org/newshour/health/sen-chris-murphys-stroke-at-53-highlights-a-trend-strokes-among-younger-adults-have-risen</link>
+            
+            <pubDate>Sat, 07 Nov 2026 16:14:44 -0500</pubDate>
+            <guid isPermaLink="true">https://www.pbs.org/newshour/health/sen-chris-murphys-stroke-at-53-highlights-a-trend-strokes-among-younger-adults-have-risen</guid>
+                        <category domain="https://www.pbs.org/newshour/tag/chris-murphy"><![CDATA[chris murphy]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/connecticut"><![CDATA[connecticut]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/politifact"><![CDATA[politifact]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/senate"><![CDATA[senate]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/stroke"><![CDATA[stroke]]></category>
+                                                        <dc:creator><![CDATA[Grace Abels, PolitiFact]]></dc:creator>
+                                <dc:creator><![CDATA[Madison Czopek, PolitiFact]]></dc:creator>
+                                                                
+                    </item>
+                <item>
+            <title><![CDATA[Trump says he's asked UFC's Dana White to be his press secretary]]></title>
+            <link>https://www.pbs.org/newshour/politics/trump-says-hes-asked-ufcs-dana-white-to-be-his-press-secretary</link>
+            
+            <pubDate>Sat, 07 Nov 2026 15:55:40 -0500</pubDate>
+            <guid isPermaLink="true">https://www.pbs.org/newshour/politics/trump-says-hes-asked-ufcs-dana-white-to-be-his-press-secretary</guid>
+                        <category domain="https://www.pbs.org/newshour/tag/dana-white"><![CDATA[Dana White]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/donald-trump"><![CDATA[Donald Trump news]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/white-house-press-secretary"><![CDATA[White House Press Secretary]]></category>
+                                                        <dc:creator><![CDATA[Michelle L. Price, Associated Press]]></dc:creator>
+                                                                
+                    </item>
+                <item>
+            <title><![CDATA[Melania Trump and LSU announce a scholarship program for students who were in foster care]]></title>
+            <link>https://www.pbs.org/newshour/politics/melania-trump-and-lsu-announce-a-scholarship-program-for-students-who-were-in-foster-care</link>
+            
+            <pubDate>Sat, 07 Nov 2026 14:35:15 -0500</pubDate>
+            <guid isPermaLink="true">https://www.pbs.org/newshour/politics/melania-trump-and-lsu-announce-a-scholarship-program-for-students-who-were-in-foster-care</guid>
+                        <category domain="https://www.pbs.org/newshour/tag/foster-care"><![CDATA[foster care]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/Louisiana"><![CDATA[Louisiana]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/louisiana-state-university"><![CDATA[Louisiana State University]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/melania-trump"><![CDATA[Melania Trump]]></category>
+                                                        <dc:creator><![CDATA[Darlene Superville, Associated Press]]></dc:creator>
+                                                                
+                    </item>
+                <item>
+            <title><![CDATA[Judge wants former U.S. attorney to investigate whether the government misled her in Trump golf case]]></title>
+            <link>https://www.pbs.org/newshour/politics/judge-wants-former-u-s-attorney-to-investigate-whether-the-government-misled-her-in-trump-golf-case</link>
+            
+            <pubDate>Sat, 07 Nov 2026 13:34:30 -0500</pubDate>
+            <guid isPermaLink="true">https://www.pbs.org/newshour/politics/judge-wants-former-u-s-attorney-to-investigate-whether-the-government-misled-her-in-trump-golf-case</guid>
+                        <category domain="https://www.pbs.org/newshour/tag/construction"><![CDATA[construction]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/east-potomac-golf-course"><![CDATA[east potomac golf course]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/trump-administration"><![CDATA[Trump Administration]]></category>
+                        <category domain="https://www.pbs.org/newshour/tag/washington-dc"><![CDATA[Washington D.C.]]></category>
+                                                        <dc:creator><![CDATA[Gary Fields, Associated Press]]></dc:creator>
+                                <dc:creator><![CDATA[Jesse Bedayn, Associated Press]]></dc:creator>
+                                                                
+                    </item>
+</channel>
+</rss>

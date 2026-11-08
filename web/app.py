@@ -128,6 +128,15 @@ def get_health() -> dict:
     return {"ok": True, "daemon_alive": _daemon_alive(load_status())}
 
 
+@app.get("/api/news")
+def get_news() -> dict:
+    """Each news topic's feeds (key + outlet), for the UI's feed list. Static:
+    the headlines themselves come from status.json."""
+    from checkout import news
+
+    return {"topics": news.catalogue()}
+
+
 @app.get("/api/devices")
 def get_devices() -> dict:
     """The audio input devices the audioviz process enumerated (for the spectrum

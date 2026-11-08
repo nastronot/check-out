@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>Mississippi Free Press</title>
+	<atom:link href="https://www.mississippifreepress.org/feed/" rel="self" type="application/rss+xml" />
+	<link>https://www.mississippifreepress.org/</link>
+	<description>Journalism by Mississippians, for Mississippians</description>
+	<lastBuildDate>Sat, 07 Nov 2026 00:10:13 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	
+
+<image>
+	<url>https://www.mississippifreepress.org/wp-content/uploads/2024/07/cropped-MFP-Logo-initials-transparent-32x32.png</url>
+	<title>Mississippi Free Press</title>
+	<link>https://www.mississippifreepress.org/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+<site xmlns="com-wordpress:feed-additions:1">231350839</site>	<item>
+		<title>Democracy &#124; The Original MFP Editor Was Beaten With a Tire Iron. The Work Must Prevail.</title>
+		<link>https://www.mississippifreepress.org/democracy-the-original-mfp-editor-was-beaten-with-a-tire-iron-the-work-must-prevail/</link>
+		
+		<dc:creator><![CDATA[Donna Ladd]]></dc:creator>
+		<pubDate>Sat, 07 Nov 2026 00:10:07 +0000</pubDate>
+				<category><![CDATA[Democracy | Donna Ladd]]></category>
+		<category><![CDATA[MFP Voices]]></category>
+		<category><![CDATA[Civil Rights]]></category>
+		<category><![CDATA[Democracy]]></category>
+		<category><![CDATA[Editor’s Note]]></category>
+		<category><![CDATA[Journalism]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<guid isPermaLink="false">https://www.mississippifreepress.org/?p=365058</guid>
+
+					
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">365058</post-id>	</item>
+		<item>
+		<title>Why It’s Still Too Early to Call the US Senate Race in Mississippi</title>
+		<link>https://www.mississippifreepress.org/why-its-still-too-early-to-call-the-us-senate-race-in-mississippi/</link>
+		
+		<dc:creator><![CDATA[Camille Baker]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 23:44:47 +0000</pubDate>
+				<category><![CDATA[News]]></category>
+		<category><![CDATA[2026 Elections]]></category>
+		<category><![CDATA[AP]]></category>
+		<category><![CDATA[Cindy Hyde-Smith]]></category>
+		<category><![CDATA[elections]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<category><![CDATA[Scott Colom]]></category>
+		<category><![CDATA[U.S. Senate]]></category>
+		<category><![CDATA[Wire]]></category>
+		<guid isPermaLink="false">https://www.mississippifreepress.org/?p=365030</guid>
+
+					
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">365030</post-id>		<dc:creator><![CDATA[Matt Holt]]></dc:creator>
+		<dc:creator><![CDATA[Associated Press]]></dc:creator>
+	</item>
+		<item>
+		<title>Trump Replaces Susie Wiles With Stephen Miller as Chief of Staff After GOP’s Midterm Defeat</title>
+		<link>https://www.mississippifreepress.org/trump-replaces-susie-wiles-with-stephen-miller-as-chief-of-staff-after-gops-midterm-defeat/</link>
+		
+		<dc:creator><![CDATA[Seung Min Kim]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 21:43:54 +0000</pubDate>
+				<category><![CDATA[News]]></category>
+		<category><![CDATA[AP]]></category>
+		<category><![CDATA[Donald Trump]]></category>
+		<category><![CDATA[national]]></category>
+		<category><![CDATA[Stephen Miller]]></category>
+		<category><![CDATA[White House]]></category>
+		<category><![CDATA[Wire]]></category>
+		<guid isPermaLink="false">https://www.mississippifreepress.org/?p=364985</guid>
+
+					
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">364985</post-id>		<dc:creator><![CDATA[Associated Press]]></dc:creator>
+	</item>
+		<item>
+		<title>Scott Colom Is Overperforming Affidavit Ballots in North Mississippi—Even in Hyde-Smith Friendly Counties</title>
+		<link>https://www.mississippifreepress.org/scott-colom-is-overperforming-affidavit-ballots-in-north-mississippi-even-in-hyde-smith-friendly-counties/</link>
+		
+		<dc:creator><![CDATA[Ahmer A. Khan]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 18:49:23 +0000</pubDate>
+				<category><![CDATA[News]]></category>
+		<category><![CDATA[2026 Elections]]></category>
+		<category><![CDATA[Alcorn County]]></category>
+		<category><![CDATA[Benton County]]></category>
+		<category><![CDATA[Calhoun County]]></category>
+		<category><![CDATA[Chickasaw County]]></category>
+		<category><![CDATA[Clay County]]></category>
+		<category><![CDATA[elections]]></category>
+		<category><![CDATA[Itawamba County]]></category>
+		<category><![CDATA[Lee County]]></category>
+		<category><![CDATA[Lowndes County]]></category>
+		<category><![CDATA[Marshall county]]></category>
+		<category><![CDATA[North Mississippi]]></category>
+		<category><![CDATA[Prentiss county]]></category>
+		<category><![CDATA[Tishomingo County]]></category>
+		<category><![CDATA[U.S. Senate]]></category>
+		<guid isPermaLink="false">https://www.mississippifreepress.org/?p=364951</guid>
+
+					
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">364951</post-id>		<dc:creator><![CDATA[Ashton Pittman]]></dc:creator>
+	</item>
+</channel>
+</rss>

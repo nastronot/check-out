@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	
+	xmlns:georss="http://www.georss.org/georss"
+	xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#"
+	xmlns:dcterms="http://purl.org/dc/terms/"
+>
+
+<channel>
+	<title>WJTV</title>
+	<atom:link href="https://www.wjtv.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://www.wjtv.com</link>
+	<description>WJTV 12 Focused on You</description>
+	<lastBuildDate>Sat, 07 Nov 2026 23:17:46 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=6.9.11</generator>
+
+<image>
+	<url>https://www.wjtv.com/wp-content/uploads/sites/72/2019/07/cropped-Blue_12_Favicon-1.png?w=32</url>
+	<title>WJTV</title>
+	<link>https://www.wjtv.com</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+	<item>
+		<title>Scott Colom and Black Mississippians stand on the cusp of Senate history as vote count stretches on</title>
+		<link>https://www.wjtv.com/news/election/ap-scott-colom-and-black-mississippians-stand-on-the-cusp-of-senate-history-as-vote-count-stretches-on/</link>
+		
+		<dc:creator><![CDATA[BILL BARROW and SOPHIE BATES, Associated Press]]></dc:creator>
+		<pubDate>Sat, 07 Nov 2026 23:13:20 +0000</pubDate>
+		<category><![CDATA[Election]]></category>		
+		<category><![CDATA[Local News]]></category>
+		<category><![CDATA[State]]></category>
+		<category><![CDATA[Top Stories]]></category>
+		<category><![CDATA[Washington-DC]]></category>
+		<guid isPermaLink="false"></guid>
+
+					
+		
+		
+		
+		<enclosure url="https://www.wjtv.com/wp-content/uploads/sites/72/2026/11/6aefb19920beb9.47665428.jpeg?w=900" type="image/jpeg" length="8377659" />
+<dcterms:modified>2026-11-07T23:17:46+00:00</dcterms:modified>
+	</item>
+		<item>
+		<title>One person found dead on Morningside Drive in Hattiesburg</title>
+		<link>https://www.wjtv.com/pine-belt-news/one-person-found-dead-on-morningside-drive-in-hattiesburg/</link>
+		
+		<dc:creator><![CDATA[Miracle Jennings]]></dc:creator>
+		<pubDate>Sat, 07 Nov 2026 21:18:01 +0000</pubDate>
+		<category><![CDATA[Pine Belt News]]></category>		<category><![CDATA[News]]></category>
+		<category><![CDATA[Pine Belt]]></category>
+		
+		<category><![CDATA[Top Stories]]></category>
+		<category><![CDATA[Hattiesburg]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<category><![CDATA[Whlt]]></category>
+		<guid isPermaLink="false">https://www.wjtv.com/?p=3193425</guid>
+
+					
+		
+		
+		
+		<enclosure url="https://www.wjtv.com/wp-content/uploads/sites/72/2026/10/gettyimages-482691137-e1729617334160.jpg?w=800" type="image/jpeg" length="48615" />
+<dcterms:modified>2026-11-07T22:50:44+00:00</dcterms:modified>
+	</item>
+		<item>
+		<title>Man turns himself in for fatal Greenview Drive shooting</title>
+		<link>https://www.wjtv.com/news/local-news/man-turns-himself-in-for-fatal-greenview-drive-shooting/</link>
+		
+		<dc:creator><![CDATA[Miracle Jennings]]></dc:creator>
+		<pubDate>Sat, 07 Nov 2026 16:51:04 +0000</pubDate>
+		<category><![CDATA[Local News]]></category>		
+		<category><![CDATA[News]]></category>
+		<category><![CDATA[Top Stories]]></category>
+		<category><![CDATA[Jackson]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<guid isPermaLink="false">https://www.wjtv.com/?p=3193241</guid>
+
+					
+		
+		
+		
+		<enclosure url="https://www.wjtv.com/wp-content/uploads/sites/72/2026/11/Untitled-August-01-2026-at-12.19.01-30.jpeg?w=900" type="image/jpeg" length="169081" />
+<dcterms:modified>2026-11-07T16:51:06+00:00</dcterms:modified>
+	</item>
+		<item>
+		<title>Victim dies after being shot on Jones Avenue in Jackson</title>
+		<link>https://www.wjtv.com/news/local-news/victim-dies-after-being-shot-on-jones-avenue-in-jackson/</link>
+		
+		<dc:creator><![CDATA[Kaitlin Howell]]></dc:creator>
+		<pubDate>Sat, 07 Nov 2026 01:24:49 +0000</pubDate>
+		<category><![CDATA[Local News]]></category>		
+		<category><![CDATA[News]]></category>
+		<category><![CDATA[Top News]]></category>
+		<category><![CDATA[Top Stories]]></category>
+		<guid isPermaLink="false">https://www.wjtv.com/?p=3193012</guid>
+
+					
+		
+		
+		
+		<enclosure url="https://www.wjtv.com/wp-content/uploads/sites/72/2023/07/Capitol-Police.png?w=674" type="image/png" length="308158" />
+<dcterms:modified>2026-11-07T01:24:51+00:00</dcterms:modified>
+	</item>
+</channel>
+</rss>

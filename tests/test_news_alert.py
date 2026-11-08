@@ -3,7 +3,7 @@ brightness effects, and how DynamicFrame starts and ends an alert."""
 
 from datetime import datetime, timedelta
 
-from checkout import glyphs
+from checkout import glyphs, news
 from checkout.driver import GLYPH_CODES
 from checkout.frames import news_alert as na
 from checkout.frames.dynamic import DynamicFrame
@@ -122,7 +122,7 @@ def test_news_off_means_no_polling_and_no_alert():
 def test_polling_follows_the_settings():
     f = _frame()
     f.tick(T0, {**STATE, "news_topics": ["mississippi", "tech"], "news_interval_min": 2})
-    assert f.news.config == (["mt", "nyt_tech", "bbc_tech", "linux"], 120)
+    assert f.news.config == (news.sources_for(["mississippi", "tech"]), 120)
 
 
 def test_leaving_dynamic_or_turning_news_off_ends_an_alert():

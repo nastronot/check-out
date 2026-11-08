@@ -23,8 +23,12 @@ def _ts(*args):
 
 
 # --- parsing ---------------------------------------------------------------------
+NEW_2026_11 = ["guardian_politics", "bbc_us", "politico", "pbs_politics", "guardian_tech",
+               "media404", "ars", "mfp", "wjtv", "magnolia", "darkhorse"]
+
+
 @pytest.mark.parametrize("key", ["ap", "bbc", "nyt", "mt", "hill", "ai", "linux",
-                                 "nyt_tech", "bbc_tech", "nyt_politics"])
+                                 "nyt_tech", "bbc_tech", "nyt_politics", *NEW_2026_11])
 def test_parse_reads_every_item(key):
     items = news.parse_rss(_feed(key), news.SOURCES[key])
     assert len(items) == 4
@@ -275,7 +279,11 @@ def test_every_source_has_a_short_label_and_a_known_pick():
     assert {k: s.name for k, s in news.SOURCES.items()} == {
         "ap": "AP", "bbc": "BBC", "nyt": "NYT", "mt": "MT", "wired": "WIRED",
         "hill": "HILL", "ai": "ARS", "linux": "PHORONIX",
-        "nyt_tech": "NYT", "bbc_tech": "BBC", "nyt_politics": "NYT"}
+        "nyt_tech": "NYT", "bbc_tech": "BBC", "nyt_politics": "NYT",
+        "guardian_politics": "GUARDIAN", "bbc_us": "BBC", "politico": "POLITICO",
+        "pbs_politics": "PBS", "guardian_tech": "GUARDIAN", "media404": "404 MEDIA",
+        "ars": "ARS", "mfp": "MFP", "wjtv": "WJTV", "magnolia": "MAGNOLIA",
+        "darkhorse": "DARKHORSE"}
     assert all(s.pick in ("first", "newest") for s in news.SOURCES.values())
 
 
@@ -286,12 +294,112 @@ def test_wired_coupon_posts_are_dropped():
 
 
 def test_topics_map_to_curated_feeds():
+    tech = ["nyt_tech", "bbc_tech", "guardian_tech", "linux", "media404", "ars"]
     assert news.TOPICS == {
-        "tech": ("nyt_tech", "bbc_tech", "linux"),
-        "politics": ("nyt_politics",),
-        "mississippi": ("mt",),
+        "tech": tuple(tech),
+        "politics": ("nyt_politics", "guardian_politics", "bbc_us", "politico", "pbs_politics"),
+        "mississippi": ("mt", "mfp", "wjtv", "magnolia", "darkhorse"),
     }
-    assert news.sources_for(["mississippi", "tech"]) == ["mt", "nyt_tech", "bbc_tech", "linux"]
-    assert news.sources_for(["weather", "tech", "tech"]) == ["nyt_tech", "bbc_tech", "linux"]
+    assert news.sources_for(["mississippi", "tech"]) == [
+        "mt", "mfp", "wjtv", "magnolia", "darkhorse", *tech]
+    assert news.sources_for(["weather", "tech", "tech"]) == tech
     assert news.sources_for([]) == []
 
+
+
+# --- feed list in the UI (v1.10.0) -------------------------------------------------
+def test_catalogue_lists_each_topics_feeds_with_their_outlet():
+    cat = news.catalogue()
+    assert list(cat) == ["tech", "politics", "mississippi"]
+    assert cat["mississippi"][-1] == {"key": "darkhorse", "name": "DARKHORSE"}
+    assert [f["key"] for f in cat["politics"]] == list(news.TOPICS["politics"])
+
+
+def test_status_names_each_outlet_and_links_its_lead():
+    f = _fetcher(_Web(bbc=BBC_1, nyt=NYT_1))
+    f.fetch_once()
+    st = f.status()
+    assert st["sources"]["bbc"]["name"] == "BBC"
+    assert st["sources"]["bbc"]["link"] is None          # "b1" is not http(s)
+    assert st["latest"]["name"] == "BBC"
+
+
+def test_status_keeps_http_links():
+    feed = _rss(("Lead", "https://www.bbc.co.uk/news/1", "2026-09-24 10:00"))
+    f = _fetcher(_Web(bbc=feed, nyt=NYT_1))
+    f.fetch_once()
+    assert f.status()["sources"]["bbc"]["link"] == "https://www.bbc.co.uk/news/1"
+
+
+@pytest.mark.parametrize("link, safe", [
+    ("https://a.example/x", "https://a.example/x"), ("http://a.example/x", "http://a.example/x"),
+    ("javascript:alert(1)", None), ("Buzzsprout-123", None)])
+def test_safe_link_only_passes_http(link, safe):
+    assert news.safe_link(link) == safe
+
+
+# --- conditional GET: an unchanged feed is not downloaded again ------------------
+class _Reply:
+    def __init__(self, body, headers):
+        self._body, self.headers = body, headers
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _urlopen(replies, seen):
+    """A fake urlopen: records each request's headers, plays `replies` in order."""
+    import email.message
+    import urllib.error
+
+    def opener(request, timeout):
+        seen.append(dict(request.header_items()))
+        status, body, headers = replies.pop(0)
+        msg = email.message.Message()
+        for k, v in headers.items():
+            msg[k] = v
+        if status == 304:
+            raise urllib.error.HTTPError(request.full_url, 304, "Not Modified", msg, None)
+        return _Reply(body, msg)
+    return opener
+
+
+def test_an_unchanged_feed_is_revalidated_and_served_from_the_cache(monkeypatch):
+    import gzip
+    url = "https://feed.example/rss"
+    monkeypatch.setattr(news, "_CACHE", {})
+    seen = []
+    monkeypatch.setattr(news.urllib.request, "urlopen", _urlopen([
+        (200, gzip.compress(b"<rss/>"), {"ETag": '"v1"', "Content-Encoding": "gzip",
+                                          "Last-Modified": "Sat, 07 Nov 2026 14:23:09 GMT"}),
+        (304, b"", {}),
+    ], seen))
+    assert news._http_get_bytes(url, 5) == b"<rss/>"          # gzip undone
+    assert news._http_get_bytes(url, 5) == b"<rss/>"          # 304 -> cached body
+    assert seen[0].get("Accept-encoding") == "gzip" and "If-none-match" not in seen[0]
+    assert seen[1]["If-none-match"] == '"v1"'
+    assert seen[1]["If-modified-since"] == "Sat, 07 Nov 2026 14:23:09 GMT"
+
+
+def test_a_feed_without_validators_is_not_cached(monkeypatch):
+    monkeypatch.setattr(news, "_CACHE", {})
+    seen = []
+    monkeypatch.setattr(news.urllib.request, "urlopen",
+                        _urlopen([(200, b"<rss/>", {}), (200, b"<rss/>", {})], seen))
+    news._http_get_bytes("https://feed.example/rss", 5)
+    news._http_get_bytes("https://feed.example/rss", 5)
+    assert "If-none-match" not in seen[1] and news._CACHE == {}
+
+
+def test_a_real_error_still_raises(monkeypatch):
+    import urllib.error
+    monkeypatch.setattr(news, "_CACHE", {})
+    monkeypatch.setattr(news.urllib.request, "urlopen", _urlopen([(304, b"", {})], []))
+    with pytest.raises(urllib.error.HTTPError):               # a 304 with nothing cached
+        news._http_get_bytes("https://feed.example/rss", 5)

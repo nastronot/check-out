@@ -158,3 +158,9 @@ def test_hashed_assets_are_cached_for_good(client):
     r = client.get("/" + asset)
     assert r.status_code == 200
     assert "immutable" in r.headers["cache-control"]
+
+
+def test_news_catalogue_lists_each_topics_feeds(client):
+    topics = client.get("/api/news").json()["topics"]
+    assert set(topics) == {"tech", "politics", "mississippi"}
+    assert {"key": "mt", "name": "MT"} in topics["mississippi"]

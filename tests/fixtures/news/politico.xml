@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+  <channel>
+    <title>Politics</title>
+    <link>https://rss.politico.com/politics-news.xml</link>
+    <description>News, Analysis and Opinion from POLITICO</description>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 07 Nov 2026 12:00:00 EST</lastBuildDate>
+    <item>
+      <title>Why this GOP governor thinks his party got ‘worse than a butt whipping’ on Tuesday</title>
+      <link>https://www.politico.com/news/2026/11/07/kevin-stitt-republicans-butt-whipping-be-nice-01155140</link>
+      
+      <category>Politics</category>
+      <category>DC</category>
+      <category>2026 Elections</category>
+      <category>2028 Elections</category>
+      <category>Kevin Stitt</category>
+      <category>Oklahoma</category>
+      <guid isPermaLink="false">000001a1-b6dc-def8-a5f7-f6dcb9700000</guid>
+      <pubDate>Sat, 07 Nov 2026 12:00:00 EST</pubDate>
+      
+      <dc:creator>By Lauren Fedor</dc:creator>
+      <dc:contributor>By Lauren Fedor</dc:contributor>
+      
+    </item>
+    <item>
+      <title>Inside the early GOP reckoning after historic defeat</title>
+      <link>https://www.politico.com/news/2026/11/06/gop-reckoning-trump-midterms-stephen-miller-01154760</link>
+      
+      <category>Politics</category>
+      <category>DC</category>
+      <category>2026 Elections</category>
+      <category>Stephen Miller</category>
+      <category>Donald Trump</category>
+      <guid isPermaLink="false">000001a1-b2b8-dc5e-abb5-b2ffefa00001</guid>
+      <pubDate>Fri, 06 Nov 2026 18:00:00 EST</pubDate>
+      
+      <dc:creator>By Meredith Lee Hill</dc:creator>
+      <dc:contributor>By Meredith Lee Hill</dc:contributor>
+      
+    </item>
+    <item>
+      <title>The size of Democrats’ wave surprised even their top House super PAC</title>
+      <link>https://www.politico.com/news/2026/11/06/democratic-blue-wave-surprised-house-leader-01153548</link>
+      
+      <category>Politics</category>
+      <category>DC</category>
+      <category>2026 Elections</category>
+      <category>2028 Elections</category>
+      <guid isPermaLink="false">000001a1-b146-d0f3-a5f5-bbf687ef0000</guid>
+      <pubDate>Fri, 06 Nov 2026 10:00:00 EST</pubDate>
+      
+      <dc:creator>By Aaron Pellish</dc:creator>
+      <dc:contributor>By Aaron Pellish</dc:contributor>
+      
+    </item>
+    <item>
+      <title>The Clyburn test</title>
+      <link>https://www.politico.com/video/2026/11/06/the-clyburn-test-2222220</link>
+      
+      <category>Politics</category>
+      <category>DC</category>
+      <category>Podcast: Playbook</category>
+      <guid isPermaLink="false">000001a1-af5a-d2f6-adb3-af7ecaa50000</guid>
+      <pubDate>Fri, 06 Nov 2026 05:45:00 EST</pubDate>
+      
+    </item>
+</channel>
+</rss>

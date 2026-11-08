@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>Magnolia Tribune</title>
+	<atom:link href="https://magnoliatribune.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://magnoliatribune.com/</link>
+	<description>Mississippi Politics &#38; News</description>
+	<lastBuildDate>Fri, 06 Nov 2026 19:14:03 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.4</generator>
+
+<image>
+	<url>https://magnoliatribune.com/wp-content/uploads/2022/11/cropped-magnolia-tribune-favicon-32x32.png</url>
+	<title>Magnolia Tribune</title>
+	<link>https://magnoliatribune.com/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+	<item>
+		<title>Lipscomb, a first-time candidate, says, &#8220;These are not my first fights,&#8221; as she launches Secretary of State bid</title>
+		<link>https://magnoliatribune.com/2026/11/06/lipscomb-a-first-time-candidate-says-these-are-not-my-first-fights-as-she-launches-secretary-of-state-bid/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=lipscomb-a-first-time-candidate-says-these-are-not-my-first-fights-as-she-launches-secretary-of-state-bid</link>
+		
+		<dc:creator><![CDATA[Frank Corder]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 19:13:59 +0000</pubDate>
+				<category><![CDATA[Elections]]></category>
+		<category><![CDATA[News]]></category>
+		<category><![CDATA[elections]]></category>
+		<category><![CDATA[Lipscomb]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<category><![CDATA[Secretary of State]]></category>
+		<guid isPermaLink="false">https://magnoliatribune.com/?p=151127</guid>
+
+					
+										
+					
+		
+		
+			</item>
+		<item>
+		<title>U.S. continues to generate jobs, yet inflation is eroding the spending power of millions of Americans</title>
+		<link>https://magnoliatribune.com/2026/11/06/u-s-continues-to-generate-jobs-yet-inflation-is-eroding-the-spending-power-of-millions-of-americans/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=u-s-continues-to-generate-jobs-yet-inflation-is-eroding-the-spending-power-of-millions-of-americans</link>
+		
+		<dc:creator><![CDATA[Paul Wiseman, Associated Press]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 17:00:00 +0000</pubDate>
+				<category><![CDATA[Economy]]></category>
+		<category><![CDATA[News]]></category>
+		<category><![CDATA[economy]]></category>
+		<category><![CDATA[jobs]]></category>
+		<guid isPermaLink="false">https://magnoliatribune.com/?p=151145</guid>
+
+					
+										
+					
+		
+		
+			</item>
+		<item>
+		<title>Reeves announces approval of more than 100 Opportunity Zones under federal tax program</title>
+		<link>https://magnoliatribune.com/2026/11/06/reeves-announces-approval-of-more-than-100-opportunity-zones-under-federal-tax-program/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=reeves-announces-approval-of-more-than-100-opportunity-zones-under-federal-tax-program</link>
+		
+		<dc:creator><![CDATA[Jeremy Pittari]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 16:49:18 +0000</pubDate>
+				<category><![CDATA[News]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<guid isPermaLink="false">https://magnoliatribune.com/?p=151128</guid>
+
+					
+										
+					
+		
+		
+			</item>
+		<item>
+		<title>No. 2 Georgia and No. 12 Mississippi meet again in a showcase of two of the SEC&#8217;s best since 2023</title>
+		<link>https://magnoliatribune.com/2026/11/06/no-2-georgia-and-no-12-mississippi-meet-again-in-a-showcase-of-two-of-the-secs-best-since-2023/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=no-2-georgia-and-no-12-mississippi-meet-again-in-a-showcase-of-two-of-the-secs-best-since-2023</link>
+		
+		<dc:creator><![CDATA[Chris Burrows, Associated Press]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 16:40:15 +0000</pubDate>
+				<category><![CDATA[Culture]]></category>
+		<category><![CDATA[Sports]]></category>
+		<category><![CDATA[College Football]]></category>
+		<category><![CDATA[Mississippi]]></category>
+		<category><![CDATA[Ole Miss]]></category>
+		<guid isPermaLink="false">https://magnoliatribune.com/?p=151143</guid>
+
+					
+										
+					
+		
+		
+			</item>
+</channel>
+</rss>
