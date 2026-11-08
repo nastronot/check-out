@@ -136,23 +136,39 @@ mode list (`ControlPanel.svelte` `MODES`) because the hardware ticker scrolls
 only the top row at one fixed speed; its daemon path, state keys and panel still
 work — add `'marquee'` back to `MODES` to restore it.
 
-### UI layout (v1.4.0, consolidated v1.9.0)
+### UI layout (v1.4.0, consolidated v1.9.0, fitted to the real screens v1.11.0)
 Two screens on hash routes (`App.svelte`): the display page (`#/`,
-`BoardPage.svelte`) and the bump bar page (`#/bumpbar`). Display page — left column:
-preview (a SurePOS-style black housing; its footer is make · model and a live/offline
-light + level, which replaced the old daemon readout), glyph editor (draw grid + 3x3
-slot grid side by side at equal height — slot thumbnails use `GlyphCanvas
-fit="height"` — tools below), glyph library. Right column: ONE Control panel, then
-Saved messages. Control = mode + its settings, then a "Display" section
-(`DisplaySettings.svelte`: brightness, blank) passed in its default slot, with
-Self-test / Reset (`CommandBar`) small in its header slot. HW scroll and code page
-are hidden behind `DisplaySettings.svelte` `SHOW_HW_SETTINGS = false` — kept, not
-removed.
+`BoardPage.svelte`) and the bump bar page (`#/bumpbar`). **Desktop only, sized for
+the real screens** (CSS px): the main monitor on dad and work, about **2048×1030**
+usable, and portrait side monitors, **1024×1280** (dad) and **1080×1920** (work).
+No phone layout. `BoardPage` is ONE grid with named areas: at ≥1600px wide three
+columns, glass + glyph editor + glyph library | Control | Saved messages + News
+feeds, and the whole page fits 2048×1030 without scrolling (keep it that way: check
+the page height after adding anything). Under 1600px (portrait): the glass across
+the top, then Control beside the side lists, then editor beside library. The bump
+bar page is pad | key editor | Key map (all keys, tap + shift; a row selects its
+key) at ≥1600px; on portrait the Key map drops below.
+Preview: a SurePOS-style black housing; its footer is make · model and a
+live/offline light + level. Glyph editor: fixed-width draw grid + 3x3 slot grid at
+equal height (slot thumbnails use `GlyphCanvas fit="height"`), Clear in its header.
+Control = mode + its settings, then a "Display" group (`DisplaySettings.svelte`:
+brightness, Blank in the group head) passed in its default slot, with Self-test /
+Reset (`CommandBar`) small in its header slot. HW scroll and code page are hidden
+behind `DisplaySettings.svelte` `SHOW_HW_SETTINGS = false` — kept, not removed.
+News feeds (`NewsFeeds.svelte`) is its own panel, shown only in dynamic mode with
+alerts on.
 **Shared UI patterns (`app.css`) — use these, don't restyle per panel:** panel
-headers are dot + title left, any `.btn` pushed right; `.seg` rows fill the width
-with equal buttons, `.seg--sm` is the compact inline variant; `.ctl-row` +
-`.ctl-row__name` is "short label, then controls on one line"; `.readout` is a
-value at the right of a field label; hints (`.field__hint`) are one short line.
+headers are dot + title left, any `.btn` pushed right, `.panel__note` a faint
+one-line note before it; `.group` + `.group__head` + `.group__title` split a panel
+into titled sections (a rule between them), with `.group__aside` at the right for
+a switch that governs the whole group (Alerts, Half speed, Blank); `.seg` rows fill
+the width with equal buttons, `.seg--sm` is the compact inline variant; `.ctl-row`
++ `.ctl-row__name` is "short label, then controls on one line"; `.num-grid` of
+`.num` (`.num__label` above a `.num__box` holding the input and its `.num__unit`)
+lines number fields up in equal columns (`--cols`, default 4); `.cols-2` is two
+equal columns; `.readout` is a value at the right of a field label; hints
+(`.field__hint`) are one short line, and `.field__hint--clip` cuts a variable one
+with an ellipsis; `.btn--mini` is the compact button.
 
 ### News alerts (v1.5.0)
 Dynamic mode, `news_enabled`: the UI offers TOPICS (`news_topics`), each backed
@@ -173,7 +189,7 @@ character leaves at the left (`news_alert._tape`), then back to time/weather.
 **Feeds list (v1.10.0):** `GET /api/news` (`news.catalogue()`) gives each
 topic's feeds; `status.json` `news.sources` carries each fetched feed's `name`,
 lead `title`, `link` (http(s) only, `news.safe_link`) and `published`. The UI's
-fold-out Feeds list joins the two; unticked topics show "off" (never fetched).
+News feeds panel joins the two; unticked topics show "off" (never fetched).
 **Conditional GET:** `_http_get_bytes` sends `If-None-Match`/`If-Modified-Since`
 and `Accept-Encoding: gzip`; a 304 re-parses the cached body. Large feeds
 (Darkhorse Press ~450 KB) would otherwise re-download every check.

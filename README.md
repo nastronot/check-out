@@ -484,7 +484,7 @@ Panel settings:
 - **Speed** — the scroll step in ms. **Repeat** — extra passes of the headline.
 - **Flash** — `none`, `3x` or `continuous` brightness effect on the alert.
 - **Show latest** — plays the newest lead now.
-- **Feeds** — a fold-out list of every topic's feeds, each with its current lead
+- **News feeds** — a panel beside Control listing every topic's feeds, each with its current lead
   story (a link) and its age. Feeds in unticked topics show as off: the daemon
   fetches only ticked topics.
 
