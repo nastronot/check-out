@@ -87,7 +87,11 @@
 </script>
 
 <section class="panel glyphs">
-  <div class="panel__title">Glyph editor</div>
+  <div class="panel__title">
+    Glyph editor
+    <span class="panel__note" title="Changes reach the display in under a second.">Click or drag to draw.</span>
+    <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
+  </div>
 
   <!-- board: the draw grid (left) sets the height; the 3x3 slot grid (right)
        stretches to match it. Tools sit underneath both. -->
@@ -162,18 +166,17 @@
         {:else if sync[selected] === 'error'}sync failed
         {/if}
       </span>
-      <button class="btn btn--mini" on:click={clearSlot}>Clear</button>
     </div>
   </div>
 
-  <p class="field__hint">Click or drag to draw. Changes reach the display in under a second.</p>
 </section>
 
 <style>
   /* board: draw grid + 3x3 slot grid side by side, equal height */
   .board {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* a fixed-width draw grid keeps the panel short; the slots take the rest */
+    grid-template-columns: 180px minmax(0, 1fr);
     gap: 14px;
     align-items: stretch;
     margin-bottom: 14px;
@@ -271,7 +274,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 10px 24px;
-    margin-bottom: 10px;
   }
 
   .ref {
@@ -304,24 +306,10 @@
     text-align: center;
   }
 
-  .btn--mini {
-    padding: 6px 12px;
-    font-size: 11px;
-  }
-
   .sync-label {
     font-size: 11px;
     letter-spacing: 0.06em;
     color: var(--text-faint);
   }
 
-
-  @media (max-width: 560px) {
-    .board {
-      grid-template-columns: 1fr;
-    }
-    .slots {
-      grid-template-rows: none;
-    }
-  }
 </style>

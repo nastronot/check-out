@@ -34,12 +34,10 @@
       {#if showBumpbarNav(bumpbarInstalled, route)}
         <nav class="nav">
           <a href="#/" aria-current={route === 'board' ? 'page' : undefined}>display</a>
-          <span class="nav__dot">·</span>
           <a href="#/bumpbar" aria-current={route === 'bumpbar' ? 'page' : undefined}>bump bar</a>
-          <span class="nav__dot">·</span>
         </nav>
       {/if}
-      <span class="masthead__sub">v{version}</span>
+      <span class="tag">v{version}</span>
     </div>
   </header>
 
@@ -61,18 +59,19 @@
 
 <style>
   .shell {
-    max-width: 1180px;
+    /* Sized for the real screens: a 2048-wide main monitor and 1024-1080-wide
+       portrait side monitors. No phone layout. */
+    max-width: 2200px;
     margin: 0 auto;
-    padding: 26px 22px 40px;
+    padding: 16px 24px 16px;
   }
 
   .masthead {
     display: flex;
     justify-content: space-between;
     /* Sit the meta text on the logo's baseline (its bottom edge), not the top. */
-    align-items: baseline;
-    padding-bottom: 14px;
-    margin-bottom: 22px;
+    align-items: center;
+    margin-bottom: 16px;
   }
 
   .masthead__brand {
@@ -83,7 +82,7 @@
 
   .masthead__logo {
     display: block;
-    height: 34px;
+    height: 30px;
     aspect-ratio: 923 / 121; /* the logo PNG's intrinsic ratio */
     /* Tint the (white/transparent) wordmark to the app's phosphor accent: use
        the logo's alpha as a mask and fill with the accent color. The scanline
@@ -93,33 +92,28 @@
     mask: url(/logo.png) no-repeat center / contain;
   }
 
-  .masthead__sub {
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-faint);
-  }
-
   .masthead__meta {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    align-items: baseline;
-    gap: 6px 8px;
+    align-items: center;
+    gap: 18px;
   }
 
-  /* Two screens: board and bump bar. Same small-caps voice as the sub line. */
+  /* Two screens, drawn as tabs: the current one is lit and underlined. */
   .nav {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
 
   .nav a {
+    padding: 6px 10px;
     color: var(--text-mute);
     text-decoration: none;
+    border-bottom: 2px solid transparent;
   }
 
   .nav a:hover {
@@ -129,27 +123,11 @@
   .nav a[aria-current='page'] {
     color: var(--phosphor);
     text-shadow: 0 0 8px var(--phosphor-deep);
-  }
-
-  .nav__dot {
-    color: var(--text-faint);
-  }
-
-  /* Phone width: the nav + version line drop under the logo instead of
-     squeezing into a column beside it. */
-  @media (max-width: 600px) {
-    .masthead {
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .masthead__meta {
-      justify-content: flex-start;
-    }
+    border-bottom-color: var(--phosphor);
   }
 
   .footnote {
-    margin-top: 26px;
+    margin-top: 18px;
     text-align: center;
     font-size: 11px;
     letter-spacing: 0.1em;

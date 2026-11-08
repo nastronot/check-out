@@ -2,9 +2,8 @@
   import { lineBudget } from '../message';
   import { audioDevices, refreshDevices } from '../stores';
   import { parseCoord, weatherSummary } from '../weather';
-  import { onMount } from 'svelte';
-  import { feedRows, newsSummary } from '../news';
-  import { getNews, postCommand } from '../api';
+  import { newsSummary } from '../news';
+  import { postCommand } from '../api';
   import type {
     Align,
     AppState,
@@ -18,7 +17,6 @@
     Status,
     DynamicColon,
     DynamicPacmanSprite,
-    NewsCatalogue,
     NewsEffect,
     NewsTopic,
   } from '../types';
@@ -202,25 +200,23 @@
   }
   $: newsLine = newsSummary(status?.news, state?.news_topics.length);
 
-  // The Feeds list: every topic's feeds (static, from /api/news) with each
-  // ticked feed's current lead (status.news). Ages refresh with each status poll.
-  let newsCatalogue: NewsCatalogue | null = null;
-  onMount(async () => {
-    try {
-      newsCatalogue = (await getNews()).topics;
-    } catch {
-      newsCatalogue = null; // older web process: no list, the rest still works
-    }
-  });
-  $: newsFeeds = feedRows(newsCatalogue, status?.news, state?.news_topics ?? [], status ? Date.now() : 0);
-
   // One line per colon choice: only the selected one is explained.
   const COLON_HINTS: Record<DynamicColon, string> = {
     on: 'A steady colon.',
     tick: 'The colon blinks every second.',
     twinkle: 'A star twinkles in place of the colon.',
     pulse: 'The colon grows taller and back, once a second.',
-    pacman: 'Pacman eats the chosen sprite; Solo shows it alone (automatic when the date fills the line).',
+    pacman: 'Pacman eats the sprite. Solo shows it alone (forced on long dates).',
+  };
+  // Spectrum: like the colon, only the selected choice is explained.
+  const SOURCE_HINTS: Record<AudioSource, string> = {
+    system: "What's playing on this computer.",
+    mic: 'The default input.',
+  };
+  const LAYOUT_HINTS: Record<SpectrumLayout, string> = {
+    full: 'One spectrum, mono.',
+    stereo_v: 'A spectrum per channel.',
+    stereo_h: 'Level meters.',
   };
 
   // Message rows: one template for top and bottom, via these helpers.
@@ -264,8 +260,9 @@
   {#if !state}
     <p class="loading">connecting to daemon…</p>
   {:else}
-    <div class="field">
-      <span class="field__label">Mode</span>
+    <!-- Each section is a .group: a rule, a title, and its controls. -->
+    <div class="group">
+      <div class="group__head"><span class="group__title">Mode</span></div>
       <div class="seg">
         {#each MODES as m}
           <button type="button" aria-pressed={state.mode === m} on:click={() => setMode(m)}>{m}</button>
@@ -275,22 +272,24 @@
 
     <!-- MESSAGE: text + per-row source / scroll / direction (was also "scroll") -->
     {#if state.mode === 'message'}
-      <div class="field">
-        <span class="field__label">
-          Message
+      <div class="group">
+        <div class="group__head">
+          <span class="group__title">Message</span>
           <!-- Length is only flagged while nothing scrolls. -->
           {#if !anyScroll}
-            {#if budget.hasNewline}
-              <span class="budget">
+            <span class="group__aside">
+              {#if budget.hasNewline}
+                <span class="budget">
+                  <span class:over={budget.topOver}>{budget.top}/20</span>
+                  <span class="sep">·</span>
+                  <span class:over={budget.bottomOver}>{budget.bottom}/20</span>
+                </span>
+              {:else}
                 <span class:over={budget.topOver}>{budget.top}/20</span>
-                <span class="sep">·</span>
-                <span class:over={budget.bottomOver}>{budget.bottom}/20</span>
-              </span>
-            {:else}
-              <span class:over={budget.topOver}>{budget.top}/20</span>
-            {/if}
+              {/if}
+            </span>
           {/if}
-        </span>
+        </div>
         <textarea
           rows="2"
           bind:value={messageDraft}
@@ -303,8 +302,8 @@
         </span>
       </div>
 
-      <div class="field">
-        <span class="field__label">Rows</span>
+      <div class="group">
+        <div class="group__head"><span class="group__title">Rows</span></div>
         {#each rowsView ?? [] as r (r.row)}
           <div class="ctl-row">
             <span class="ctl-row__name">{r.label}</span>
@@ -340,8 +339,10 @@
         {#if anyScroll}
           <label class="ctl-row">
             <span class="ctl-row__name">Speed</span>
-            <input type="number" min="60" step="20" value={state.scroll_speed_ms} on:change={setScrollSpeed} />
-            <span class="field__hint">ms per step</span>
+            <span class="num__box">
+              <input type="number" min="60" step="20" value={state.scroll_speed_ms} on:change={setScrollSpeed} />
+              <span class="num__unit">ms/step</span>
+            </span>
           </label>
         {/if}
       </div>
@@ -349,117 +350,125 @@
 
     <!-- MARQUEE: hidden from MODES (v1.4.0) but still works if selected. -->
     {#if state.mode === 'marquee'}
-      <div class="field">
-        <span class="field__label">
-          Marquee text
-          <span class:over={marqueeDraft.length > 45}>{marqueeDraft.length}/45</span>
-        </span>
+      <div class="group">
+        <div class="group__head">
+          <span class="group__title">Marquee text</span>
+          <span class="group__aside" class:over={marqueeDraft.length > 45}>{marqueeDraft.length}/45</span>
+        </div>
         <input type="text" bind:value={marqueeDraft} on:input={onMarqueeInput} spellcheck="false" />
         <span class="field__hint">Hardware ticker: top row, fixed speed.</span>
-      </div>
-      <div class="field">
-        <span class="field__label">Bottom row</span>
-        <input
-          type="text"
-          value={state.marquee_bottom_text}
-          on:change={setMarqueeBottomText}
-          spellcheck="false"
-        />
+        <div class="field">
+          <span class="field__label">Bottom row</span>
+          <input
+            type="text"
+            value={state.marquee_bottom_text}
+            on:change={setMarqueeBottomText}
+            spellcheck="false"
+          />
+        </div>
       </div>
     {/if}
 
     <!-- SPECTRUM: settings only; the bars stream from the audioviz process. -->
     {#if state.mode === 'spectrum'}
-      <div class="field">
-        <span class="field__label">Source</span>
-        <div class="seg">
-          {#each SOURCES as src}
-            <button
-              type="button"
-              aria-pressed={state.audio_source === src.value}
-              on:click={() => setAudioSource(src.value)}>{src.label}</button
-            >
-          {/each}
+      <div class="group">
+        <div class="group__head"><span class="group__title">Audio input</span></div>
+        <div class="field">
+          <span class="field__label">Source</span>
+          <div class="seg">
+            {#each SOURCES as src}
+              <button
+                type="button"
+                aria-pressed={state.audio_source === src.value}
+                on:click={() => setAudioSource(src.value)}>{src.label}</button
+              >
+            {/each}
+          </div>
+          <span class="field__hint">{SOURCE_HINTS[state.audio_source] ?? ''}</span>
         </div>
-        <span class="field__hint">System = what's playing · Mic = the default input</span>
-      </div>
-
-      <div class="field">
-        <span class="field__label">Layout</span>
-        <div class="seg">
-          {#each LAYOUTS as l}
-            <button
-              type="button"
-              aria-pressed={state.spectrum_layout === l.value}
-              on:click={() => setSpectrumLayout(l.value)}>{l.label}</button
-            >
-          {/each}
-        </div>
-        <span class="field__hint">Full = mono · Stereo-V = a spectrum per channel · Stereo-H = level meters</span>
-      </div>
-
-      <div class="field">
-        <span class="field__label">Style</span>
-        <div class="seg">
-          {#each STYLES as st}
-            <button
-              type="button"
-              aria-pressed={state.spectrum_style === st.value}
-              on:click={() => setSpectrumStyle(st.value)}>{st.label}</button
-            >
-          {/each}
+        <div class="field">
+          <span class="field__label">Device</span>
+          <select value={state.audio_device ?? ''} on:change={setAudioDevice}>
+            <option value="">
+              {state.audio_source === 'system' ? 'Auto (default output)' : 'Auto (default input)'}
+            </option>
+            {#each devicesForSource as d}
+              <option value={d.id}>{d.label}</option>
+            {/each}
+          </select>
+          {#if devicesForSource.length === 0}
+            <span class="field__hint">
+              None found — run <code>python -m checkout.audioviz --list</code>
+            </span>
+          {/if}
         </div>
       </div>
 
-      <div class="field">
-        <span class="field__label">Device</span>
-        <select value={state.audio_device ?? ''} on:change={setAudioDevice}>
-          <option value="">
-            {state.audio_source === 'system' ? 'Auto (default output)' : 'Auto (default input)'}
-          </option>
-          {#each devicesForSource as d}
-            <option value={d.id}>{d.label}</option>
-          {/each}
-        </select>
-        {#if devicesForSource.length === 0}
-          <span class="field__hint">
-            None found — run <code>python -m checkout.audioviz --list</code>
-          </span>
-        {/if}
+      <div class="group">
+        <div class="group__head"><span class="group__title">Look</span></div>
+        <div class="field">
+          <span class="field__label">Layout</span>
+          <div class="seg">
+            {#each LAYOUTS as l}
+              <button
+                type="button"
+                aria-pressed={state.spectrum_layout === l.value}
+                on:click={() => setSpectrumLayout(l.value)}>{l.label}</button
+              >
+            {/each}
+          </div>
+          <span class="field__hint">{LAYOUT_HINTS[state.spectrum_layout] ?? ''}</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Style</span>
+          <div class="seg">
+            {#each STYLES as st}
+              <button
+                type="button"
+                aria-pressed={state.spectrum_style === st.value}
+                on:click={() => setSpectrumStyle(st.value)}>{st.label}</button
+              >
+            {/each}
+          </div>
+        </div>
       </div>
 
-      <div class="field">
-        <span class="field__label">
-          Sensitivity <span class="readout">{state.audio_gain.toFixed(1)}×</span>
-        </span>
-        <input
-          class="phosphor-slider"
-          type="range" min="0.3" max="3" step="0.1"
-          aria-label="sensitivity"
-          value={state.audio_gain}
-          on:input={setAudioGain}
-        />
-      </div>
-
-      <div class="field">
-        <span class="field__label">
-          Smoothing <span class="readout">{state.audio_decay.toFixed(2)}</span>
-        </span>
-        <input
-          class="phosphor-slider"
-          type="range" min="0" max="0.98" step="0.01"
-          aria-label="smoothing"
-          value={state.audio_decay}
-          on:input={setAudioDecay}
-        />
+      <div class="group">
+        <div class="group__head"><span class="group__title">Response</span></div>
+        <div class="cols-2">
+          <div class="field">
+            <span class="field__label">
+              Sensitivity <span class="readout">{state.audio_gain.toFixed(1)}×</span>
+            </span>
+            <input
+              class="phosphor-slider"
+              type="range" min="0.3" max="3" step="0.1"
+              aria-label="sensitivity"
+              value={state.audio_gain}
+              on:input={setAudioGain}
+            />
+          </div>
+          <div class="field">
+            <span class="field__label">
+              Smoothing <span class="readout">{state.audio_decay.toFixed(2)}</span>
+            </span>
+            <input
+              class="phosphor-slider"
+              type="range" min="0" max="0.98" step="0.01"
+              aria-label="smoothing"
+              value={state.audio_decay}
+              on:input={setAudioDecay}
+            />
+          </div>
+        </div>
         <span class="field__hint">Uses all 9 glyph slots; your glyphs come back when you leave.</span>
       </div>
     {/if}
 
     <!-- DYNAMIC: date/time on top, the next 24 h of weather below. -->
     {#if state.mode === 'dynamic'}
-      <div class="field">
-        <span class="field__label">Weather location</span>
+      <div class="group">
+        <div class="group__head"><span class="group__title">Weather location</span></div>
         <form class="coords" on:submit|preventDefault={saveLocation}>
           <input
             type="text" inputmode="decimal" spellcheck="false"
@@ -486,8 +495,22 @@
         </span>
       </div>
 
-      <div class="field">
-        <span class="field__label">Time features</span>
+      <div class="group">
+        <div class="group__head">
+          <span class="group__title">Time features</span>
+          <span class="group__aside">
+            <label class="switch" class:disabled={state.dynamic_colon === 'on'}>
+              <input
+                type="checkbox"
+                checked={state.dynamic_colon_half}
+                disabled={state.dynamic_colon === 'on'}
+                on:change={setColonHalf}
+              />
+              <span class="switch__track"></span>
+              <span class="switch__label">Half speed</span>
+            </label>
+          </span>
+        </div>
         <div class="seg">
           {#each COLONS as c}
             <button
@@ -497,23 +520,9 @@
             >
           {/each}
         </div>
-        <div class="ctl-row">
-          <label class="switch" class:disabled={state.dynamic_colon === 'on'}>
-            <input
-              type="checkbox"
-              checked={state.dynamic_colon_half}
-              disabled={state.dynamic_colon === 'on'}
-              on:change={setColonHalf}
-            />
-            <span class="switch__track"></span>
-            <span class="switch__label">Half speed</span>
-          </label>
-          {#if state.dynamic_colon === 'pacman'}
-            <label class="switch">
-              <input type="checkbox" checked={state.dynamic_pacman_solo} on:change={setSolo} />
-              <span class="switch__track"></span>
-              <span class="switch__label">Solo</span>
-            </label>
+        {#if state.dynamic_colon === 'pacman'}
+          <div class="ctl-row">
+            <span class="ctl-row__name">Sprite</span>
             <div class="seg seg--sm">
               {#each SPRITES as p}
                 <button
@@ -523,25 +532,32 @@
                 >
               {/each}
             </div>
-          {/if}
-        </div>
+            <label class="switch">
+              <input type="checkbox" checked={state.dynamic_pacman_solo} on:change={setSolo} />
+              <span class="switch__track"></span>
+              <span class="switch__label">Solo</span>
+            </label>
+          </div>
+        {/if}
         <span class="field__hint">{COLON_HINTS[state.dynamic_colon]}</span>
       </div>
 
-      <div class="field">
-        <span class="field__label">News</span>
-        <div class="ctl-row">
-          <label class="switch">
-            <input type="checkbox" checked={state.news_enabled} on:change={setNewsEnabled} />
-            <span class="switch__track"></span>
-            <span class="switch__label">Alerts</span>
-          </label>
-          <button
-            type="button"
-            class="btn"
-            disabled={!state.news_enabled || showingLatest}
-            on:click={showLatestNews}>Show latest</button
-          >
+      <div class="group">
+        <div class="group__head">
+          <span class="group__title">News alerts</span>
+          <span class="group__aside">
+            <label class="switch">
+              <input type="checkbox" checked={state.news_enabled} on:change={setNewsEnabled} />
+              <span class="switch__track"></span>
+              <span class="switch__label">On</span>
+            </label>
+            <button
+              type="button"
+              class="btn btn--mini"
+              disabled={!state.news_enabled || showingLatest}
+              on:click={showLatestNews}>Show latest</button
+            >
+          </span>
         </div>
         {#if state.news_enabled}
           <div class="seg" aria-label="news topics">
@@ -553,18 +569,35 @@
               >
             {/each}
           </div>
-          <div class="ctl-row">
-            <span class="ctl-row__name">Check</span>
-            <input type="number" min="1" max="60" value={state.news_interval_min} on:change={setNewsInterval} />
-            <span class="ctl-row__name">Gap</span>
-            <input type="number" min="0" max="60" value={state.news_gap_min} on:change={setNewsGap} />
-            <span class="ctl-row__name">min</span>
-          </div>
-          <div class="ctl-row">
-            <span class="ctl-row__name">Speed</span>
-            <input type="number" min="60" max="1000" step="10" value={state.news_speed_ms} on:change={setNewsSpeed} />
-            <span class="ctl-row__name">Repeat</span>
-            <input type="number" min="0" max="5" value={state.news_repeat} on:change={setNewsRepeat} />
+          <div class="num-grid">
+            <label class="num">
+              <span class="num__label">Check every</span>
+              <span class="num__box">
+                <input type="number" min="1" max="60" value={state.news_interval_min} on:change={setNewsInterval} />
+                <span class="num__unit">min</span>
+              </span>
+            </label>
+            <label class="num">
+              <span class="num__label">Gap</span>
+              <span class="num__box">
+                <input type="number" min="0" max="60" value={state.news_gap_min} on:change={setNewsGap} />
+                <span class="num__unit">min</span>
+              </span>
+            </label>
+            <label class="num">
+              <span class="num__label">Speed</span>
+              <span class="num__box">
+                <input type="number" min="60" max="1000" step="10" value={state.news_speed_ms} on:change={setNewsSpeed} />
+                <span class="num__unit">ms</span>
+              </span>
+            </label>
+            <label class="num">
+              <span class="num__label">Repeat</span>
+              <span class="num__box">
+                <input type="number" min="0" max="5" value={state.news_repeat} on:change={setNewsRepeat} />
+                <span class="num__unit">×</span>
+              </span>
+            </label>
           </div>
           <div class="ctl-row">
             <span class="ctl-row__name">Flash</span>
@@ -578,38 +611,7 @@
               {/each}
             </div>
           </div>
-          <span class="field__hint">{newsLine}</span>
-          {#if newsFeeds.length}
-            <details class="feeds">
-              <summary>Feeds</summary>
-              {#each newsFeeds as group}
-                <div class="feeds__topic" class:feeds__topic--off={!group.on}>
-                  {group.topic}{group.on ? '' : ' · off'}
-                </div>
-                <ul>
-                  {#each group.feeds as f (f.key)}
-                    <li class="feed feed--{f.state}">
-                      <span class="feed__name">{f.name}</span>
-                      {#if f.state === 'ok'}
-                        {#if f.link}
-                          <a class="feed__title" href={f.link} target="_blank" rel="noopener noreferrer"
-                            title={f.title}>{f.title}</a
-                          >
-                        {:else}
-                          <span class="feed__title" title={f.title}>{f.title}</span>
-                        {/if}
-                        <span class="feed__age">{f.age}</span>
-                      {:else if f.state === 'error'}
-                        <span class="feed__title" title={f.error}>fetch failed</span>
-                      {:else if f.state === 'waiting'}
-                        <span class="feed__title">waiting…</span>
-                      {/if}
-                    </li>
-                  {/each}
-                </ul>
-              {/each}
-            </details>
-          {/if}
+          <span class="field__hint field__hint--clip" title={newsLine}>{newsLine}</span>
         {/if}
       </div>
     {/if}
@@ -617,11 +619,11 @@
     <!-- Justify: N/A in spectrum (bars) and dynamic (always centred). In the
          hidden marquee mode only the static bottom line justifies. -->
     {#if state.mode !== 'spectrum' && state.mode !== 'dynamic'}
-      <div class="field">
-        <span class="field__label">Justify</span>
+      <div class="group">
+        <div class="group__head"><span class="group__title">Justify</span></div>
         {#if state.mode !== 'marquee'}
           <div class="ctl-row">
-            <span class="ctl-row__name">Line 1</span>
+            <span class="ctl-row__name">Top</span>
             <div class="seg seg--sm">
               {#each ALIGNS as a}
                 <button type="button" aria-pressed={state.align_top === a} on:click={() => setAlignTop(a)}>{a}</button>
@@ -630,7 +632,7 @@
           </div>
         {/if}
         <div class="ctl-row">
-          <span class="ctl-row__name">Line 2</span>
+          <span class="ctl-row__name">Bottom</span>
           <div class="seg seg--sm">
             {#each ALIGNS as a}
               <button type="button" aria-pressed={state.align_bottom === a} on:click={() => setAlignBottom(a)}>{a}</button>
@@ -643,26 +645,39 @@
     <!-- Animation: N/A where the mode owns the rows (marquee, spectrum) or
          animates its own colon (dynamic). -->
     {#if state.mode !== 'marquee' && state.mode !== 'spectrum' && state.mode !== 'dynamic'}
-      <div class="field">
-        <span class="field__label">Animation</span>
+      <div class="group">
+        <div class="group__head"><span class="group__title">Animation</span></div>
         <div class="seg">
           {#each ANIMATIONS as a}
             <button type="button" aria-pressed={state.animation === a} on:click={() => setAnimation(a)}>{a}</button>
           {/each}
         </div>
         {#if state.animation === 'flash' || state.animation === 'blink'}
-          <div class="ctl-row">
-            <span class="ctl-row__name">On</span>
-            <input type="number" min="50" step="50" value={state.animation_params.on_ms} on:change={setOnMs} />
-            <span class="ctl-row__name">Off</span>
-            <input type="number" min="50" step="50" value={state.animation_params.off_ms} on:change={setOffMs} />
-            <span class="field__hint">ms</span>
+          <div class="num-grid">
+            <label class="num">
+              <span class="num__label">On</span>
+              <span class="num__box">
+                <input type="number" min="50" step="50" value={state.animation_params.on_ms} on:change={setOnMs} />
+                <span class="num__unit">ms</span>
+              </span>
+            </label>
+            <label class="num">
+              <span class="num__label">Off</span>
+              <span class="num__box">
+                <input type="number" min="50" step="50" value={state.animation_params.off_ms} on:change={setOffMs} />
+                <span class="num__unit">ms</span>
+              </span>
+            </label>
           </div>
         {:else if state.animation === 'pulse'}
-          <div class="ctl-row">
-            <span class="ctl-row__name">Step</span>
-            <input type="number" min="50" step="50" value={state.animation_params.step_ms} on:change={setStepMs} />
-            <span class="field__hint">ms per brightness step</span>
+          <div class="num-grid">
+            <label class="num">
+              <span class="num__label">Step</span>
+              <span class="num__box">
+                <input type="number" min="50" step="50" value={state.animation_params.step_ms} on:change={setStepMs} />
+                <span class="num__unit">ms</span>
+              </span>
+            </label>
           </div>
         {/if}
       </div>
@@ -698,9 +713,6 @@
 
   .over {
     color: var(--amber-warn);
-  }
-
-  .field__label .over {
     font-weight: 600;
   }
 
@@ -712,71 +724,4 @@
   .switch.disabled {
     opacity: 0.4;
   }
-
-  /* News Feeds list: topic heading, then OUTLET | headline | age per feed. */
-  .feeds summary {
-    cursor: pointer;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--text-mute);
-  }
-
-  .feeds__topic {
-    margin: 8px 0 2px;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--phosphor-dim);
-  }
-
-  .feeds__topic--off {
-    color: var(--text-faint);
-  }
-
-  .feeds ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .feed {
-    display: grid;
-    grid-template-columns: 10ch minmax(0, 1fr) auto;
-    gap: 8px;
-    font-size: 11px;
-    line-height: 1.6;
-    color: var(--text);
-  }
-
-  .feed__name {
-    color: var(--text-mute);
-  }
-
-  .feed__title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: inherit;
-    text-decoration: none;
-  }
-
-  a.feed__title:hover {
-    color: var(--phosphor-ink);
-    text-decoration: underline;
-  }
-
-  .feed__age {
-    color: var(--text-faint);
-  }
-
-  .feed--off,
-  .feed--waiting {
-    color: var(--text-faint);
-  }
-
-  .feed--error .feed__title {
-    color: var(--red-dead);
-  }
-
 </style>

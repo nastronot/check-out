@@ -40,7 +40,26 @@
 </script>
 
 {#if state}
-  <div class="subhead">Display</div>
+  <!-- The last group of the Control panel. Blank switches the whole glass, so
+       it sits in the group head; brightness is the body. -->
+  <div class="group">
+    <div class="group__head">
+      <span class="group__title">Display</span>
+      <span class="group__aside">
+        {#if SHOW_HW_SETTINGS}
+          <label class="switch" title="Hardware vertical scroll — for marquee effects">
+            <input type="checkbox" checked={state.scroll} on:change={setScroll} />
+            <span class="switch__track"></span>
+            <span class="switch__label">HW scroll</span>
+          </label>
+        {/if}
+        <label class="switch">
+          <input type="checkbox" checked={state.blank} on:change={setBlank} />
+          <span class="switch__track"></span>
+          <span class="switch__label">Blank</span>
+        </label>
+      </span>
+    </div>
 
     <!-- Brightness -->
     <div class="field">
@@ -69,23 +88,6 @@
       </div>
     </div>
 
-    <!-- Blank (+ hardware scroll, hidden) -->
-    <div class="row switches">
-      <label class="switch">
-        <input type="checkbox" checked={state.blank} on:change={setBlank} />
-        <span class="switch__track"></span>
-        <span class="switch__label">Blank</span>
-      </label>
-
-      {#if SHOW_HW_SETTINGS}
-        <label class="switch" title="Hardware vertical scroll — for marquee effects">
-          <input type="checkbox" checked={state.scroll} on:change={setScroll} />
-          <span class="switch__track"></span>
-          <span class="switch__label">HW scroll</span>
-        </label>
-      {/if}
-    </div>
-
     {#if SHOW_HW_SETTINGS}
       <!-- Code page -->
       <div class="field">
@@ -97,24 +99,10 @@
         </select>
       </div>
     {/if}
+  </div>
 {/if}
 
 <style>
-  .switches {
-    margin-top: 14px;
-  }
-
-  /* the divider that opens this section of the Control panel */
-  .subhead {
-    margin: 18px 0 10px;
-    padding-top: 14px;
-    border-top: 1px solid var(--rule);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--text-faint);
-  }
-
   /* brightness: a 4-stop stepped slider (NOT a continuous %) */
   .bright {
     display: flex;

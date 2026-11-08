@@ -49,7 +49,7 @@
   }
 
   function preview(m: LibraryMessage): string {
-    return (m.message || '').replace(/\n/g, ' ⏎ ').slice(0, 28) || '(empty)';
+    return (m.message || '').replace(/\n/g, ' ⏎ ').slice(0, 80) || '(empty)';
   }
 </script>
 
@@ -114,6 +114,8 @@
   }
 
   .item__name {
+    flex: none;
+    white-space: nowrap;
     color: var(--phosphor-ink);
     font-size: 13px;
   }
@@ -133,8 +135,4 @@
     flex: none;
   }
 
-  .btn--mini {
-    padding: 5px 10px;
-    font-size: 11px;
-  }
 </style>

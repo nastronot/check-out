@@ -189,7 +189,7 @@
   <section class="panel">
     <div class="panel__title">
       {current ? legendOf(current) : 'Key'}
-      <button class="btn" on:click={resetMap} disabled={!data} title="Put every key back to its default">Reset all</button>
+      <span class="panel__note">Click a key on the pad to change it.</span>
     </div>
     {#if data && current}
       {#if isShift}
@@ -224,19 +224,69 @@
           </div>
         {/each}
       {/if}
-      <p class="field__hint pick">Click a key on the pad to change it.</p>
     {:else}
       <p class="muted">loading…</p>
+    {/if}
+  </section>
+
+  <!-- Every key's two actions at once. A row selects its key, like the pad,
+       and lights while that key is pressed on the real bar. -->
+  <section class="panel keymap">
+    <div class="panel__title">
+      Key map
+      <button class="btn btn--mini" on:click={resetMap} disabled={!data} title="Put every key back to its default">Reset all</button>
+    </div>
+    {#if data}
+      <div class="map">
+        <div class="map__row map__row--head" aria-hidden="true">
+          <span>Key</span>
+          <span>Tap</span>
+          <span>Shift</span>
+        </div>
+        {#each data.buttons as b (b.id)}
+          <button
+            class="map__row"
+            class:map__row--hit={hit === b.id || (b.id === data.shift && shiftArmed)}
+            aria-pressed={selected === b.id}
+            on:click={() => (selected = b.id)}
+          >
+            <span class="map__key"><span class="swatch key--{b.color}"></span>{legendOf(b)}</span>
+            {#if b.id === data.shift}
+              <span class="map__none">one-shot shift</span>
+              <span></span>
+            {:else}
+              <span>{actionLabel(data.actions, data.map.tap[b.id])}</span>
+              <span>{actionLabel(data.actions, data.map.shift[b.id])}</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
     {/if}
   </section>
 </main>
 
 <style>
+  /* Portrait side monitors: pad beside the key editor, the key map below.
+     The main monitor (2048 wide): all three side by side. */
   .bb {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 28px;
+    grid-template-columns: 440px minmax(0, 1fr);
+    gap: 24px;
     align-items: start;
+  }
+
+  .keymap {
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 1600px) {
+    .bb {
+      grid-template-columns: 440px minmax(0, 560px) minmax(0, 800px);
+    }
+
+    .keymap {
+      grid-column: auto;
+    }
   }
 
   .muted {
@@ -384,19 +434,83 @@
     color: var(--text-mute);
   }
 
-  .pick {
-    display: block;
-    margin-top: 6px;
-  }
-
   select {
     width: 100%;
   }
 
-  @media (max-width: 860px) {
-    .bb {
-      grid-template-columns: minmax(0, 1fr);
-    }
+  /* --- the key map --------------------------------------------------------- */
+  .map {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map__row {
+    appearance: none;
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    padding: 7px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .map__row:hover {
+    background: var(--bg-panel-hi);
+  }
+
+  .map__row[aria-pressed='true'] {
+    background: var(--phosphor-deep);
+    color: var(--phosphor-ink);
+  }
+
+  .map__row--hit {
+    box-shadow: inset 3px 0 0 var(--phosphor);
+  }
+
+  .map__row--head {
+    cursor: default;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+  }
+
+  .map__row--head:hover {
+    background: transparent;
+  }
+
+  .map__row:last-child {
+    border-bottom: 0;
+  }
+
+  .map__key {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+
+  /* the key's cap colour, from the same --cap the pad uses */
+  .swatch {
+    flex: none;
+    width: 14px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--cap);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  }
+
+  .map__none {
+    color: var(--text-faint);
   }
 
   @media (max-width: 600px) {

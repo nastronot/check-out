@@ -125,8 +125,7 @@
       {/each}
     </div>
     <p class="field__hint">
-      Click to load into g{$selectedGlyphSlot} · drag onto a slot to load it there · drag
-      within the library to reorder
+      Click to load into g{$selectedGlyphSlot}. Drag onto a slot, or drag here to reorder.
     </p>
   {/if}
 </section>
@@ -134,8 +133,9 @@
 <style>
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
   }
 
   .cell {
@@ -144,7 +144,7 @@
     flex-direction: column;
     align-items: center;
     gap: 5px;
-    padding: 7px 5px;
+    padding: 6px 4px;
     background: #04090a;
     border: 1px solid var(--bezel);
     border-radius: 5px;
@@ -173,9 +173,11 @@
     box-shadow: -3px 0 0 -1px var(--phosphor), 0 0 10px rgba(61, 240, 200, 0.25);
   }
 
+  /* a fixed thumbnail width keeps the cards short, so the library fits on
+     screen beside the editor */
   .cell__thumb {
     display: block;
-    width: 100%;
+    width: 32px;
     pointer-events: none; /* so the whole card is the drag handle */
   }
 
