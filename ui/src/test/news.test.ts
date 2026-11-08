@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ago, feedRows, newsSummary } from '../lib/news';
+import { ago, feedRows, newsSummary, safeLink } from '../lib/news';
 
 const src = (title: string | null, error: string | null = null) => ({
   title,
@@ -90,5 +90,17 @@ describe('feedRows', () => {
   it('waits for a ticked feed not fetched yet, and for no catalogue shows nothing', () => {
     expect(feedRows(catalogue, null, ['tech'], now)[0].feeds[0].state).toBe('waiting');
     expect(feedRows(null, status, ['tech'], now)).toEqual([]);
+  });
+});
+
+describe('safeLink', () => {
+  it('passes only http(s) URLs', () => {
+    expect(safeLink('https://a.example/x')).toBe('https://a.example/x');
+    expect(safeLink('http://a.example/x')).toBe('http://a.example/x');
+    expect(safeLink('javascript:alert(1)')).toBeNull();
+    expect(safeLink(' JavaScript:alert(1)')).toBeNull();
+    expect(safeLink('data:text/html,hi')).toBeNull();
+    expect(safeLink('Buzzsprout-123')).toBeNull();
+    expect(safeLink(null)).toBeNull();
   });
 });

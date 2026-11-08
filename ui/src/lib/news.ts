@@ -31,6 +31,19 @@ export function ago(iso: string | null, now: number): string {
   return `${Math.floor(min / 1440)}d`;
 }
 
+/** The link if it is a real http(s) URL, else null. The daemon already filters
+ *  (news.safe_link); this second check means a `javascript:` link can never
+ *  become an href, whatever writes status.json. */
+export function safeLink(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try {
+    const p = new URL(u);
+    return p.protocol === 'http:' || p.protocol === 'https:' ? p.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** One feed in the Feeds list. `off`: its topic isn't ticked, so the daemon
  *  doesn't fetch it; `waiting`: ticked, no reply yet. */
 export interface FeedRow {
@@ -62,7 +75,7 @@ export function feedRows(
         name,
         state,
         title,
-        link: s?.link ?? null,
+        link: safeLink(s?.link),
         age: ago(s?.published ?? null, now),
         error: s?.error ?? null,
       };
